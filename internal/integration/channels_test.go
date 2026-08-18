@@ -70,8 +70,8 @@ func key32() []byte {
 
 type noopSched struct{}
 
-func (noopSched) RegisterTask(int64, string)   {}
-func (noopSched) UnregisterTask(int64)         {}
+func (noopSched) RegisterTask(int64, string) {}
+func (noopSched) UnregisterTask(int64)       {}
 
 // ---- 本地 SMTP sink（127.0.0.1，纯文本，无需 TLS —— PlainAuth 对 localhost 放行）----
 
