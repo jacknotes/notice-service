@@ -5,6 +5,7 @@ import (
 	"errors"
 	"time"
 
+	"github.com/go-sql-driver/mysql"
 	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/crypto/bcrypt"
 
@@ -78,7 +79,14 @@ func (s *AuthService) BootstrapAdmin() error {
 		return err
 	}
 	u := &model.User{Username: s.adminUser, PasswordHash: string(hash), Role: "admin"}
-	return s.users.Create(u)
+	if err := s.users.Create(u); err != nil {
+		var me *mysql.MySQLError
+		if errors.As(err, &me) && me.Number == 1062 {
+			return nil // 另一个实例已创建管理员，视为成功
+		}
+		return err
+	}
+	return nil
 }
 
 func (s *AuthService) Login(username, password string) (string, *model.User, error) {
