@@ -1,11 +1,14 @@
 package channel
 
 import (
+	"crypto/tls"
 	"errors"
 	"fmt"
+	"net"
 	"net/smtp"
 	"strconv"
 	"strings"
+	"time"
 )
 
 type EmailChannel struct {
@@ -31,17 +34,27 @@ func (e *EmailChannel) TestConnection(c map[string]string) error {
 		return err
 	}
 	port, _ := strconv.Atoi(c["port"])
-	addr := fmt.Sprintf("%s:%d", c["host"], port)
-	conn, err := smtp.Dial(addr)
+	addr := net.JoinHostPort(c["host"], strconv.Itoa(port))
+	conn, err := net.DialTimeout("tcp", addr, 10*time.Second)
 	if err != nil {
 		return err
 	}
 	defer conn.Close()
-	auth := smtp.PlainAuth("", c["username"], c["password"], c["host"])
-	if err := conn.Auth(auth); err != nil {
+	client, err := smtp.NewClient(conn, c["host"])
+	if err != nil {
 		return err
 	}
-	return conn.Noop()
+	defer client.Close()
+	if ok, _ := client.Extension("STARTTLS"); ok {
+		if err := client.StartTLS(&tls.Config{ServerName: c["host"]}); err != nil {
+			return err
+		}
+	}
+	auth := smtp.PlainAuth("", c["username"], c["password"], c["host"])
+	if err := client.Auth(auth); err != nil {
+		return err
+	}
+	return client.Noop()
 }
 
 func (e *EmailChannel) Send(message *Message, receiver *Receiver) error {

@@ -18,7 +18,7 @@ func TestRegistryRegisterAndGet(t *testing.T) {
 
 type emailChannel struct{}
 
-func (e *emailChannel) Type() string                    { return "email" }
+func (e *emailChannel) Type() string                             { return "email" }
 func (e *emailChannel) ValidateConfig(c map[string]string) error { return nil }
 func (e *emailChannel) TestConnection(c map[string]string) error { return nil }
-func (e *emailChannel) Send(m *Message, r *Receiver) error      { return nil }
+func (e *emailChannel) Send(m *Message, r *Receiver) error       { return nil }

@@ -1,7 +1,9 @@
 package channel
 
 import (
+	"errors"
 	"fmt"
+	"io"
 	"net/url"
 )
 
@@ -26,6 +28,9 @@ func (w *WechatChannel) TestConnection(c map[string]string) error {
 }
 
 func (w *WechatChannel) Send(message *Message, receiver *Receiver) error {
+	if message == nil || receiver == nil {
+		return errors.New("message/receiver 不能为空")
+	}
 	form := url.Values{}
 	form.Set("token", w.config["pushplus_token"])
 	form.Set("title", message.Subject)
@@ -38,7 +43,11 @@ func (w *WechatChannel) Send(message *Message, receiver *Receiver) error {
 	if resp.StatusCode >= 300 {
 		return fmt.Errorf("pushplus http %d", resp.StatusCode)
 	}
-	return nil
+	data, err := io.ReadAll(io.LimitReader(resp.Body, 64*1024))
+	if err != nil {
+		return err
+	}
+	return checkWebhookResp(data)
 }
 
 func NewWechatChannel(config map[string]string) *WechatChannel {

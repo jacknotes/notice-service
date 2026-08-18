@@ -1,6 +1,9 @@
 package channel
 
-import "fmt"
+import (
+	"errors"
+	"fmt"
+)
 
 type WecomChannel struct {
 	config map[string]string
@@ -29,6 +32,9 @@ func (w *WecomChannel) TestConnection(c map[string]string) error {
 }
 
 func (w *WecomChannel) Send(message *Message, receiver *Receiver) error {
+	if message == nil || receiver == nil {
+		return errors.New("message/receiver 不能为空")
+	}
 	data, err := postJSON(w.config["webhook_url"], map[string]interface{}{
 		"msgtype": "markdown",
 		"markdown": map[string]interface{}{

@@ -4,6 +4,7 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"net/url"
 	"strconv"
@@ -38,6 +39,9 @@ func (d *DingtalkChannel) TestConnection(c map[string]string) error {
 }
 
 func (d *DingtalkChannel) Send(message *Message, receiver *Receiver) error {
+	if message == nil || receiver == nil {
+		return errors.New("message/receiver 不能为空")
+	}
 	u := d.config["webhook_url"]
 	if sec := d.config["secret"]; sec != "" {
 		u = d.signedURL(u, sec, strconv.FormatInt(nowUnix(), 10))

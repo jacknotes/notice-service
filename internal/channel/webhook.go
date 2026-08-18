@@ -39,5 +39,8 @@ func checkWebhookResp(data []byte) error {
 	if code, ok := m["errcode"].(float64); ok && code != 0 {
 		return fmt.Errorf("webhook errcode=%v errmsg=%v", code, m["errmsg"])
 	}
+	if code, ok := m["code"].(float64); ok && code != 0 {
+		return fmt.Errorf("webhook code=%v msg=%v", code, m["msg"])
+	}
 	return nil
 }

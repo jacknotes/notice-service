@@ -1,6 +1,9 @@
 package channel
 
-import "fmt"
+import (
+	"errors"
+	"fmt"
+)
 
 type FeishuChannel struct {
 	config map[string]string
@@ -26,16 +29,21 @@ func (f *FeishuChannel) TestConnection(c map[string]string) error {
 	if err != nil {
 		return err
 	}
-	_ = data
-	return nil
+	return checkWebhookResp(data)
 }
 
 func (f *FeishuChannel) Send(message *Message, receiver *Receiver) error {
-	_, err := postJSON(f.config["webhook_url"], map[string]interface{}{
+	if message == nil || receiver == nil {
+		return errors.New("message/receiver 不能为空")
+	}
+	data, err := postJSON(f.config["webhook_url"], map[string]interface{}{
 		"msg_type": "text",
 		"content":  map[string]string{"text": fmt.Sprintf("%s\n%s", message.Subject, message.Content)},
 	})
-	return err
+	if err != nil {
+		return err
+	}
+	return checkWebhookResp(data)
 }
 
 func NewFeishuChannel(config map[string]string) *FeishuChannel {
