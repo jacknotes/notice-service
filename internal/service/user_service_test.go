@@ -209,4 +209,54 @@ func TestUserServiceUpdate(t *testing.T) {
 	}
 }
 
+func TestUserServiceBatchDelete(t *testing.T) {
+	db := testDB(t)
+	svc := NewUserService(db)
+
+	adminOp, err := svc.Create(uniqueName("bdop"), "secret1", "admin")
+	if err != nil {
+		t.Fatal(err)
+	}
+	adminTgt, err := svc.Create(uniqueName("bdtgt"), "secret1", "admin")
+	if err != nil {
+		t.Fatal(err)
+	}
+	n1, err := svc.Create(uniqueName("bdn1"), "secret1", "user")
+	if err != nil {
+		t.Fatal(err)
+	}
+	n2, err := svc.Create(uniqueName("bdn2"), "secret1", "user")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { db.Exec("DELETE FROM users WHERE id IN (?, ?, ?, ?)", adminOp.ID, adminTgt.ID, n1.ID, n2.ID) })
+
+	// 非 admin 操作者 → 无权操作
+	if err := svc.BatchDelete(n1.ID, "user", []int64{n1.ID, n2.ID}); err == nil || !strings.Contains(err.Error(), "无权操作") {
+		t.Fatalf("non-admin batch delete should fail, got %v", err)
+	}
+	// 包含管理员 → 拒绝
+	if err := svc.BatchDelete(adminOp.ID, "admin", []int64{n1.ID, adminTgt.ID}); err == nil || !strings.Contains(err.Error(), "不能删除管理员账号") {
+		t.Fatalf("batch with admin should fail, got %v", err)
+	}
+	// 包含自己 → 拒绝
+	if err := svc.BatchDelete(adminOp.ID, "admin", []int64{n1.ID, adminOp.ID}); err == nil || !strings.Contains(err.Error(), "不能删除当前登录账号") {
+		t.Fatalf("batch with self should fail, got %v", err)
+	}
+	// 被拒绝后目标用户仍存在
+	if _, err := svc.users.GetByID(n1.ID); err != nil {
+		t.Fatal("n1 should still exist after blocked batch")
+	}
+	// 正常批量删除普通用户 → 成功
+	if err := svc.BatchDelete(adminOp.ID, "admin", []int64{n1.ID, n2.ID}); err != nil {
+		t.Fatalf("batch delete normal users: %v", err)
+	}
+	if _, err := svc.users.GetByID(n1.ID); err == nil {
+		t.Fatal("n1 should be deleted")
+	}
+	if _, err := svc.users.GetByID(n2.ID); err == nil {
+		t.Fatal("n2 should be deleted")
+	}
+}
+
 func strPtr(s string) *string { return &s }

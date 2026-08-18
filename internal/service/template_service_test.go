@@ -23,3 +23,33 @@ func TestPreviewMergesVars(t *testing.T) {
 		t.Errorf("content = %q", content)
 	}
 }
+
+func TestTemplateServiceBatchDelete(t *testing.T) {
+	db := testDB(t)
+	svc := NewTemplateService(db)
+	uid := seedServiceUser(t, db)
+
+	mk := func(name string) *model.Template {
+		return &model.Template{Name: name, Subject: "s", ContentMD: "c", Variables: []model.TemplateVar{}}
+	}
+	t1 := mk("t1")
+	t2 := mk("t2")
+	if err := svc.Create(uid, t1); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.Create(uid, t2); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.BatchDelete([]int64{t1.ID, t2.ID}); err != nil {
+		t.Fatal(err)
+	}
+	list, err := svc.List(uid)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tp := range list {
+		if tp.ID == t1.ID || tp.ID == t2.ID {
+			t.Fatalf("deleted template %d should not be listed", tp.ID)
+		}
+	}
+}

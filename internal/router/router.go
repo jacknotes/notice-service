@@ -61,6 +61,16 @@ func NewRouter(db *sql.DB, authSvc *service.AuthService, cipher *crypto.Cipher, 
 		auth.POST("/users", userH.Create)
 		auth.PUT("/users/:id", userH.Update)
 		auth.DELETE("/users/:id", userH.Delete)
+
+		// 管理员专属：批量删除
+		admin := auth.Group("")
+		admin.Use(middleware.AdminOnly())
+		{
+			admin.POST("/channels/batch-delete", channelH.BatchDelete)
+			admin.POST("/templates/batch-delete", templateH.BatchDelete)
+			admin.POST("/tasks/batch-delete", taskH.BatchDelete)
+			admin.POST("/users/batch-delete", userH.BatchDelete)
+		}
 	}
 	api.POST("/webhook/:api_key", webhookH.Trigger)
 

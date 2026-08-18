@@ -82,6 +82,37 @@ func TestChannelServiceEncryptRoundtrip(t *testing.T) {
 	}
 }
 
+func TestChannelServiceBatchDelete(t *testing.T) {
+	db := testDB(t)
+	ciph, _ := crypto.New(key32())
+	svc := NewChannelService(db, ciph)
+	uid := seedServiceUser(t, db)
+
+	mk := func(name string) *model.Channel {
+		return &model.Channel{Type: "email", Name: name, Config: map[string]string{"host": "smtp.x.com", "port": "587", "username": "u", "password": "p", "from": "a@x.com"}, Enabled: true}
+	}
+	c1 := mk("c1")
+	c2 := mk("c2")
+	if err := svc.Create(uid, c1); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.Create(uid, c2); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.BatchDelete([]int64{c1.ID, c2.ID}); err != nil {
+		t.Fatal(err)
+	}
+	list, err := svc.List(uid)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range list {
+		if c.ID == c1.ID || c.ID == c2.ID {
+			t.Fatalf("deleted channel %d should not be listed", c.ID)
+		}
+	}
+}
+
 func TestChannelServiceOwnership(t *testing.T) {
 	db := testDB(t)
 	ciph, _ := crypto.New(key32())

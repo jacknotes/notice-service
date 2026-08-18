@@ -68,6 +68,16 @@ func (s *TemplateService) Delete(userID, id int64) error {
 	return s.repo.Delete(id)
 }
 
+// BatchDelete 批量软删除模板，复用 repo.Delete。
+func (s *TemplateService) BatchDelete(ids []int64) error {
+	for _, id := range ids {
+		if err := s.repo.Delete(id); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (s *TemplateService) Get(userID, id int64) (*model.Template, error) {
 	t, err := s.repo.GetByID(id)
 	if err != nil {

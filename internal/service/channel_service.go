@@ -82,6 +82,16 @@ func (s *ChannelService) Delete(userID, id int64) error {
 	return s.repo.Delete(id)
 }
 
+// BatchDelete 批量软删除渠道，复用 repo.Delete。
+func (s *ChannelService) BatchDelete(ids []int64) error {
+	for _, id := range ids {
+		if err := s.repo.Delete(id); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (s *ChannelService) Test(userID int64, id int64, cfg map[string]string) error {
 	if id > 0 {
 		c, err := s.repo.GetByID(id)

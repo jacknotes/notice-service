@@ -69,6 +69,32 @@ func (s *UserService) Delete(operatorRole string, operatorID, targetID int64) er
 	return s.users.Delete(targetID)
 }
 
+// BatchDelete 批量删除用户。规则同 Delete：非 admin 无权操作；
+// 若任一目标为管理员或当前登录账号则整体拒绝。
+func (s *UserService) BatchDelete(operatorID int64, operatorRole string, ids []int64) error {
+	if operatorRole != "admin" {
+		return errors.New("无权操作")
+	}
+	for _, id := range ids {
+		if id == operatorID {
+			return errors.New("不能删除当前登录账号")
+		}
+		target, err := s.users.GetByID(id)
+		if err != nil {
+			return err
+		}
+		if target.Role == "admin" {
+			return errors.New("不能删除管理员账号")
+		}
+	}
+	for _, id := range ids {
+		if err := s.users.Delete(id); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // Update 修改用户角色或重置密码。operatorRole 为操作者角色；仅 admin 可操作。
 // 规则：管理员角色可降级，但至少保留一个管理员；不能修改当前登录账号（个人密码请走个人设置）。
 func (s *UserService) Update(operatorID int64, operatorRole string, targetID int64, role, newPass *string) error {

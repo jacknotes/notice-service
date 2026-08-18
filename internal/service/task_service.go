@@ -118,6 +118,19 @@ func (s *TaskService) Delete(userID, id int64) error {
 	return s.repo.Delete(id)
 }
 
+// BatchDelete 批量软删除任务：cron 任务先从调度器注销（sched 为 nil 时跳过）。
+func (s *TaskService) BatchDelete(ids []int64) error {
+	for _, id := range ids {
+		if ex, err := s.repo.GetByID(id); err == nil && ex.TriggerType == "cron" && s.sched != nil {
+			s.sched.UnregisterTask(id)
+		}
+		if err := s.repo.Delete(id); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (s *TaskService) Toggle(userID, id int64, enabled bool) error {
 	ex, err := s.repo.GetByID(id)
 	if err != nil {

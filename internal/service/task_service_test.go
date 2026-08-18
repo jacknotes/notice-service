@@ -54,6 +54,42 @@ func TestTaskServiceRegistersCron(t *testing.T) {
 	}
 }
 
+func TestTaskServiceBatchDelete(t *testing.T) {
+	db := testDB(t)
+	s := &fakeScheduler{}
+	svc := NewTaskService(db, s)
+	uid := seedServiceUser(t, db)
+	chID := seedServiceChannel(t, db, uid)
+	tplID := seedServiceTemplate(t, db, uid)
+
+	cron := &model.Task{Name: "cron", ChannelID: chID, TemplateID: tplID, TriggerType: "cron", CronExpr: "0 9 * * *", Receivers: []string{"a@x.com"}, Enabled: true}
+	api := &model.Task{Name: "api", ChannelID: chID, TemplateID: tplID, TriggerType: "api", Receivers: []string{"a@x.com"}, Enabled: true}
+	if err := svc.Create(uid, cron); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.Create(uid, api); err != nil {
+		t.Fatal(err)
+	}
+	// 重置 fake 记录，只观察 batch delete 的注销：cron 被注销，api 不注销
+	s.added = 0
+	s.removed = 0
+	if err := svc.BatchDelete([]int64{cron.ID, api.ID}); err != nil {
+		t.Fatal(err)
+	}
+	if s.removed != cron.ID {
+		t.Errorf("cron task should be unregistered, removed=%d want=%d", s.removed, cron.ID)
+	}
+	list, err := svc.List(uid)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tk := range list {
+		if tk.ID == cron.ID || tk.ID == api.ID {
+			t.Fatalf("deleted task %d should not be listed", tk.ID)
+		}
+	}
+}
+
 func TestTaskValidateReceiversOnlyRequiredForEmail(t *testing.T) {
 	db := testDB(t)
 	svc := NewTaskService(db, &fakeScheduler{})
