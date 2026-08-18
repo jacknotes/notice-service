@@ -59,7 +59,7 @@ func (r *TemplateRepo) ListByUser(userID int64) ([]*model.Template, error) {
 		return nil, err
 	}
 	defer rows.Close()
-	var out []*model.Template
+	out := []*model.Template{}
 	for rows.Next() {
 		t := &model.Template{}
 		var v sql.NullString

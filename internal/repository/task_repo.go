@@ -97,7 +97,7 @@ func (r *TaskRepo) scanMany(where string, args ...interface{}) ([]*model.Task, e
 		return nil, err
 	}
 	defer rows.Close()
-	var out []*model.Task
+	out := []*model.Task{}
 	for rows.Next() {
 		t := &model.Task{}
 		var recv, allowed sql.NullString

@@ -59,7 +59,7 @@ func (r *ChannelRepo) ListByUser(userID int64) ([]*model.Channel, error) {
 		return nil, err
 	}
 	defer rows.Close()
-	var out []*model.Channel
+	out := []*model.Channel{}
 	for rows.Next() {
 		c := &model.Channel{}
 		var cfg sql.NullString

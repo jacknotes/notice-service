@@ -46,7 +46,7 @@ func (r *TaskLogRepo) Recent(limit int) ([]*model.TaskLog, error) {
 }
 
 func scanLogs(rows *sql.Rows) ([]*model.TaskLog, error) {
-	var out []*model.TaskLog
+	out := []*model.TaskLog{}
 	for rows.Next() {
 		l := &model.TaskLog{}
 		var req, resp, errMsg sql.NullString
