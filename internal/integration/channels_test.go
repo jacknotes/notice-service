@@ -30,7 +30,7 @@ import (
 	"notice-service/internal/service"
 )
 
-const testDSN = "notice:notice123@tcp(127.0.0.1:3306)/notice_service?parseTime=true&charset=utf8mb4&loc=Local"
+const testDSN = "notice:notice123@tcp(127.0.0.1:3306)/notice_service_test?parseTime=true&charset=utf8mb4&loc=Local"
 
 func openDB(t *testing.T) *sql.DB {
 	t.Helper()

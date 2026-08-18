@@ -20,7 +20,7 @@ import (
 
 func testDB(t *testing.T) *sql.DB {
 	t.Helper()
-	db, err := sql.Open("mysql", "notice:notice123@tcp(127.0.0.1:3306)/notice_service?parseTime=true&charset=utf8mb4&loc=Local")
+	db, err := sql.Open("mysql", "notice:notice123@tcp(127.0.0.1:3306)/notice_service_test?parseTime=true&charset=utf8mb4&loc=Local")
 	if err != nil {
 		t.Fatal(err)
 	}
