@@ -25,8 +25,8 @@ type Scheduler struct {
 func New(exec ExecFunc, repo *repository.TaskRepo, instanceID string) *Scheduler {
 	s := &Scheduler{
 		cron: cron.New(cron.WithChain(
-			cron.Recover(cron.DefaultLogger),
 			cron.SkipIfStillRunning(cron.DefaultLogger),
+			cron.Recover(cron.DefaultLogger),
 		)),
 		exec: exec,
 	}
@@ -52,11 +52,6 @@ func (s *Scheduler) RegisterTask(taskID int64, cronExpr string) {
 		return
 	}
 	s.taskEntries.Store(taskID, eid)
-}
-
-// RegisterTaskWithSpec 测试辅助：直接注册任意 spec 并返回 entry id。
-func (s *Scheduler) RegisterTaskWithSpec(spec string, fn func()) (cron.EntryID, error) {
-	return s.cron.AddFunc(spec, fn)
 }
 
 // UnregisterTask 注销任务（按 taskID 映射移除）。实现 service.Scheduler 接口。
