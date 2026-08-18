@@ -87,3 +87,29 @@ func TestNotificationServiceDefaultInstancerWithCipher(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestNotificationServiceFailureLogs(t *testing.T) {
+	db := testDB(t)
+	ns := NewNotificationService(db, nil)
+	ns.RetryBackoff = []time.Duration{time.Millisecond, time.Millisecond, time.Millisecond}
+	ns.Instancer = func(c *model.Channel) (channel.Channel, error) { return &fakeChan{failTimes: 999}, nil }
+
+	uid := seedServiceUser(t, db)
+	chID := seedServiceChannel(t, db, uid)
+	tplID := seedServiceTemplate(t, db, uid)
+	tkID := seedServiceTask(t, db, uid, chID, tplID)
+
+	if err := ns.SendTask(tkID, map[string]string{}); err == nil {
+		t.Fatal("expected error after all retries exhausted")
+	}
+	var status, errMsg string
+	if err := db.QueryRow("SELECT status, error_msg FROM task_logs WHERE task_id=? ORDER BY id DESC LIMIT 1", tkID).Scan(&status, &errMsg); err != nil {
+		t.Fatal(err)
+	}
+	if status != "failed" {
+		t.Errorf("status = %q, want failed", status)
+	}
+	if errMsg == "" {
+		t.Error("failed log should record error_msg")
+	}
+}

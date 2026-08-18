@@ -127,7 +127,10 @@ func (s *ChannelService) InstancedChannel(c *model.Channel) (channel.Channel, er
 	case "wechat":
 		return channel.NewWechatChannel(cfg), nil
 	}
-	// 注册表中已注册的类型（含测试/插件渠道）可直接复用。
+	// 内置类型在上面的 switch 中总会用解密后的 cfg 构造全新实例。
+	// 此回退返回注册表中的共享原型实例，丢弃已解密的 cfg —— 仅适用于忽略
+	// config 的测试/插件渠道类型（如 fakeChan）；真实发送依赖 config 的
+	// 渠道必须走上面的 switch 分支。暂不重构该接口。
 	if ch, ok := channel.Get(c.Type); ok {
 		return ch, nil
 	}
