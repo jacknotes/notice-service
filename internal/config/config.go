@@ -30,12 +30,28 @@ func Load() *Config {
 		DBPassword: getEnv("DB_PASSWORD", "notice123"),
 		DBName:     getEnv("DB_NAME", "notice_service"),
 		JWTSecret:  getEnv("JWT_SECRET", "change-me"),
-		EncryptKey: getEnv("ENCRYPT_KEY", randomHex(16)),
+		EncryptKey: resolveEncryptKey(),
 		Port:       getEnv("PORT", "8080"),
 		InstanceID: getEnv("INSTANCE_ID", uuid.NewString()),
 		AdminUser:  getEnv("ADMIN_USER", "admin"),
 		AdminPass:  getEnv("ADMIN_PASS", "admin123"),
 	}
+}
+
+// keyFile 未显式配置 ENCRYPT_KEY 时用于持久化密钥，保证重启后能解密已存的渠道配置。
+const keyFile = ".notice-encrypt.key"
+
+// resolveEncryptKey 优先用环境变量；否则读取本地密钥文件，不存在则生成并持久化。
+func resolveEncryptKey() string {
+	if v := os.Getenv("ENCRYPT_KEY"); v != "" {
+		return v
+	}
+	if b, err := os.ReadFile(keyFile); err == nil && len(b) >= 32 {
+		return string(b[:32])
+	}
+	k := randomHex(16)
+	_ = os.WriteFile(keyFile, []byte(k), 0o600)
+	return k
 }
 
 func (c *Config) DSN() string {
