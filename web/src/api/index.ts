@@ -38,6 +38,12 @@ export const taskApi = {
   logs: (id: number) => client.get(`/tasks/${id}/logs`).then((r) => r.data),
 }
 
+export const userApi = {
+  list: () => client.get('/users').then((r) => r.data),
+  create: (d: { username: string; password: string; role: string }) => client.post('/users', d).then((r) => r.data),
+  remove: (id: number) => client.delete(`/users/${id}`).then((r) => r.data),
+}
+
 export const dashboardApi = {
   stats: () => client.get('/dashboard/stats').then((r) => r.data),
   trend: () => client.get('/dashboard/trend').then((r) => r.data),

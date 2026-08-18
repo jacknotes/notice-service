@@ -13,7 +13,7 @@
       </div>
 
       <el-menu router :default-active="route.path" class="side-menu">
-        <el-menu-item v-for="item in navItems" :key="item.path" :index="item.path">
+        <el-menu-item v-for="item in visibleNavItems" :key="item.path" :index="item.path">
           <el-icon><component :is="item.icon" /></el-icon>
           <span>{{ item.label }}</span>
         </el-menu-item>
@@ -83,7 +83,7 @@
     <!-- ── Mobile bottom nav ───────────────────────────────────────── -->
     <nav class="bottom-nav">
       <button
-        v-for="item in navItems"
+        v-for="item in visibleNavItems"
         :key="item.path"
         class="bn-item"
         :class="{ 'is-active': route.path === item.path }"
@@ -98,6 +98,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import type { Component } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessageBox } from 'element-plus'
 import {
@@ -111,14 +112,27 @@ const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
 
-const navItems = [
+interface NavItem {
+  path: string
+  label: string
+  icon: Component
+  adminOnly?: boolean
+}
+
+const navItems: NavItem[] = [
   { path: '/dashboard', label: '仪表盘', icon: Odometer },
   { path: '/channels', label: '渠道管理', icon: Connection },
   { path: '/templates', label: '模板管理', icon: Document },
   { path: '/tasks', label: '任务管理', icon: AlarmClock },
   { path: '/logs', label: '发送日志', icon: MessageBox },
+  { path: '/users', label: '用户管理', icon: User, adminOnly: true },
   { path: '/settings', label: '个人设置', icon: Setting },
 ]
+
+// 用户管理仅对 admin 可见
+const visibleNavItems = computed(() =>
+  navItems.filter((item) => !item.adminOnly || auth.user?.role === 'admin')
+)
 
 const pageTitle = computed<string>(
   () => (route.meta.title as string) || '信号中枢'

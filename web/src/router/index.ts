@@ -15,6 +15,7 @@ const router = createRouter({
         { path: 'templates', component: () => import('@/views/Templates.vue'), meta: { title: '模板管理' } },
         { path: 'tasks', component: () => import('@/views/Tasks.vue'), meta: { title: '任务管理' } },
         { path: 'logs', component: () => import('@/views/Logs.vue'), meta: { title: '发送日志' } },
+        { path: 'users', component: () => import('@/views/Users.vue'), meta: { title: '用户管理', adminOnly: true } },
         { path: 'settings', component: () => import('@/views/Settings.vue'), meta: { title: '个人设置' } },
       ],
     },
@@ -25,6 +26,7 @@ router.beforeEach((to) => {
   const auth = useAuthStore()
   if (!to.meta.public && !auth.isLoggedIn) return { path: '/login' }
   if (to.path === '/login' && auth.isLoggedIn) return { path: '/dashboard' }
+  if (to.meta.adminOnly && auth.user?.role !== 'admin') return { path: '/dashboard' }
   return true
 })
 

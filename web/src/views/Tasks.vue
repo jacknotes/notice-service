@@ -104,7 +104,12 @@
           </el-form-item>
 
           <el-form-item label="通知模板" prop="template_id" class="grow">
-            <el-select v-model="form.template_id" placeholder="选择模板" style="width: 100%">
+            <el-select
+              v-model="form.template_id"
+              placeholder="选择模板"
+              style="width: 100%"
+              @change="onTemplateChange"
+            >
               <el-option
                 v-for="t in templates"
                 :key="t.id"
@@ -126,23 +131,20 @@
           <el-input v-model="form.cron_expr" placeholder="例如：0 */30 * * * *" class="mono" />
         </el-form-item>
 
-        <el-form-item label="接收地址" prop="receivers">
+        <el-form-item v-if="showReceivers" label="接收地址" prop="receivers">
           <el-input
             v-model="form.receivers"
             type="textarea"
             :rows="4"
             :placeholder="RECEIVER_PLACEHOLDER"
           />
-          <div v-if="nonEmailChannel" class="receiver-alert" role="note">
-            <el-icon class="receiver-alert-icon"><InfoFilled /></el-icon>
-            <span>
-              当前渠道为 <b class="receiver-alert-strong">{{ channelTypeLabel }}</b>，
-              消息将发送到机器人 / token 绑定的目标，<b class="receiver-alert-strong">接收地址不生效</b>；
-              如需发送到指定邮箱请选择「邮件」渠道。
-            </span>
-          </div>
-          <div v-else class="field-hint mono">{{ RECEIVER_HINT }}</div>
+          <div class="field-hint mono">{{ RECEIVER_HINT }}</div>
         </el-form-item>
+
+        <div v-else-if="nonEmailChannel" class="receiver-note">
+          当前渠道为 <b class="receiver-note-strong">{{ channelTypeLabel }}</b>，
+          消息将发送到机器人 / token 绑定的目标
+        </div>
 
         <el-form-item v-if="form.trigger_type === 'api'" label="IP 白名单（可选）">
           <el-input
@@ -151,6 +153,22 @@
             :rows="3"
             placeholder="每行一个 IP 或 CIDR，留空表示不限制"
           />
+        </el-form-item>
+
+        <el-form-item v-if="selectedTemplateVariables.length" label="模板变量">
+          <div class="tpl-vars-list">
+            <div v-for="v in selectedTemplateVariables" :key="v.name" class="tpl-var-item">
+              <div class="tpl-var-meta">
+                <span class="tpl-var-name mono">{{ v.name }}</span>
+                <span v-if="v.description" class="tpl-var-desc">{{ v.description }}</span>
+              </div>
+              <el-input
+                :model-value="form.variables[v.name] ?? v.default ?? ''"
+                :placeholder="v.default ? `默认：${v.default}` : '发送时替换为实际值'"
+                @update:model-value="setVariable(v.name, $event)"
+              />
+            </div>
+          </div>
         </el-form-item>
 
         <el-form-item label="状态">
@@ -203,7 +221,7 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
-import { Plus, CopyDocument, InfoFilled } from '@element-plus/icons-vue'
+import { Plus, CopyDocument } from '@element-plus/icons-vue'
 import { channelApi, taskApi, templateApi } from '@/api'
 
 interface TaskRow {
@@ -216,9 +234,17 @@ interface TaskRow {
   cron_expr: string
   api_key?: string
   allowed_ips: string[]
+  variables?: Record<string, string>
   enabled: boolean
   created_at?: string
   updated_at?: string
+}
+
+interface TemplateVar {
+  name: string
+  type?: string
+  description?: string
+  default?: string
 }
 
 const router = useRouter()
@@ -226,7 +252,7 @@ const router = useRouter()
 const loading = ref(false)
 const tasks = ref<TaskRow[]>([])
 const channels = ref<{ id: number; name: string; type: string }[]>([])
-const templates = ref<{ id: number; name: string }[]>([])
+const templates = ref<{ id: number; name: string; variables: TemplateVar[] }[]>([])
 const togglingId = ref<number | null>(null)
 
 const dialogVisible = ref(false)
@@ -242,6 +268,7 @@ const form = reactive<{
   cron_expr: string
   receivers: string
   allowed_ips: string
+  variables: Record<string, string>
   enabled: boolean
 }>({
   id: 0,
@@ -252,6 +279,7 @@ const form = reactive<{
   cron_expr: '',
   receivers: '',
   allowed_ips: '',
+  variables: {},
   enabled: true,
 })
 
@@ -269,7 +297,15 @@ const rules: FormRules = {
       trigger: 'blur',
     },
   ],
-  receivers: [{ required: true, message: '请至少填写一个接收地址', trigger: 'blur' }],
+  receivers: [
+    {
+      validator: (_rule: any, value: string, cb: any) => {
+        if (showReceivers.value && !value.trim()) cb(new Error('请至少填写一个接收地址'))
+        else cb()
+      },
+      trigger: 'blur',
+    },
+  ],
 }
 
 const RECEIVER_PLACEHOLDER = '每行一个接收地址，例如：\nuser@example.com\nalert@example.com'
@@ -291,11 +327,22 @@ const selectedChannel = computed(() =>
 const nonEmailChannel = computed(
   () => !!selectedChannel.value && selectedChannel.value.type !== 'email'
 )
+// 未选择渠道时默认展示接收地址；选定非邮件渠道时隐藏，仅展示渠道提示
+const showReceivers = computed(
+  () => !selectedChannel.value || selectedChannel.value.type === 'email'
+)
 const channelTypeLabel = computed(
   () =>
     (selectedChannel.value &&
       (CHANNEL_TYPE_LABELS[selectedChannel.value.type] || selectedChannel.value.type)) ||
     ''
+)
+
+const selectedTemplate = computed(() =>
+  templates.value.find((t) => t.id === form.template_id)
+)
+const selectedTemplateVariables = computed<TemplateVar[]>(
+  () => selectedTemplate.value?.variables || []
 )
 
 const webhookTagStyle = {
@@ -376,6 +423,7 @@ function openCreate() {
   form.cron_expr = ''
   form.receivers = ''
   form.allowed_ips = ''
+  form.variables = {}
   form.enabled = true
   dialogVisible.value = true
 }
@@ -389,8 +437,19 @@ function openEdit(row: TaskRow) {
   form.cron_expr = row.cron_expr || ''
   form.receivers = (row.receivers || []).join('\n')
   form.allowed_ips = (row.allowed_ips || []).join('\n')
+  form.variables = row.variables ? { ...row.variables } : {}
   form.enabled = row.enabled
   dialogVisible.value = true
+}
+
+/* ── Template variables editor ──────────────────────────────────────── */
+// 切换模板时清空变量：不同模板的变量互不通用
+function onTemplateChange() {
+  form.variables = {}
+}
+
+function setVariable(name: string, value: string) {
+  form.variables[name] = value
 }
 
 function splitLines(s: string): string[] {
@@ -415,6 +474,7 @@ async function saveTask() {
       cron_expr: form.trigger_type === 'cron' ? form.cron_expr.trim() : '',
       receivers: splitLines(form.receivers),
       allowed_ips: form.trigger_type === 'api' ? splitLines(form.allowed_ips) : [],
+      variables: form.variables,
       enabled: form.enabled,
     }
 
@@ -507,29 +567,51 @@ onMounted(() => {
   font-size: 11px;
 }
 
-.receiver-alert {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
+.receiver-note {
   width: 100%;
-  margin-top: 6px;
+  margin-top: 2px;
   padding: 8px 12px;
   border-radius: var(--radius-sm);
-  border: 1px solid rgba(251, 191, 36, 0.35);
-  background: rgba(251, 191, 36, 0.08);
-  color: var(--text-secondary);
+  border: 1px dashed var(--border);
+  background: rgba(148, 163, 184, 0.05);
+  color: var(--text-muted);
   font-size: var(--text-xs);
   line-height: 1.7;
 }
-.receiver-alert-icon {
-  flex-shrink: 0;
-  margin-top: 2px;
-  color: var(--amber-400);
-  font-size: 14px;
-}
-.receiver-alert-strong {
-  color: var(--amber-400);
+.receiver-note-strong {
+  color: var(--text-secondary);
   font-weight: 600;
+}
+
+/* ── Template variables editor ──────────────────────────────────────── */
+.tpl-vars-list {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.tpl-var-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.tpl-var-meta {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+.tpl-var-name {
+  color: var(--indigo-400);
+  font-size: var(--text-xs);
+  font-weight: 600;
+}
+.tpl-var-desc {
+  color: var(--text-faint);
+  font-size: var(--text-xs);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .enabled-row {
