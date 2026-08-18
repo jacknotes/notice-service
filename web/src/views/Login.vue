@@ -83,6 +83,7 @@ const rules: FormRules = {
 }
 
 async function onSubmit() {
+  if (loading.value) return
   error.value = ''
   const valid = await formRef.value?.validate().catch(() => false)
   if (!valid) return

@@ -1,7 +1,12 @@
 import client from './client'
 
+export interface AuthResponse {
+  token: string
+  user: { id: number; username: string; role: string }
+}
+
 export const authApi = {
-  login: (username: string, password: string) =>
+  login: (username: string, password: string): Promise<AuthResponse> =>
     client.post('/auth/login', { username, password }).then((r) => r.data),
   me: () => client.get('/auth/me').then((r) => r.data),
 }

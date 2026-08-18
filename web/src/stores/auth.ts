@@ -3,10 +3,18 @@ import { authApi } from '@/api'
 
 interface User { id: number; username: string; role: string }
 
+function loadUser(): User | null {
+  try {
+    return JSON.parse(localStorage.getItem('user') || 'null')
+  } catch {
+    return null
+  }
+}
+
 export const useAuthStore = defineStore('auth', {
   state: () => ({
     token: localStorage.getItem('token') || '',
-    user: JSON.parse(localStorage.getItem('user') || 'null') as User | null,
+    user: loadUser(),
   }),
   getters: { isLoggedIn: (s) => !!s.token },
   actions: {
