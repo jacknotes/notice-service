@@ -90,6 +90,49 @@ func TestTaskServiceBatchDelete(t *testing.T) {
 	}
 }
 
+// TestTaskServiceReadAllAndAdminManage: 列表返回全部共享任务，管理员可管理任意用户的任务。
+func TestTaskServiceReadAllAndAdminManage(t *testing.T) {
+	db := testDB(t)
+	s := &fakeScheduler{}
+	svc := NewTaskService(db, s)
+	uidA := seedServiceUser(t, db)
+	uidB := seedServiceUser(t, db)
+	chID := seedServiceChannel(t, db, uidA)
+	tplID := seedServiceTemplate(t, db, uidA)
+
+	tk := &model.Task{Name: "A的任务", ChannelID: chID, TemplateID: tplID, TriggerType: "api", Receivers: []string{"a@x.com"}, Enabled: true}
+	if err := svc.Create(uidA, tk); err != nil {
+		t.Fatal(err)
+	}
+
+	// B 的列表包含 A 的任务（读全部）
+	listB, err := svc.List(uidB)
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, t := range listB {
+		if t.ID == tk.ID {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("B's list should include A's task (read-all)")
+	}
+
+	// B 可读取任意任务（Get 不再校验属主）
+	if _, err := svc.Get(uidB, tk.ID); err != nil {
+		t.Fatalf("B reading A's task: %v", err)
+	}
+	// 管理员可 toggle / delete A 的任务
+	if err := svc.Toggle(uidB, tk.ID, false); err != nil {
+		t.Fatalf("admin toggling A's task: %v", err)
+	}
+	if err := svc.Delete(uidB, tk.ID); err != nil {
+		t.Fatalf("admin deleting A's task: %v", err)
+	}
+}
+
 func TestTaskValidateReceiversOnlyRequiredForEmail(t *testing.T) {
 	db := testDB(t)
 	svc := NewTaskService(db, &fakeScheduler{})

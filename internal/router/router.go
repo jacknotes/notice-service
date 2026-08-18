@@ -35,40 +35,41 @@ func NewRouter(db *sql.DB, authSvc *service.AuthService, cipher *crypto.Cipher, 
 		auth.GET("/auth/me", authH.Me)
 		auth.POST("/auth/change-password", authH.ChangePassword)
 
+		// 读操作：所有登录用户可见全部共享数据
 		auth.GET("/channels", channelH.List)
-		auth.POST("/channels", channelH.Create)
-		auth.PUT("/channels/:id", channelH.Update)
-		auth.DELETE("/channels/:id", channelH.Delete)
-		auth.POST("/channels/:id/test", channelH.Test)
-
 		auth.GET("/templates", templateH.List)
-		auth.POST("/templates", templateH.Create)
-		auth.PUT("/templates/:id", templateH.Update)
-		auth.DELETE("/templates/:id", templateH.Delete)
 		auth.POST("/templates/:id/preview", templateH.Preview)
-
 		auth.GET("/tasks", taskH.List)
-		auth.POST("/tasks", taskH.Create)
-		auth.PUT("/tasks/:id", taskH.Update)
-		auth.DELETE("/tasks/:id", taskH.Delete)
-		auth.POST("/tasks/:id/toggle", taskH.Toggle)
 		auth.GET("/tasks/:id/logs", taskH.Logs)
 
 		auth.GET("/dashboard/stats", dashH.Stats)
 		auth.GET("/dashboard/trend", dashH.Trend)
 
-		auth.GET("/users", userH.List)
-		auth.POST("/users", userH.Create)
-		auth.PUT("/users/:id", userH.Update)
-		auth.DELETE("/users/:id", userH.Delete)
-
-		// 管理员专属：批量删除
+		// 写操作与用户管理：仅管理员
 		admin := auth.Group("")
 		admin.Use(middleware.AdminOnly())
 		{
+			admin.POST("/channels", channelH.Create)
+			admin.PUT("/channels/:id", channelH.Update)
+			admin.DELETE("/channels/:id", channelH.Delete)
+			admin.POST("/channels/:id/test", channelH.Test)
 			admin.POST("/channels/batch-delete", channelH.BatchDelete)
+
+			admin.POST("/templates", templateH.Create)
+			admin.PUT("/templates/:id", templateH.Update)
+			admin.DELETE("/templates/:id", templateH.Delete)
 			admin.POST("/templates/batch-delete", templateH.BatchDelete)
+
+			admin.POST("/tasks", taskH.Create)
+			admin.PUT("/tasks/:id", taskH.Update)
+			admin.DELETE("/tasks/:id", taskH.Delete)
+			admin.POST("/tasks/:id/toggle", taskH.Toggle)
 			admin.POST("/tasks/batch-delete", taskH.BatchDelete)
+
+			admin.GET("/users", userH.List)
+			admin.POST("/users", userH.Create)
+			admin.PUT("/users/:id", userH.Update)
+			admin.DELETE("/users/:id", userH.Delete)
 			admin.POST("/users/batch-delete", userH.BatchDelete)
 		}
 	}

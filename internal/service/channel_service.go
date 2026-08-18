@@ -21,8 +21,9 @@ func NewChannelService(db *sql.DB, cipher *crypto.Cipher) *ChannelService {
 	return &ChannelService{repo: repository.NewChannelRepo(db), cipher: cipher}
 }
 
+// List 返回全部未删除渠道（所有用户共享的数据集）；userID 参数仅为兼容保留，不再过滤。
 func (s *ChannelService) List(userID int64) ([]*model.Channel, error) {
-	list, err := s.repo.ListByUser(userID)
+	list, err := s.repo.List()
 	if err != nil {
 		return nil, err
 	}
@@ -55,9 +56,6 @@ func (s *ChannelService) Update(userID, id int64, in *model.Channel) error {
 	if err != nil {
 		return err
 	}
-	if existing.UserID != userID {
-		return errors.New("无权操作")
-	}
 	if _, ok := channel.Get(in.Type); !ok {
 		return errors.New("不支持的渠道类型")
 	}
@@ -66,18 +64,15 @@ func (s *ChannelService) Update(userID, id int64, in *model.Channel) error {
 		return err
 	}
 	in.ID = id
-	in.UserID = userID
+	// 保持原属主：管理员可编辑任意用户的渠道
+	in.UserID = existing.UserID
 	in.ConfigJSON = enc
 	return s.repo.Update(in)
 }
 
 func (s *ChannelService) Delete(userID, id int64) error {
-	existing, err := s.repo.GetByID(id)
-	if err != nil {
+	if _, err := s.repo.GetByID(id); err != nil {
 		return err
-	}
-	if existing.UserID != userID {
-		return errors.New("无权操作")
 	}
 	return s.repo.Delete(id)
 }
@@ -97,9 +92,6 @@ func (s *ChannelService) Test(userID int64, id int64, cfg map[string]string) err
 		c, err := s.repo.GetByID(id)
 		if err != nil {
 			return err
-		}
-		if c.UserID != userID {
-			return errors.New("无权操作")
 		}
 		dec, err := s.decryptConfig(c.ConfigJSON)
 		if err != nil {

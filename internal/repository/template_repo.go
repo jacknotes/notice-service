@@ -71,3 +71,24 @@ func (r *TemplateRepo) ListByUser(userID int64) ([]*model.Template, error) {
 	}
 	return out, rows.Err()
 }
+
+// List 返回全部未删除模板（所有用户共享的数据集）。
+func (r *TemplateRepo) List() ([]*model.Template, error) {
+	rows, err := r.db.Query(
+		"SELECT id, user_id, name, subject, content_md, variables, created_at, updated_at FROM templates WHERE deleted_at IS NULL ORDER BY id")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []*model.Template{}
+	for rows.Next() {
+		t := &model.Template{}
+		var v sql.NullString
+		if err := rows.Scan(&t.ID, &t.UserID, &t.Name, &t.Subject, &t.ContentMD, &v, &t.CreatedAt, &t.UpdatedAt); err != nil {
+			return nil, err
+		}
+		t.VariablesJSON = v.String
+		out = append(out, t)
+	}
+	return out, rows.Err()
+}

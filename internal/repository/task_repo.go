@@ -62,6 +62,11 @@ func (r *TaskRepo) ListByUser(userID int64) ([]*model.Task, error) {
 	return r.scanMany("WHERE user_id = ? AND deleted_at IS NULL ORDER BY id", userID)
 }
 
+// List 返回全部未删除任务（所有用户共享的数据集）。
+func (r *TaskRepo) List() ([]*model.Task, error) {
+	return r.scanMany("WHERE deleted_at IS NULL ORDER BY id")
+}
+
 func (r *TaskRepo) ListEnabledCron() ([]*model.Task, error) {
 	return r.scanMany("WHERE enabled = 1 AND trigger_type = 'cron' AND cron_expr != '' AND deleted_at IS NULL ORDER BY id")
 }
@@ -72,11 +77,12 @@ const taskCols = `id, user_id, name, channel_id, template_id, trigger_type, rece
 func (r *TaskRepo) scanOne(where string, args ...interface{}) (*model.Task, error) {
 	t := &model.Task{}
 	var recv, allowed, vars sql.NullString
+	var apiKey sql.NullString
 	var lockedBy sql.NullString
 	var lockedAt, lastRun, nextRun, deletedAt sql.NullTime
 	err := r.db.QueryRow("SELECT "+taskCols+" FROM tasks "+where, args...).Scan(
 		&t.ID, &t.UserID, &t.Name, &t.ChannelID, &t.TemplateID, &t.TriggerType, &recv,
-		&t.CronExpr, &t.APIKey, &allowed, &vars, &lockedBy, &lockedAt, &t.Enabled, &lastRun, &nextRun,
+		&t.CronExpr, &apiKey, &allowed, &vars, &lockedBy, &lockedAt, &t.Enabled, &lastRun, &nextRun,
 		&t.CreatedAt, &t.UpdatedAt, &deletedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
@@ -85,6 +91,7 @@ func (r *TaskRepo) scanOne(where string, args ...interface{}) (*model.Task, erro
 		return nil, err
 	}
 	t.ReceiversJSON = recv.String
+	t.APIKey = apiKey.String
 	t.AllowedIPsJSON = allowed.String
 	t.VariablesJSON = vars.String
 	t.LockedBy = lockedBy.String
@@ -113,14 +120,16 @@ func (r *TaskRepo) scanMany(where string, args ...interface{}) ([]*model.Task, e
 	for rows.Next() {
 		t := &model.Task{}
 		var recv, allowed, vars sql.NullString
+		var apiKey sql.NullString
 		var lockedBy sql.NullString
 		var lockedAt, lastRun, nextRun, deletedAt sql.NullTime
 		if err := rows.Scan(&t.ID, &t.UserID, &t.Name, &t.ChannelID, &t.TemplateID, &t.TriggerType, &recv,
-			&t.CronExpr, &t.APIKey, &allowed, &vars, &lockedBy, &lockedAt, &t.Enabled, &lastRun, &nextRun,
+			&t.CronExpr, &apiKey, &allowed, &vars, &lockedBy, &lockedAt, &t.Enabled, &lastRun, &nextRun,
 			&t.CreatedAt, &t.UpdatedAt, &deletedAt); err != nil {
 			return nil, err
 		}
 		t.ReceiversJSON = recv.String
+		t.APIKey = apiKey.String
 		t.AllowedIPsJSON = allowed.String
 		t.VariablesJSON = vars.String
 		t.LockedBy = lockedBy.String

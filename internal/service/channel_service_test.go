@@ -74,11 +74,20 @@ func TestChannelServiceEncryptRoundtrip(t *testing.T) {
 		t.Fatalf("config_json should be ciphertext, got %q", stored)
 	}
 	list, err := svc.List(uid)
-	if err != nil || len(list) != 1 {
-		t.Fatalf("list err=%v n=%d", err, len(list))
+	if err != nil {
+		t.Fatal(err)
 	}
-	if list[0].Config["host"] != "smtp.x.com" {
-		t.Errorf("decrypted config = %v", list[0].Config)
+	var found *model.Channel
+	for _, c := range list {
+		if c.ID == ch.ID {
+			found = c
+		}
+	}
+	if found == nil {
+		t.Fatalf("created channel %d should be in list (n=%d)", ch.ID, len(list))
+	}
+	if found.Config["host"] != "smtp.x.com" {
+		t.Errorf("decrypted config = %v", found.Config)
 	}
 }
 
@@ -113,11 +122,11 @@ func TestChannelServiceBatchDelete(t *testing.T) {
 	}
 }
 
-func TestChannelServiceOwnership(t *testing.T) {
+// TestChannelServiceReadAllAndAdminManage: 列表返回全部共享渠道，管理员可管理任意用户的渠道。
+func TestChannelServiceReadAllAndAdminManage(t *testing.T) {
 	db := testDB(t)
 	ciph, _ := crypto.New(key32())
 	svc := NewChannelService(db, ciph)
-
 	uidA := seedServiceUser(t, db)
 	uidB := seedServiceUser(t, db)
 
@@ -126,22 +135,33 @@ func TestChannelServiceOwnership(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// 用户 B 更新 A 的渠道 → 拒绝
-	if err := svc.Update(uidB, ch.ID, &model.Channel{Type: "email", Name: "x", Config: map[string]string{"host": "h"}}); err == nil {
-		t.Error("B updating A's channel should fail")
-	}
-	// 用户 B 删除 A 的渠道 → 拒绝
-	if err := svc.Delete(uidB, ch.ID); err == nil {
-		t.Error("B deleting A's channel should fail")
-	}
-	// 用户 B 的列表不应包含 A 的渠道
+	// B 的列表包含 A 的渠道（读全部）
 	listB, err := svc.List(uidB)
 	if err != nil {
 		t.Fatal(err)
 	}
+	found := false
 	for _, c := range listB {
 		if c.ID == ch.ID {
-			t.Error("B's list should not contain A's channel")
+			found = true
 		}
+	}
+	if !found {
+		t.Fatal("B's list should include A's channel (read-all)")
+	}
+
+	// 管理员可更新/删除 A 的渠道，且属主保持不变
+	if err := svc.Update(uidB, ch.ID, &model.Channel{Type: "email", Name: "改", Config: map[string]string{"host": "h", "port": "587", "username": "u", "password": "p", "from": "a@x.com"}, Enabled: true}); err != nil {
+		t.Fatalf("admin updating A's channel: %v", err)
+	}
+	got, err := svc.repo.GetByID(ch.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.UserID != uidA {
+		t.Errorf("channel owner changed: %d want %d", got.UserID, uidA)
+	}
+	if err := svc.Delete(uidB, ch.ID); err != nil {
+		t.Fatalf("admin deleting A's channel: %v", err)
 	}
 }

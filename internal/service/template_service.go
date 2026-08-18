@@ -3,7 +3,6 @@ package service
 import (
 	"database/sql"
 	"encoding/json"
-	"errors"
 
 	"notice-service/internal/model"
 	"notice-service/internal/render"
@@ -18,8 +17,9 @@ func NewTemplateService(db *sql.DB) *TemplateService {
 	return &TemplateService{repo: repository.NewTemplateRepo(db)}
 }
 
+// List 返回全部未删除模板（所有用户共享的数据集）；userID 参数仅为兼容保留，不再过滤。
 func (s *TemplateService) List(userID int64) ([]*model.Template, error) {
-	list, err := s.repo.ListByUser(userID)
+	list, err := s.repo.List()
 	if err != nil {
 		return nil, err
 	}
@@ -44,26 +44,20 @@ func (s *TemplateService) Update(userID, id int64, in *model.Template) error {
 	if err != nil {
 		return err
 	}
-	if ex.UserID != userID {
-		return errors.New("无权操作")
-	}
 	b, err := json.Marshal(in.Variables)
 	if err != nil {
 		return err
 	}
 	in.ID = id
-	in.UserID = userID
+	// 保持原属主：管理员可编辑任意用户的模板
+	in.UserID = ex.UserID
 	in.VariablesJSON = string(b)
 	return s.repo.Update(in)
 }
 
 func (s *TemplateService) Delete(userID, id int64) error {
-	ex, err := s.repo.GetByID(id)
-	if err != nil {
+	if _, err := s.repo.GetByID(id); err != nil {
 		return err
-	}
-	if ex.UserID != userID {
-		return errors.New("无权操作")
 	}
 	return s.repo.Delete(id)
 }
@@ -78,13 +72,11 @@ func (s *TemplateService) BatchDelete(ids []int64) error {
 	return nil
 }
 
+// Get 不再校验属主：所有用户可读任意模板。
 func (s *TemplateService) Get(userID, id int64) (*model.Template, error) {
 	t, err := s.repo.GetByID(id)
 	if err != nil {
 		return nil, err
-	}
-	if t.UserID != userID {
-		return nil, errors.New("无权操作")
 	}
 	s.fillJSON(t)
 	return t, nil

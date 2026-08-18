@@ -80,8 +80,16 @@ func TestChannelsCRUD(t *testing.T) {
 	if err := json.Unmarshal(wl.Body.Bytes(), &list); err != nil {
 		t.Fatal(err)
 	}
-	if len(list) != 1 {
-		t.Fatalf("expected 1 channel, got %d", len(list))
+	// 列表返回全部共享渠道，只校验刚创建的渠道在列表中
+	created := mustJSON(t, w)
+	found := false
+	for _, c := range list {
+		if int64(c["id"].(float64)) == int64(created["id"].(float64)) {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("created channel should be in list, got %d items", len(list))
 	}
 }
 

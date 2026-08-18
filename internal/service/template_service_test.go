@@ -53,3 +53,50 @@ func TestTemplateServiceBatchDelete(t *testing.T) {
 		}
 	}
 }
+
+// TestTemplateServiceReadAllAndAdminManage: 列表返回全部共享模板，管理员可管理任意用户的模板。
+func TestTemplateServiceReadAllAndAdminManage(t *testing.T) {
+	db := testDB(t)
+	svc := NewTemplateService(db)
+	uidA := seedServiceUser(t, db)
+	uidB := seedServiceUser(t, db)
+
+	tpl := &model.Template{Name: "A的模板", Subject: "s", ContentMD: "c", Variables: []model.TemplateVar{}}
+	if err := svc.Create(uidA, tpl); err != nil {
+		t.Fatal(err)
+	}
+
+	// B 的列表包含 A 的模板（读全部）
+	listB, err := svc.List(uidB)
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, tp := range listB {
+		if tp.ID == tpl.ID {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("B's list should include A's template (read-all)")
+	}
+
+	// B 可读取任意模板（Get 不再校验属主）
+	if _, err := svc.Get(uidB, tpl.ID); err != nil {
+		t.Fatalf("B reading A's template: %v", err)
+	}
+	// 管理员可更新/删除 A 的模板，且属主保持不变
+	if err := svc.Update(uidB, tpl.ID, &model.Template{Name: "改", Subject: "s", ContentMD: "c", Variables: []model.TemplateVar{}}); err != nil {
+		t.Fatalf("admin updating A's template: %v", err)
+	}
+	got, err := svc.repo.GetByID(tpl.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.UserID != uidA {
+		t.Errorf("template owner changed: %d want %d", got.UserID, uidA)
+	}
+	if err := svc.Delete(uidB, tpl.ID); err != nil {
+		t.Fatalf("admin deleting A's template: %v", err)
+	}
+}

@@ -36,8 +36,9 @@ func NewTaskService(db *sql.DB, sched Scheduler) *TaskService {
 	}
 }
 
+// List 返回全部未删除任务（所有用户共享的数据集）；userID 参数仅为兼容保留，不再过滤。
 func (s *TaskService) List(userID int64) ([]*model.Task, error) {
-	list, err := s.repo.ListByUser(userID)
+	list, err := s.repo.List()
 	if err != nil {
 		return nil, err
 	}
@@ -47,13 +48,11 @@ func (s *TaskService) List(userID int64) ([]*model.Task, error) {
 	return list, nil
 }
 
+// Get 不再校验属主：所有用户可读任意任务（含日志归属检查）。
 func (s *TaskService) Get(userID, id int64) (*model.Task, error) {
 	t, err := s.repo.GetByID(id)
 	if err != nil {
 		return nil, err
-	}
-	if t.UserID != userID {
-		return nil, errors.New("无权操作")
 	}
 	s.fill(t)
 	return t, nil
@@ -83,14 +82,12 @@ func (s *TaskService) Update(userID, id int64, in *model.Task) error {
 	if err != nil {
 		return err
 	}
-	if ex.UserID != userID {
-		return errors.New("无权操作")
-	}
 	if err := s.validate(in); err != nil {
 		return err
 	}
 	in.ID = id
-	in.UserID = userID
+	// 保持原属主：管理员可编辑任意用户的任务
+	in.UserID = ex.UserID
 	if (ex.TriggerType == "cron" || in.TriggerType == "cron") && s.sched != nil {
 		s.sched.UnregisterTask(id)
 	}
@@ -108,9 +105,6 @@ func (s *TaskService) Delete(userID, id int64) error {
 	ex, err := s.repo.GetByID(id)
 	if err != nil {
 		return err
-	}
-	if ex.UserID != userID {
-		return errors.New("无权操作")
 	}
 	if ex.TriggerType == "cron" && s.sched != nil {
 		s.sched.UnregisterTask(id)
@@ -135,9 +129,6 @@ func (s *TaskService) Toggle(userID, id int64, enabled bool) error {
 	ex, err := s.repo.GetByID(id)
 	if err != nil {
 		return err
-	}
-	if ex.UserID != userID {
-		return errors.New("无权操作")
 	}
 	if err := s.repo.SetEnabled(id, enabled); err != nil {
 		return err
