@@ -35,7 +35,11 @@ func (w *WechatChannel) Send(message *Message, receiver *Receiver) error {
 	form.Set("token", w.config["pushplus_token"])
 	form.Set("title", message.Subject)
 	form.Set("content", message.Content)
-	resp, err := webhookClient.PostForm("https://www.pushplus.plus/send", form)
+	endpoint := "https://www.pushplus.plus/send"
+	if u := w.config["pushplus_url"]; u != "" {
+		endpoint = u // 测试/自托管可用：指向本地端点
+	}
+	resp, err := webhookClient.PostForm(endpoint, form)
 	if err != nil {
 		return err
 	}
