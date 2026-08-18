@@ -33,6 +33,18 @@ func key32() []byte {
 	return k
 }
 
+func seedServiceUser(t *testing.T, db *sql.DB) int64 {
+	t.Helper()
+	uname := fmt.Sprintf("svc_%d", time.Now().UnixNano())
+	res, err := db.Exec("INSERT INTO users (username, password_hash, role) VALUES (?, 'h', 'user')", uname)
+	if err != nil {
+		t.Fatal(err)
+	}
+	id, _ := res.LastInsertId()
+	t.Cleanup(func() { db.Exec("DELETE FROM users WHERE id=?", id) })
+	return id
+}
+
 func TestChannelServiceEncryptRoundtrip(t *testing.T) {
 	db := testDB(t)
 	ciph, _ := crypto.New(key32())
@@ -63,5 +75,38 @@ func TestChannelServiceEncryptRoundtrip(t *testing.T) {
 	}
 	if list[0].Config["host"] != "smtp.x.com" {
 		t.Errorf("decrypted config = %v", list[0].Config)
+	}
+}
+
+func TestChannelServiceOwnership(t *testing.T) {
+	db := testDB(t)
+	ciph, _ := crypto.New(key32())
+	svc := NewChannelService(db, ciph)
+
+	uidA := seedServiceUser(t, db)
+	uidB := seedServiceUser(t, db)
+
+	ch := &model.Channel{Type: "email", Name: "A的渠道", Config: map[string]string{"host": "smtp.x.com", "port": "587", "username": "u", "password": "p", "from": "a@x.com"}, Enabled: true}
+	if err := svc.Create(uidA, ch); err != nil {
+		t.Fatal(err)
+	}
+
+	// 用户 B 更新 A 的渠道 → 拒绝
+	if err := svc.Update(uidB, ch.ID, &model.Channel{Type: "email", Name: "x", Config: map[string]string{"host": "h"}}); err == nil {
+		t.Error("B updating A's channel should fail")
+	}
+	// 用户 B 删除 A 的渠道 → 拒绝
+	if err := svc.Delete(uidB, ch.ID); err == nil {
+		t.Error("B deleting A's channel should fail")
+	}
+	// 用户 B 的列表不应包含 A 的渠道
+	listB, err := svc.List(uidB)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range listB {
+		if c.ID == ch.ID {
+			t.Error("B's list should not contain A's channel")
+		}
 	}
 }

@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"log"
 
 	"notice-service/internal/channel"
 	"notice-service/internal/crypto"
@@ -27,9 +28,11 @@ func (s *ChannelService) List(userID int64) ([]*model.Channel, error) {
 	}
 	for _, c := range list {
 		cfg, err := s.decryptConfig(c.ConfigJSON)
-		if err == nil {
-			c.Config = cfg
+		if err != nil {
+			log.Printf("channel %d: decrypt config failed: %v", c.ID, err)
+			continue
 		}
+		c.Config = cfg
 	}
 	return list, nil
 }
