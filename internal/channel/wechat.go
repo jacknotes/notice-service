@@ -21,6 +21,7 @@ func (w *WechatChannel) ValidateConfig(c map[string]string) error {
 }
 
 // sendPushPlus 调用 PushPlus API；template 可选 text/markdown 等。
+// 配置 pushplus_topic（群组编码）非空时追加 topic 参数，实现群组发送。
 func sendPushPlus(cfg map[string]string, title, content, template string) error {
 	form := url.Values{}
 	form.Set("token", cfg["pushplus_token"])
@@ -28,6 +29,9 @@ func sendPushPlus(cfg map[string]string, title, content, template string) error 
 	form.Set("content", content)
 	if template != "" {
 		form.Set("template", template)
+	}
+	if topic := cfg["pushplus_topic"]; topic != "" {
+		form.Set("topic", topic)
 	}
 	endpoint := "https://www.pushplus.plus/send"
 	if u := cfg["pushplus_url"]; u != "" {
