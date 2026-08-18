@@ -1,9 +1,11 @@
 package config
 
 import (
+	"bufio"
 	"crypto/rand"
 	"encoding/hex"
 	"os"
+	"strings"
 
 	"github.com/google/uuid"
 )
@@ -23,6 +25,7 @@ type Config struct {
 }
 
 func Load() *Config {
+	loadDotEnv(".env") // 可选配置文件；已存在的环境变量优先，不会被覆盖
 	return &Config{
 		DBHost:     getEnv("DB_HOST", "127.0.0.1"),
 		DBPort:     getEnv("DB_PORT", "3306"),
@@ -64,6 +67,35 @@ func getEnv(key, def string) string {
 		return v
 	}
 	return def
+}
+
+// loadDotEnv 读取简单的 KEY=VALUE 配置文件（每行一条，支持 # 注释与引号）。
+// 仅当对应环境变量未设置时才写入，保证显式环境变量优先。
+func loadDotEnv(path string) {
+	f, err := os.Open(path)
+	if err != nil {
+		return
+	}
+	defer f.Close()
+	sc := bufio.NewScanner(f)
+	for sc.Scan() {
+		line := strings.TrimSpace(sc.Text())
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		k, v, ok := strings.Cut(line, "=")
+		if !ok {
+			continue
+		}
+		k = strings.TrimSpace(k)
+		v = strings.Trim(strings.TrimSpace(v), `"'`)
+		if k == "" {
+			continue
+		}
+		if os.Getenv(k) == "" {
+			_ = os.Setenv(k, v)
+		}
+	}
 }
 
 func randomHex(n int) string {

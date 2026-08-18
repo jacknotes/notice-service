@@ -92,15 +92,15 @@ func (s *NotificationService) sendWithRetry(inst channel.Channel, msg *channel.M
 		err = inst.Send(msg, &channel.Receiver{Address: addr})
 		if err == nil {
 			_ = s.logRepo.Create(&model.TaskLog{
-				TaskID: task.ID, ChannelID: ch.ID, Status: "success",
-				Request: string(reqBody), Response: "ok", RetryCount: attempt,
+				TaskID: task.ID, ChannelID: ch.ID, Subject: msg.Subject, Content: msg.Content,
+				Status: "success", Request: string(reqBody), Response: "ok", RetryCount: attempt,
 			})
 			return nil
 		}
 	}
 	_ = s.logRepo.Create(&model.TaskLog{
-		TaskID: task.ID, ChannelID: ch.ID, Status: "failed",
-		Request: string(reqBody), Response: "", ErrorMsg: err.Error(), RetryCount: maxRetries,
+		TaskID: task.ID, ChannelID: ch.ID, Subject: msg.Subject, Content: msg.Content,
+		Status: "failed", Request: string(reqBody), Response: "", ErrorMsg: err.Error(), RetryCount: maxRetries,
 	})
 	return fmt.Errorf("发送失败(已重试%d次): %w", maxRetries, err)
 }

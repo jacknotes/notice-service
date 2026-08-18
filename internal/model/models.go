@@ -68,6 +68,8 @@ type TaskLog struct {
 	ID         int64     `json:"id"`
 	TaskID     int64     `json:"task_id"`
 	ChannelID  int64     `json:"channel_id"`
+	Subject    string    `json:"subject"`
+	Content    string    `json:"content"`
 	Status     string    `json:"status"`
 	Request    string    `json:"request"`
 	Response   string    `json:"response"`

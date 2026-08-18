@@ -16,8 +16,8 @@ func (r *TaskLogRepo) Create(l *model.TaskLog) error {
 		l.SentAt = time.Now() // 未显式指定时用当前时间，避免零值覆盖 DB 默认
 	}
 	res, err := r.db.Exec(
-		"INSERT INTO task_logs (task_id, channel_id, status, request, response, error_msg, retry_count, sent_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-		l.TaskID, l.ChannelID, l.Status, l.Request, l.Response, l.ErrorMsg, l.RetryCount, l.SentAt)
+		"INSERT INTO task_logs (task_id, channel_id, subject, content, status, request, response, error_msg, retry_count, sent_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+		l.TaskID, l.ChannelID, l.Subject, l.Content, l.Status, l.Request, l.Response, l.ErrorMsg, l.RetryCount, l.SentAt)
 	if err != nil {
 		return err
 	}
@@ -28,7 +28,7 @@ func (r *TaskLogRepo) Create(l *model.TaskLog) error {
 
 func (r *TaskLogRepo) ListByTask(taskID int64) ([]*model.TaskLog, error) {
 	rows, err := r.db.Query(
-		"SELECT id, task_id, channel_id, status, request, response, error_msg, retry_count, sent_at FROM task_logs WHERE task_id=? ORDER BY id DESC LIMIT 200",
+		"SELECT id, task_id, channel_id, subject, content, status, request, response, error_msg, retry_count, sent_at FROM task_logs WHERE task_id=? ORDER BY id DESC LIMIT 200",
 		taskID)
 	if err != nil {
 		return nil, err
@@ -39,7 +39,7 @@ func (r *TaskLogRepo) ListByTask(taskID int64) ([]*model.TaskLog, error) {
 
 func (r *TaskLogRepo) Recent(limit int) ([]*model.TaskLog, error) {
 	rows, err := r.db.Query(
-		"SELECT id, task_id, channel_id, status, request, response, error_msg, retry_count, sent_at FROM task_logs ORDER BY id DESC LIMIT ?",
+		"SELECT id, task_id, channel_id, subject, content, status, request, response, error_msg, retry_count, sent_at FROM task_logs ORDER BY id DESC LIMIT ?",
 		limit)
 	if err != nil {
 		return nil, err
@@ -52,10 +52,12 @@ func scanLogs(rows *sql.Rows) ([]*model.TaskLog, error) {
 	out := []*model.TaskLog{}
 	for rows.Next() {
 		l := &model.TaskLog{}
-		var req, resp, errMsg sql.NullString
-		if err := rows.Scan(&l.ID, &l.TaskID, &l.ChannelID, &l.Status, &req, &resp, &errMsg, &l.RetryCount, &l.SentAt); err != nil {
+		var subj, content, req, resp, errMsg sql.NullString
+		if err := rows.Scan(&l.ID, &l.TaskID, &l.ChannelID, &subj, &content, &l.Status, &req, &resp, &errMsg, &l.RetryCount, &l.SentAt); err != nil {
 			return nil, err
 		}
+		l.Subject = subj.String
+		l.Content = content.String
 		l.Request = req.String
 		l.Response = resp.String
 		l.ErrorMsg = errMsg.String

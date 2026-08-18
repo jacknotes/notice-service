@@ -61,6 +61,8 @@ CREATE TABLE IF NOT EXISTS task_logs (
     id BIGINT PRIMARY KEY AUTO_INCREMENT,
     task_id BIGINT NOT NULL,
     channel_id BIGINT NOT NULL,
+    subject VARCHAR(200) NOT NULL DEFAULT '',
+    content TEXT,
     status VARCHAR(20) NOT NULL,
     request TEXT,
     response TEXT,
