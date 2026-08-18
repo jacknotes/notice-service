@@ -53,8 +53,8 @@ func (w *WechatChannel) TestConnection(c map[string]string) error {
 	if err := w.ValidateConfig(c); err != nil {
 		return err
 	}
-	// 真实推送一条测试消息，便于用户确认能收到
-	return sendPushPlus(c, "【notice-service】渠道连接测试", "渠道连接测试成功！", "text")
+	// 真实推送一条测试消息，便于用户确认能收到（template 用 txt：text 是非法值会报 code=600）
+	return sendPushPlus(c, "【notice-service】渠道连接测试", "渠道连接测试成功！", "txt")
 }
 
 func (w *WechatChannel) Send(message *Message, receiver *Receiver) error {
