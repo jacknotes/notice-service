@@ -62,3 +62,25 @@ func (r *UserRepo) UpdatePassword(userID int64, hash string) error {
 	_, err := r.db.Exec("UPDATE users SET password_hash = ? WHERE id = ?", hash, userID)
 	return err
 }
+
+func (r *UserRepo) List() ([]*model.User, error) {
+	rows, err := r.db.Query("SELECT id, username, password_hash, role, created_at, updated_at FROM users ORDER BY id")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []*model.User{}
+	for rows.Next() {
+		u := &model.User{}
+		if err := rows.Scan(&u.ID, &u.Username, &u.PasswordHash, &u.Role, &u.CreatedAt, &u.UpdatedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, u)
+	}
+	return out, rows.Err()
+}
+
+func (r *UserRepo) Delete(id int64) error {
+	_, err := r.db.Exec("DELETE FROM users WHERE id = ?", id)
+	return err
+}

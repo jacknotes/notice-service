@@ -21,6 +21,7 @@ func NewRouter(db *sql.DB, authSvc *service.AuthService, cipher *crypto.Cipher, 
 	taskH := handler.NewTaskHandler(db, sched)
 	webhookH := handler.NewWebhookHandler(db, cipher)
 	dashH := handler.NewDashboardHandler(db)
+	userH := handler.NewUserHandler(db)
 
 	r.GET("/api/health", handler.Health)
 
@@ -55,6 +56,10 @@ func NewRouter(db *sql.DB, authSvc *service.AuthService, cipher *crypto.Cipher, 
 
 		auth.GET("/dashboard/stats", dashH.Stats)
 		auth.GET("/dashboard/trend", dashH.Trend)
+
+		auth.GET("/users", userH.List)
+		auth.POST("/users", userH.Create)
+		auth.DELETE("/users/:id", userH.Delete)
 	}
 	api.POST("/webhook/:api_key", webhookH.Trigger)
 
