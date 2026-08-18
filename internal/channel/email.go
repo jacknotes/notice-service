@@ -81,7 +81,27 @@ func (e *EmailChannel) TestConnection(c map[string]string) error {
 		return err
 	}
 	defer client.Close()
-	return client.Noop()
+	// 真正发送一封测试邮件到发件人邮箱，便于确认能够送达
+	subject := "【notice-service】渠道连接测试"
+	body := "<h3>渠道连接测试成功！</h3><p>这是一封来自 Notice Service 的测试邮件。</p>"
+	msg := buildMailFrom(c["from"], c["from"], subject, body)
+	if err := client.Mail(c["from"]); err != nil {
+		return err
+	}
+	if err := client.Rcpt(c["from"]); err != nil {
+		return err
+	}
+	w, err := client.Data()
+	if err != nil {
+		return err
+	}
+	if _, err := w.Write([]byte(msg)); err != nil {
+		return err
+	}
+	if err := w.Close(); err != nil {
+		return err
+	}
+	return client.Quit()
 }
 
 func (e *EmailChannel) Send(message *Message, receiver *Receiver) error {
@@ -115,8 +135,13 @@ func (e *EmailChannel) Send(message *Message, receiver *Receiver) error {
 }
 
 func (e *EmailChannel) buildMail(subject, htmlBody, to string) string {
+	return buildMailFrom(e.config["from"], to, subject, htmlBody)
+}
+
+// buildMailFrom 组装一封 text/html 邮件（TestConnection 用传入配置）。
+func buildMailFrom(from, to, subject, htmlBody string) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "From: %s\r\n", e.config["from"])
+	fmt.Fprintf(&b, "From: %s\r\n", from)
 	fmt.Fprintf(&b, "To: %s\r\n", to)
 	fmt.Fprintf(&b, "Subject: %s\r\n", subject)
 	b.WriteString("MIME-Version: 1.0\r\n")
