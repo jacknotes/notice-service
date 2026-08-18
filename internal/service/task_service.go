@@ -175,11 +175,14 @@ func (s *TaskService) toJSON(t *model.Task) {
 	t.ReceiversJSON = string(b)
 	ab, _ := json.Marshal(t.AllowedIPs)
 	t.AllowedIPsJSON = string(ab)
+	vb, _ := json.Marshal(t.Variables)
+	t.VariablesJSON = string(vb)
 }
 
 func (s *TaskService) fill(t *model.Task) {
 	_ = json.Unmarshal([]byte(t.ReceiversJSON), &t.Receivers)
 	_ = json.Unmarshal([]byte(t.AllowedIPsJSON), &t.AllowedIPs)
+	_ = json.Unmarshal([]byte(t.VariablesJSON), &t.Variables)
 }
 
 func generateAPIKey() string {

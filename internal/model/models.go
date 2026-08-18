@@ -43,25 +43,27 @@ type Template struct {
 }
 
 type Task struct {
-	ID             int64      `json:"id"`
-	UserID         int64      `json:"user_id"`
-	Name           string     `json:"name"`
-	ChannelID      int64      `json:"channel_id"`
-	TemplateID     int64      `json:"template_id"`
-	TriggerType    string     `json:"trigger_type"`
-	Receivers      []string   `json:"receivers"`
-	ReceiversJSON  string     `json:"-"`
-	CronExpr       string     `json:"cron_expr"`
-	APIKey         string     `json:"api_key,omitempty"`
-	AllowedIPs     []string   `json:"allowed_ips,omitempty"`
-	AllowedIPsJSON string     `json:"-"`
-	LockedBy       string     `json:"-"`
-	LockedAt       *time.Time `json:"-"`
-	Enabled        bool       `json:"enabled"`
-	LastRunAt      *time.Time `json:"last_run_at"`
-	NextRunAt      *time.Time `json:"next_run_at"`
-	CreatedAt      time.Time  `json:"created_at"`
-	UpdatedAt      time.Time  `json:"updated_at"`
+	ID             int64             `json:"id"`
+	UserID         int64             `json:"user_id"`
+	Name           string            `json:"name"`
+	ChannelID      int64             `json:"channel_id"`
+	TemplateID     int64             `json:"template_id"`
+	TriggerType    string            `json:"trigger_type"`
+	Receivers      []string          `json:"receivers"`
+	ReceiversJSON  string            `json:"-"`
+	CronExpr       string            `json:"cron_expr"`
+	APIKey         string            `json:"api_key,omitempty"`
+	AllowedIPs     []string          `json:"allowed_ips,omitempty"`
+	AllowedIPsJSON string            `json:"-"`
+	Variables      map[string]string `json:"variables,omitempty"`
+	VariablesJSON  string            `json:"-"`
+	LockedBy       string            `json:"-"`
+	LockedAt       *time.Time        `json:"-"`
+	Enabled        bool              `json:"enabled"`
+	LastRunAt      *time.Time        `json:"last_run_at"`
+	NextRunAt      *time.Time        `json:"next_run_at"`
+	CreatedAt      time.Time         `json:"created_at"`
+	UpdatedAt      time.Time         `json:"updated_at"`
 }
 
 type TaskLog struct {

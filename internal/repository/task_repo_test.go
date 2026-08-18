@@ -7,6 +7,43 @@ import (
 	"notice-service/internal/model"
 )
 
+func TestTaskRepoVariablesRoundtrip(t *testing.T) {
+	db := openTestDB(t)
+	tr := NewTaskRepo(db)
+	uid := seedUser(t, db)
+	chID := seedChannel(t, db, uid)
+	tplID := seedTemplate(t, db, uid)
+
+	tk := &model.Task{
+		UserID: uid, Name: "带变量", ChannelID: chID, TemplateID: tplID,
+		TriggerType: "api", ReceiversJSON: `[]`, VariablesJSON: `{"name":"任务值","env":"prod"}`,
+		APIKey: "key-" + randSuffix(), Enabled: true,
+	}
+	if err := tr.Create(tk); err != nil {
+		t.Fatal(err)
+	}
+	got, err := tr.GetByID(tk.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.VariablesJSON != `{"name":"任务值","env":"prod"}` {
+		t.Errorf("VariablesJSON = %q", got.VariablesJSON)
+	}
+	list, err := tr.ListByUser(uid)
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, x := range list {
+		if x.ID == tk.ID && x.VariablesJSON == tk.VariablesJSON {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("ListByUser should round-trip VariablesJSON")
+	}
+}
+
 func TestTaskRepoCRUDAndLease(t *testing.T) {
 	db := openTestDB(t)
 	tr := NewTaskRepo(db)

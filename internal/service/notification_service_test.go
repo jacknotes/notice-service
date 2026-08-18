@@ -61,6 +61,56 @@ func TestNotificationServiceSendOnceWithoutReceivers(t *testing.T) {
 	}
 }
 
+// captureChan 捕获最后一次发送的 Message，用于断言渲染结果。
+type captureChan struct {
+	lastMsg *channel.Message
+}
+
+func (c *captureChan) Type() string                             { return "wechat" }
+func (c *captureChan) ValidateConfig(m map[string]string) error { return nil }
+func (c *captureChan) TestConnection(m map[string]string) error { return nil }
+func (c *captureChan) Send(m *channel.Message, r *channel.Receiver) error {
+	c.lastMsg = m
+	return nil
+}
+
+func TestNotificationServiceTaskVariablesMerge(t *testing.T) {
+	db := testDB(t)
+	ns := NewNotificationService(db, nil)
+
+	uid := seedServiceUser(t, db)
+	chID := seedServiceChannelType(t, db, uid, "wechat")
+	// 模板默认：a=defaultA, b=defaultB, c=defaultC
+	tplRes, err := db.Exec(
+		"INSERT INTO templates (user_id, name, subject, content_md, variables) VALUES (?, 't', '{{a}} {{b}} {{c}}', '{{a}}|{{b}}|{{c}}', '[{\"name\":\"a\",\"default\":\"defaultA\"},{\"name\":\"b\",\"default\":\"defaultB\"},{\"name\":\"c\",\"default\":\"defaultC\"}]')",
+		uid)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tplID, _ := tplRes.LastInsertId()
+	t.Cleanup(func() { db.Exec("DELETE FROM templates WHERE id=?", tplID) })
+
+	// 任务级变量覆盖 a、b；c 保持模板默认
+	tkID := seedServiceTaskWithVars(t, db, uid, chID, tplID, `["x@x.com"]`, `{"a":"taskA","b":"taskB"}`)
+
+	cc := &captureChan{}
+	ns.Instancer = func(c *model.Channel) (channel.Channel, error) { return cc, nil }
+
+	// 请求变量覆盖 a；预期：a=reqA（请求）> b=taskB（任务）> c=defaultC（模板默认）
+	if err := ns.SendTask(tkID, map[string]string{"a": "reqA"}); err != nil {
+		t.Fatal(err)
+	}
+	if cc.lastMsg == nil {
+		t.Fatal("no message captured")
+	}
+	if got, want := cc.lastMsg.Subject, "reqA taskB defaultC"; got != want {
+		t.Errorf("subject = %q, want %q", got, want)
+	}
+	if got, want := cc.lastMsg.Content, "reqA|taskB|defaultC"; got != want {
+		t.Errorf("content = %q, want %q", got, want)
+	}
+}
+
 func TestNotificationServiceSendsAndLogs(t *testing.T) {
 	db := testDB(t)
 	ns := NewNotificationService(db, nil)

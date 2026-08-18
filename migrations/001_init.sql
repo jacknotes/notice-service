@@ -44,6 +44,7 @@ CREATE TABLE IF NOT EXISTS tasks (
     cron_expr VARCHAR(100) DEFAULT '',
     api_key VARCHAR(64) UNIQUE,
     allowed_ips VARCHAR(500) DEFAULT '',
+    variables JSON,
     locked_by VARCHAR(64) DEFAULT NULL,
     locked_at DATETIME DEFAULT NULL,
     enabled TINYINT(1) NOT NULL DEFAULT 1,

@@ -16,10 +16,10 @@ func NewTaskRepo(db *sql.DB) *TaskRepo { return &TaskRepo{db: db} }
 
 func (r *TaskRepo) Create(t *model.Task) error {
 	res, err := r.db.Exec(
-		`INSERT INTO tasks (user_id, name, channel_id, template_id, trigger_type, receivers, cron_expr, api_key, allowed_ips, enabled)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		`INSERT INTO tasks (user_id, name, channel_id, template_id, trigger_type, receivers, cron_expr, api_key, allowed_ips, variables, enabled)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		t.UserID, t.Name, t.ChannelID, t.TemplateID, t.TriggerType, t.ReceiversJSON,
-		t.CronExpr, t.APIKey, t.AllowedIPsJSON, t.Enabled)
+		t.CronExpr, t.APIKey, t.AllowedIPsJSON, varsJSON(t.VariablesJSON), t.Enabled)
 	if err != nil {
 		return err
 	}
@@ -30,11 +30,19 @@ func (r *TaskRepo) Create(t *model.Task) error {
 
 func (r *TaskRepo) Update(t *model.Task) error {
 	_, err := r.db.Exec(
-		`UPDATE tasks SET name=?, channel_id=?, template_id=?, trigger_type=?, receivers=?, cron_expr=?, allowed_ips=?, enabled=?
+		`UPDATE tasks SET name=?, channel_id=?, template_id=?, trigger_type=?, receivers=?, cron_expr=?, allowed_ips=?, variables=?, enabled=?
 		 WHERE id=? AND user_id=?`,
 		t.Name, t.ChannelID, t.TemplateID, t.TriggerType, t.ReceiversJSON, t.CronExpr,
-		t.AllowedIPsJSON, t.Enabled, t.ID, t.UserID)
+		t.AllowedIPsJSON, varsJSON(t.VariablesJSON), t.Enabled, t.ID, t.UserID)
 	return err
+}
+
+// varsJSON 保证写入 JSON 列的是合法 JSON：空值以 null 表示。
+func varsJSON(s string) string {
+	if s == "" {
+		return "null"
+	}
+	return s
 }
 
 func (r *TaskRepo) Delete(id int64) error {
@@ -59,16 +67,16 @@ func (r *TaskRepo) ListEnabledCron() ([]*model.Task, error) {
 }
 
 const taskCols = `id, user_id, name, channel_id, template_id, trigger_type, receivers, cron_expr,
-	api_key, allowed_ips, locked_by, locked_at, enabled, last_run_at, next_run_at, created_at, updated_at`
+	api_key, allowed_ips, variables, locked_by, locked_at, enabled, last_run_at, next_run_at, created_at, updated_at`
 
 func (r *TaskRepo) scanOne(where string, args ...interface{}) (*model.Task, error) {
 	t := &model.Task{}
-	var recv, allowed sql.NullString
+	var recv, allowed, vars sql.NullString
 	var lockedBy sql.NullString
 	var lockedAt, lastRun, nextRun sql.NullTime
 	err := r.db.QueryRow("SELECT "+taskCols+" FROM tasks "+where, args...).Scan(
 		&t.ID, &t.UserID, &t.Name, &t.ChannelID, &t.TemplateID, &t.TriggerType, &recv,
-		&t.CronExpr, &t.APIKey, &allowed, &lockedBy, &lockedAt, &t.Enabled, &lastRun, &nextRun,
+		&t.CronExpr, &t.APIKey, &allowed, &vars, &lockedBy, &lockedAt, &t.Enabled, &lastRun, &nextRun,
 		&t.CreatedAt, &t.UpdatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
@@ -78,6 +86,7 @@ func (r *TaskRepo) scanOne(where string, args ...interface{}) (*model.Task, erro
 	}
 	t.ReceiversJSON = recv.String
 	t.AllowedIPsJSON = allowed.String
+	t.VariablesJSON = vars.String
 	t.LockedBy = lockedBy.String
 	if lockedAt.Valid {
 		t.LockedAt = &lockedAt.Time
@@ -100,16 +109,17 @@ func (r *TaskRepo) scanMany(where string, args ...interface{}) ([]*model.Task, e
 	out := []*model.Task{}
 	for rows.Next() {
 		t := &model.Task{}
-		var recv, allowed sql.NullString
+		var recv, allowed, vars sql.NullString
 		var lockedBy sql.NullString
 		var lockedAt, lastRun, nextRun sql.NullTime
 		if err := rows.Scan(&t.ID, &t.UserID, &t.Name, &t.ChannelID, &t.TemplateID, &t.TriggerType, &recv,
-			&t.CronExpr, &t.APIKey, &allowed, &lockedBy, &lockedAt, &t.Enabled, &lastRun, &nextRun,
+			&t.CronExpr, &t.APIKey, &allowed, &vars, &lockedBy, &lockedAt, &t.Enabled, &lastRun, &nextRun,
 			&t.CreatedAt, &t.UpdatedAt); err != nil {
 			return nil, err
 		}
 		t.ReceiversJSON = recv.String
 		t.AllowedIPsJSON = allowed.String
+		t.VariablesJSON = vars.String
 		t.LockedBy = lockedBy.String
 		if lockedAt.Valid {
 			t.LockedAt = &lockedAt.Time

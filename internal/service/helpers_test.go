@@ -41,10 +41,20 @@ func seedServiceTask(t *testing.T, db *sql.DB, uid, chID, tplID int64) int64 {
 
 func seedServiceTaskWithReceivers(t *testing.T, db *sql.DB, uid, chID, tplID int64, receiversJSON string) int64 {
 	t.Helper()
+	return seedServiceTaskFull(t, db, uid, chID, tplID, receiversJSON, "null")
+}
+
+func seedServiceTaskWithVars(t *testing.T, db *sql.DB, uid, chID, tplID int64, receiversJSON, variablesJSON string) int64 {
+	t.Helper()
+	return seedServiceTaskFull(t, db, uid, chID, tplID, receiversJSON, variablesJSON)
+}
+
+func seedServiceTaskFull(t *testing.T, db *sql.DB, uid, chID, tplID int64, receiversJSON, variablesJSON string) int64 {
+	t.Helper()
 	apiKey := fmt.Sprintf("key-%d", time.Now().UnixNano())
 	res, err := db.Exec(
-		"INSERT INTO tasks (user_id, name, channel_id, template_id, trigger_type, receivers, api_key, enabled) VALUES (?, 't', ?, ?, 'api', ?, ?, 1)",
-		uid, chID, tplID, receiversJSON, apiKey)
+		"INSERT INTO tasks (user_id, name, channel_id, template_id, trigger_type, receivers, variables, api_key, enabled) VALUES (?, 't', ?, ?, 'api', ?, ?, ?, 1)",
+		uid, chID, tplID, receiversJSON, variablesJSON, apiKey)
 	if err != nil {
 		t.Fatal(err)
 	}

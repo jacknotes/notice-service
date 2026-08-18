@@ -66,7 +66,16 @@ func (s *NotificationService) SendTask(taskID int64, vars map[string]string) err
 
 	var tplVars []model.TemplateVar
 	_ = json.Unmarshal([]byte(tpl.VariablesJSON), &tplVars)
-	fullVars := mergeVars(tplVars, vars)
+	fullVars := mergeVars(tplVars, nil)
+	// 任务级变量介于模板默认值与请求变量之间：request > 任务级 > 模板默认
+	var taskVars map[string]string
+	_ = json.Unmarshal([]byte(task.VariablesJSON), &taskVars)
+	for k, v := range taskVars {
+		fullVars[k] = v
+	}
+	for k, v := range vars {
+		fullVars[k] = v // request 优先级最高
+	}
 	subject, content := render.RenderMessage(tpl.Subject, tpl.ContentMD, fullVars)
 	// content 为渲染后的原始 Markdown，由各渠道决定如何呈现：
 	// 邮箱 → HTML；飞书 → 纯文本；企微/钉钉/PushPlus → 原生 Markdown
