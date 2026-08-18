@@ -3,6 +3,7 @@ package service
 import (
 	"errors"
 	"testing"
+	"time"
 
 	"notice-service/internal/channel"
 	"notice-service/internal/crypto"
@@ -51,6 +52,7 @@ func TestNotificationServiceSendsAndLogs(t *testing.T) {
 func TestNotificationServiceRetries(t *testing.T) {
 	db := testDB(t)
 	ns := NewNotificationService(db, nil)
+	ns.RetryBackoff = []time.Duration{time.Millisecond, time.Millisecond, time.Millisecond} // 加速测试
 	ns.Instancer = func(c *model.Channel) (channel.Channel, error) { return &fakeChan{failTimes: 2}, nil }
 
 	uid := seedServiceUser(t, db)

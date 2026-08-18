@@ -15,7 +15,7 @@ import (
 
 const maxRetries = 3
 
-var retryBackoff = []time.Duration{5 * time.Second, 30 * time.Second, 60 * time.Second}
+var defaultRetryBackoff = []time.Duration{5 * time.Second, 30 * time.Second, 60 * time.Second}
 
 // ChannelInstancer 从渠道模型构造可发送的渠道实例（测试可替换）。
 type ChannelInstancer func(c *model.Channel) (channel.Channel, error)
@@ -26,6 +26,8 @@ type NotificationService struct {
 	channelRepo  *repository.ChannelRepo
 	logRepo      *repository.TaskLogRepo
 	Instancer    ChannelInstancer
+	// RetryBackoff 可被测试替换为毫秒级值以加速测试。
+	RetryBackoff []time.Duration
 }
 
 func NewNotificationService(db *sql.DB, cipher *crypto.Cipher) *NotificationService {
@@ -36,6 +38,7 @@ func NewNotificationService(db *sql.DB, cipher *crypto.Cipher) *NotificationServ
 		channelRepo:  repository.NewChannelRepo(db),
 		logRepo:      repository.NewTaskLogRepo(db),
 		Instancer:    func(c *model.Channel) (channel.Channel, error) { return cs.InstancedChannel(c) },
+		RetryBackoff: defaultRetryBackoff,
 	}
 }
 
@@ -79,9 +82,10 @@ func (s *NotificationService) SendTask(taskID int64, vars map[string]string) err
 func (s *NotificationService) sendWithRetry(inst channel.Channel, msg *channel.Message, addr string, task *model.Task, ch *model.Channel) error {
 	reqBody, _ := json.Marshal(map[string]string{"address": addr})
 	var err error
+	backoff := s.RetryBackoff
 	for attempt := 0; attempt <= maxRetries; attempt++ {
 		if attempt > 0 {
-			time.Sleep(retryBackoff[min(attempt-1, len(retryBackoff)-1)])
+			time.Sleep(backoff[min(attempt-1, len(backoff)-1)])
 		}
 		err = inst.Send(msg, &channel.Receiver{Address: addr})
 		if err == nil {
