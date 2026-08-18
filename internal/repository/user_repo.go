@@ -57,3 +57,8 @@ func (r *UserRepo) GetByID(id int64) (*model.User, error) {
 	}
 	return u, nil
 }
+
+func (r *UserRepo) UpdatePassword(userID int64, hash string) error {
+	_, err := r.db.Exec("UPDATE users SET password_hash = ? WHERE id = ?", hash, userID)
+	return err
+}

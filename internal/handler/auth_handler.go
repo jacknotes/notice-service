@@ -43,3 +43,19 @@ func (h *AuthHandler) Me(c *gin.Context) {
 	role := c.GetString("role")
 	c.JSON(http.StatusOK, gin.H{"id": uid, "role": role})
 }
+
+func (h *AuthHandler) ChangePassword(c *gin.Context) {
+	var req struct {
+		OldPassword string `json:"old_password"`
+		NewPassword string `json:"new_password"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "参数错误"})
+		return
+	}
+	if err := h.Svc.ChangePassword(c.GetInt64("uid"), req.OldPassword, req.NewPassword); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"ok": true})
+}

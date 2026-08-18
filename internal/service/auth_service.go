@@ -106,3 +106,22 @@ func (s *AuthService) Login(username, password string) (string, *model.User, err
 	}
 	return tok, u, nil
 }
+
+// ChangePassword 校验旧密码并更新为新密码。
+func (s *AuthService) ChangePassword(userID int64, oldPass, newPass string) error {
+	if len(newPass) < 6 {
+		return errors.New("新密码至少 6 位")
+	}
+	u, err := s.users.GetByID(userID)
+	if err != nil {
+		return err
+	}
+	if bcrypt.CompareHashAndPassword([]byte(u.PasswordHash), []byte(oldPass)) != nil {
+		return errors.New("原密码不正确")
+	}
+	hash, err := bcrypt.GenerateFromPassword([]byte(newPass), bcrypt.DefaultCost)
+	if err != nil {
+		return err
+	}
+	return s.users.UpdatePassword(u.ID, string(hash))
+}

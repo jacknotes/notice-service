@@ -32,6 +32,7 @@ func NewRouter(db *sql.DB, authSvc *service.AuthService, cipher *crypto.Cipher, 
 	{
 		auth.POST("/auth/logout", authH.Logout)
 		auth.GET("/auth/me", authH.Me)
+		auth.POST("/auth/change-password", authH.ChangePassword)
 
 		auth.GET("/channels", channelH.List)
 		auth.POST("/channels", channelH.Create)
