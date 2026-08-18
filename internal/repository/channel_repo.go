@@ -31,7 +31,7 @@ func (r *ChannelRepo) Update(c *model.Channel) error {
 }
 
 func (r *ChannelRepo) Delete(id int64) error {
-	_, err := r.db.Exec("DELETE FROM channels WHERE id=?", id)
+	_, err := r.db.Exec("UPDATE channels SET deleted_at = NOW() WHERE id=? AND deleted_at IS NULL", id)
 	return err
 }
 
@@ -39,7 +39,7 @@ func (r *ChannelRepo) GetByID(id int64) (*model.Channel, error) {
 	c := &model.Channel{}
 	var cfg sql.NullString
 	err := r.db.QueryRow(
-		"SELECT id, user_id, type, name, config_json, enabled, created_at, updated_at FROM channels WHERE id=?",
+		"SELECT id, user_id, type, name, config_json, enabled, created_at, updated_at FROM channels WHERE id=? AND deleted_at IS NULL",
 		id).Scan(&c.ID, &c.UserID, &c.Type, &c.Name, &cfg, &c.Enabled, &c.CreatedAt, &c.UpdatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
@@ -53,7 +53,7 @@ func (r *ChannelRepo) GetByID(id int64) (*model.Channel, error) {
 
 func (r *ChannelRepo) ListByUser(userID int64) ([]*model.Channel, error) {
 	rows, err := r.db.Query(
-		"SELECT id, user_id, type, name, config_json, enabled, created_at, updated_at FROM channels WHERE user_id=? ORDER BY id",
+		"SELECT id, user_id, type, name, config_json, enabled, created_at, updated_at FROM channels WHERE user_id=? AND deleted_at IS NULL ORDER BY id",
 		userID)
 	if err != nil {
 		return nil, err

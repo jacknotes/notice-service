@@ -7,9 +7,9 @@ import (
 	"notice-service/internal/model"
 )
 
-// TestTaskDeleteCascadesLogs 验证删除任务时其日志随 ON DELETE CASCADE 一并删除，
-// 而不是因外键约束 (MySQL 1451) 而失败。
-func TestTaskDeleteCascadesLogs(t *testing.T) {
+// TestTaskSoftDeleteKeepsLogs 验证任务改为逻辑删除后：任务行仍物理存在（GetByID 因
+// deleted_at 过滤返回 ErrNotFound），日志不再被 ON DELETE CASCADE 清除。
+func TestTaskSoftDeleteKeepsLogs(t *testing.T) {
 	db := openTestDB(t)
 	tr := NewTaskRepo(db)
 	lr := NewTaskLogRepo(db)
@@ -35,14 +35,29 @@ func TestTaskDeleteCascadesLogs(t *testing.T) {
 	}
 
 	if err := tr.Delete(taskID); err != nil {
-		t.Fatalf("deleting task with logs should succeed (no FK error): %v", err)
+		t.Fatalf("soft deleting task should succeed: %v", err)
 	}
 
+	// 逻辑删除后 GetByID 应返回 ErrNotFound
+	if _, err := tr.GetByID(taskID); err != ErrNotFound {
+		t.Fatalf("expected ErrNotFound after soft delete, got %v", err)
+	}
+
+	// 但任务行仍物理存在
+	var cnt int
+	if err := db.QueryRow("SELECT COUNT(*) FROM tasks WHERE id=?", taskID).Scan(&cnt); err != nil {
+		t.Fatal(err)
+	}
+	if cnt != 1 {
+		t.Fatalf("task row should still physically exist after soft delete, count=%d", cnt)
+	}
+
+	// 日志保留（不再级联删除）
 	after, err := lr.ListByTask(taskID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(after) != 0 {
-		t.Fatalf("expected log rows to be cascaded away, got %d", len(after))
+	if len(after) != 1 {
+		t.Fatalf("expected log rows to remain after soft delete, got %d", len(after))
 	}
 }

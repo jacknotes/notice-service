@@ -6,9 +6,10 @@ type User struct {
 	ID           int64     `json:"id"`
 	Username     string    `json:"username"`
 	PasswordHash string    `json:"-"`
-	Role         string    `json:"role"`
-	CreatedAt    time.Time `json:"created_at"`
-	UpdatedAt    time.Time `json:"updated_at"`
+	Role         string     `json:"role"`
+	CreatedAt    time.Time  `json:"created_at"`
+	UpdatedAt    time.Time  `json:"updated_at"`
+	DeletedAt    *time.Time `json:"-"`
 }
 
 type Channel struct {
@@ -21,6 +22,7 @@ type Channel struct {
 	Enabled    bool              `json:"enabled"`
 	CreatedAt  time.Time         `json:"created_at"`
 	UpdatedAt  time.Time         `json:"updated_at"`
+	DeletedAt  *time.Time        `json:"-"`
 }
 
 type TemplateVar struct {
@@ -40,6 +42,7 @@ type Template struct {
 	VariablesJSON string        `json:"-"`
 	CreatedAt     time.Time     `json:"created_at"`
 	UpdatedAt     time.Time     `json:"updated_at"`
+	DeletedAt     *time.Time    `json:"-"`
 }
 
 type Task struct {
@@ -64,6 +67,7 @@ type Task struct {
 	NextRunAt      *time.Time        `json:"next_run_at"`
 	CreatedAt      time.Time         `json:"created_at"`
 	UpdatedAt      time.Time         `json:"updated_at"`
+	DeletedAt      *time.Time        `json:"-"`
 }
 
 type TaskLog struct {

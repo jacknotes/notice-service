@@ -46,38 +46,38 @@ func varsJSON(s string) string {
 }
 
 func (r *TaskRepo) Delete(id int64) error {
-	_, err := r.db.Exec("DELETE FROM tasks WHERE id=?", id)
+	_, err := r.db.Exec("UPDATE tasks SET deleted_at = NOW() WHERE id=? AND deleted_at IS NULL", id)
 	return err
 }
 
 func (r *TaskRepo) GetByID(id int64) (*model.Task, error) {
-	return r.scanOne("WHERE id = ?", id)
+	return r.scanOne("WHERE id = ? AND deleted_at IS NULL", id)
 }
 
 func (r *TaskRepo) GetByAPIKey(apiKey string) (*model.Task, error) {
-	return r.scanOne("WHERE api_key = ?", apiKey)
+	return r.scanOne("WHERE api_key = ? AND deleted_at IS NULL", apiKey)
 }
 
 func (r *TaskRepo) ListByUser(userID int64) ([]*model.Task, error) {
-	return r.scanMany("WHERE user_id = ? ORDER BY id", userID)
+	return r.scanMany("WHERE user_id = ? AND deleted_at IS NULL ORDER BY id", userID)
 }
 
 func (r *TaskRepo) ListEnabledCron() ([]*model.Task, error) {
-	return r.scanMany("WHERE enabled = 1 AND trigger_type = 'cron' AND cron_expr != '' ORDER BY id")
+	return r.scanMany("WHERE enabled = 1 AND trigger_type = 'cron' AND cron_expr != '' AND deleted_at IS NULL ORDER BY id")
 }
 
 const taskCols = `id, user_id, name, channel_id, template_id, trigger_type, receivers, cron_expr,
-	api_key, allowed_ips, variables, locked_by, locked_at, enabled, last_run_at, next_run_at, created_at, updated_at`
+	api_key, allowed_ips, variables, locked_by, locked_at, enabled, last_run_at, next_run_at, created_at, updated_at, deleted_at`
 
 func (r *TaskRepo) scanOne(where string, args ...interface{}) (*model.Task, error) {
 	t := &model.Task{}
 	var recv, allowed, vars sql.NullString
 	var lockedBy sql.NullString
-	var lockedAt, lastRun, nextRun sql.NullTime
+	var lockedAt, lastRun, nextRun, deletedAt sql.NullTime
 	err := r.db.QueryRow("SELECT "+taskCols+" FROM tasks "+where, args...).Scan(
 		&t.ID, &t.UserID, &t.Name, &t.ChannelID, &t.TemplateID, &t.TriggerType, &recv,
 		&t.CronExpr, &t.APIKey, &allowed, &vars, &lockedBy, &lockedAt, &t.Enabled, &lastRun, &nextRun,
-		&t.CreatedAt, &t.UpdatedAt)
+		&t.CreatedAt, &t.UpdatedAt, &deletedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -97,6 +97,9 @@ func (r *TaskRepo) scanOne(where string, args ...interface{}) (*model.Task, erro
 	if nextRun.Valid {
 		t.NextRunAt = &nextRun.Time
 	}
+	if deletedAt.Valid {
+		t.DeletedAt = &deletedAt.Time
+	}
 	return t, nil
 }
 
@@ -111,10 +114,10 @@ func (r *TaskRepo) scanMany(where string, args ...interface{}) ([]*model.Task, e
 		t := &model.Task{}
 		var recv, allowed, vars sql.NullString
 		var lockedBy sql.NullString
-		var lockedAt, lastRun, nextRun sql.NullTime
+		var lockedAt, lastRun, nextRun, deletedAt sql.NullTime
 		if err := rows.Scan(&t.ID, &t.UserID, &t.Name, &t.ChannelID, &t.TemplateID, &t.TriggerType, &recv,
 			&t.CronExpr, &t.APIKey, &allowed, &vars, &lockedBy, &lockedAt, &t.Enabled, &lastRun, &nextRun,
-			&t.CreatedAt, &t.UpdatedAt); err != nil {
+			&t.CreatedAt, &t.UpdatedAt, &deletedAt); err != nil {
 			return nil, err
 		}
 		t.ReceiversJSON = recv.String
@@ -130,6 +133,9 @@ func (r *TaskRepo) scanMany(where string, args ...interface{}) ([]*model.Task, e
 		if nextRun.Valid {
 			t.NextRunAt = &nextRun.Time
 		}
+		if deletedAt.Valid {
+			t.DeletedAt = &deletedAt.Time
+		}
 		out = append(out, t)
 	}
 	return out, rows.Err()
@@ -139,7 +145,7 @@ func (r *TaskRepo) scanMany(where string, args ...interface{}) ([]*model.Task, e
 func (r *TaskRepo) AcquireLease(taskID int64, instanceID string) (bool, error) {
 	res, err := r.db.Exec(
 		`UPDATE tasks SET locked_by = ?, locked_at = NOW()
-		 WHERE id = ? AND enabled = 1
+		 WHERE id = ? AND enabled = 1 AND deleted_at IS NULL
 		   AND (locked_by IS NULL OR locked_at < NOW() - INTERVAL ? SECOND)`,
 		instanceID, taskID, leaseSeconds)
 	if err != nil {

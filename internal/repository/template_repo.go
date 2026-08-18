@@ -31,7 +31,7 @@ func (r *TemplateRepo) Update(t *model.Template) error {
 }
 
 func (r *TemplateRepo) Delete(id int64) error {
-	_, err := r.db.Exec("DELETE FROM templates WHERE id=?", id)
+	_, err := r.db.Exec("UPDATE templates SET deleted_at = NOW() WHERE id=? AND deleted_at IS NULL", id)
 	return err
 }
 
@@ -39,7 +39,7 @@ func (r *TemplateRepo) GetByID(id int64) (*model.Template, error) {
 	t := &model.Template{}
 	var v sql.NullString
 	err := r.db.QueryRow(
-		"SELECT id, user_id, name, subject, content_md, variables, created_at, updated_at FROM templates WHERE id=?",
+		"SELECT id, user_id, name, subject, content_md, variables, created_at, updated_at FROM templates WHERE id=? AND deleted_at IS NULL",
 		id).Scan(&t.ID, &t.UserID, &t.Name, &t.Subject, &t.ContentMD, &v, &t.CreatedAt, &t.UpdatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
@@ -53,7 +53,7 @@ func (r *TemplateRepo) GetByID(id int64) (*model.Template, error) {
 
 func (r *TemplateRepo) ListByUser(userID int64) ([]*model.Template, error) {
 	rows, err := r.db.Query(
-		"SELECT id, user_id, name, subject, content_md, variables, created_at, updated_at FROM templates WHERE user_id=? ORDER BY id",
+		"SELECT id, user_id, name, subject, content_md, variables, created_at, updated_at FROM templates WHERE user_id=? AND deleted_at IS NULL ORDER BY id",
 		userID)
 	if err != nil {
 		return nil, err

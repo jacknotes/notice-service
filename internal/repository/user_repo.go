@@ -33,7 +33,7 @@ func (r *UserRepo) Create(u *model.User) error {
 func (r *UserRepo) GetByUsername(username string) (*model.User, error) {
 	u := &model.User{}
 	err := r.db.QueryRow(
-		"SELECT id, username, password_hash, role, created_at, updated_at FROM users WHERE username = ?",
+		"SELECT id, username, password_hash, role, created_at, updated_at FROM users WHERE username = ? AND deleted_at IS NULL",
 		username).Scan(&u.ID, &u.Username, &u.PasswordHash, &u.Role, &u.CreatedAt, &u.UpdatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
@@ -47,7 +47,7 @@ func (r *UserRepo) GetByUsername(username string) (*model.User, error) {
 func (r *UserRepo) GetByID(id int64) (*model.User, error) {
 	u := &model.User{}
 	err := r.db.QueryRow(
-		"SELECT id, username, password_hash, role, created_at, updated_at FROM users WHERE id = ?",
+		"SELECT id, username, password_hash, role, created_at, updated_at FROM users WHERE id = ? AND deleted_at IS NULL",
 		id).Scan(&u.ID, &u.Username, &u.PasswordHash, &u.Role, &u.CreatedAt, &u.UpdatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
@@ -64,7 +64,7 @@ func (r *UserRepo) UpdatePassword(userID int64, hash string) error {
 }
 
 func (r *UserRepo) List() ([]*model.User, error) {
-	rows, err := r.db.Query("SELECT id, username, password_hash, role, created_at, updated_at FROM users ORDER BY id")
+	rows, err := r.db.Query("SELECT id, username, password_hash, role, created_at, updated_at FROM users WHERE deleted_at IS NULL ORDER BY id")
 	if err != nil {
 		return nil, err
 	}
@@ -81,6 +81,6 @@ func (r *UserRepo) List() ([]*model.User, error) {
 }
 
 func (r *UserRepo) Delete(id int64) error {
-	_, err := r.db.Exec("DELETE FROM users WHERE id = ?", id)
+	_, err := r.db.Exec("UPDATE users SET deleted_at = NOW() WHERE id = ? AND deleted_at IS NULL", id)
 	return err
 }
