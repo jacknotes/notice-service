@@ -23,6 +23,44 @@ func (f *fakeChan) Send(m *channel.Message, r *channel.Receiver) error {
 	return nil
 }
 
+// countingChan 记录 Send 调用次数与最后一次的接收地址。
+type countingChan struct {
+	sends    int
+	lastAddr string
+}
+
+func (c *countingChan) Type() string                             { return "wechat" }
+func (c *countingChan) ValidateConfig(m map[string]string) error { return nil }
+func (c *countingChan) TestConnection(m map[string]string) error { return nil }
+func (c *countingChan) Send(m *channel.Message, r *channel.Receiver) error {
+	c.sends++
+	c.lastAddr = r.Address
+	return nil
+}
+
+func TestNotificationServiceSendOnceWithoutReceivers(t *testing.T) {
+	db := testDB(t)
+	ns := NewNotificationService(db, nil)
+
+	uid := seedServiceUser(t, db)
+	wechatID := seedServiceChannelType(t, db, uid, "wechat")
+	tplID := seedServiceTemplate(t, db, uid)
+	tkID := seedServiceTaskWithReceivers(t, db, uid, wechatID, tplID, `[]`)
+
+	cc := &countingChan{}
+	ns.Instancer = func(c *model.Channel) (channel.Channel, error) { return cc, nil }
+
+	if err := ns.SendTask(tkID, map[string]string{}); err != nil {
+		t.Fatal(err)
+	}
+	if cc.sends != 1 {
+		t.Fatalf("wechat with empty receivers should send exactly once, got %d", cc.sends)
+	}
+	if cc.lastAddr != "" {
+		t.Errorf("expected empty receiver address, got %q", cc.lastAddr)
+	}
+}
+
 func TestNotificationServiceSendsAndLogs(t *testing.T) {
 	db := testDB(t)
 	ns := NewNotificationService(db, nil)

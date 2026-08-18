@@ -9,7 +9,12 @@ import (
 
 func seedServiceChannel(t *testing.T, db *sql.DB, uid int64) int64 {
 	t.Helper()
-	res, err := db.Exec("INSERT INTO channels (user_id, type, name, config_json, enabled) VALUES (?, 'fake', 'c', '{}', 1)", uid)
+	return seedServiceChannelType(t, db, uid, "fake")
+}
+
+func seedServiceChannelType(t *testing.T, db *sql.DB, uid int64, typ string) int64 {
+	t.Helper()
+	res, err := db.Exec("INSERT INTO channels (user_id, type, name, config_json, enabled) VALUES (?, ?, 'c', '{}', 1)", uid, typ)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -31,10 +36,15 @@ func seedServiceTemplate(t *testing.T, db *sql.DB, uid int64) int64 {
 
 func seedServiceTask(t *testing.T, db *sql.DB, uid, chID, tplID int64) int64 {
 	t.Helper()
+	return seedServiceTaskWithReceivers(t, db, uid, chID, tplID, `["a@x.com"]`)
+}
+
+func seedServiceTaskWithReceivers(t *testing.T, db *sql.DB, uid, chID, tplID int64, receiversJSON string) int64 {
+	t.Helper()
 	apiKey := fmt.Sprintf("key-%d", time.Now().UnixNano())
 	res, err := db.Exec(
 		"INSERT INTO tasks (user_id, name, channel_id, template_id, trigger_type, receivers, api_key, enabled) VALUES (?, 't', ?, ?, 'api', ?, ?, 1)",
-		uid, chID, tplID, `["a@x.com"]`, apiKey)
+		uid, chID, tplID, receiversJSON, apiKey)
 	if err != nil {
 		t.Fatal(err)
 	}

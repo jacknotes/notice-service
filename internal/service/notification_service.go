@@ -73,12 +73,23 @@ func (s *NotificationService) SendTask(taskID int64, vars map[string]string) err
 	msg := &channel.Message{Subject: subject, Content: content}
 
 	var lastErr error
-	for _, addr := range receivers {
-		if err := s.sendWithRetry(inst, msg, addr, task, ch); err != nil {
-			lastErr = err
+	if len(receivers) > 0 {
+		for _, addr := range receivers {
+			if err := s.sendWithRetry(inst, msg, addr, task, ch); err != nil {
+				lastErr = err
+			}
 		}
+		return lastErr
 	}
-	return lastErr
+	// 无接收地址：非邮箱渠道发送一次到机器人/token 绑定的目标（空地址）；
+	// 邮箱渠道缺少接收地址则报错。
+	if ch.Type != "email" {
+		if err := s.sendWithRetry(inst, msg, "", task, ch); err != nil {
+			return err
+		}
+		return nil
+	}
+	return fmt.Errorf("邮件渠道至少需要一个接收地址")
 }
 
 func (s *NotificationService) sendWithRetry(inst channel.Channel, msg *channel.Message, addr string, task *model.Task, ch *model.Channel) error {

@@ -21,16 +21,18 @@ type Scheduler interface {
 }
 
 type TaskService struct {
-	repo    *repository.TaskRepo
-	logRepo *repository.TaskLogRepo
-	sched   Scheduler
+	repo        *repository.TaskRepo
+	logRepo     *repository.TaskLogRepo
+	channelRepo *repository.ChannelRepo
+	sched       Scheduler
 }
 
 func NewTaskService(db *sql.DB, sched Scheduler) *TaskService {
 	return &TaskService{
-		repo:    repository.NewTaskRepo(db),
-		logRepo: repository.NewTaskLogRepo(db),
-		sched:   sched,
+		repo:        repository.NewTaskRepo(db),
+		logRepo:     repository.NewTaskLogRepo(db),
+		channelRepo: repository.NewChannelRepo(db),
+		sched:       sched,
 	}
 }
 
@@ -154,8 +156,16 @@ func (s *TaskService) validate(t *model.Task) error {
 	if t.TriggerType == "cron" && strings.TrimSpace(t.CronExpr) == "" {
 		return errors.New("cron 任务必须填写 cron 表达式")
 	}
-	if len(t.Receivers) == 0 {
-		return errors.New("至少需要一个接收地址")
+	// 接收地址只对邮箱渠道有实际意义：webhook/IM 渠道发送到机器人/token 绑定的目标。
+	// 若渠道查询失败（如渠道不存在）则回退为要求接收地址（安全默认）。
+	isEmail := false
+	if ch, err := s.channelRepo.GetByID(t.ChannelID); err == nil {
+		isEmail = ch.Type == "email"
+	} else {
+		isEmail = true
+	}
+	if isEmail && len(t.Receivers) == 0 {
+		return errors.New("邮件渠道至少需要一个接收地址")
 	}
 	return nil
 }

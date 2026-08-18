@@ -53,3 +53,35 @@ func TestTaskServiceRegistersCron(t *testing.T) {
 		t.Errorf("delete should unregister, removed=%d", s.removed)
 	}
 }
+
+func TestTaskValidateReceiversOnlyRequiredForEmail(t *testing.T) {
+	db := testDB(t)
+	svc := NewTaskService(db, &fakeScheduler{})
+	uid := seedServiceUser(t, db)
+	emailID := seedServiceChannelType(t, db, uid, "email")
+	wechatID := seedServiceChannelType(t, db, uid, "wechat")
+	tplID := seedServiceTemplate(t, db, uid)
+
+	base := func(chID int64) *model.Task {
+		return &model.Task{Name: "t", ChannelID: chID, TemplateID: tplID, TriggerType: "api"}
+	}
+
+	// email 渠道无接收地址 → 校验失败
+	if err := svc.validate(base(emailID)); err == nil {
+		t.Fatal("email task without receivers should fail validation")
+	}
+	withRecv := base(emailID)
+	withRecv.Receivers = []string{"a@x.com"}
+	if err := svc.validate(withRecv); err != nil {
+		t.Fatalf("email task with receivers should pass: %v", err)
+	}
+	// wechat 渠道无接收地址 → 通过（非邮箱渠道不要求接收地址）
+	if err := svc.validate(base(wechatID)); err != nil {
+		t.Fatalf("wechat task without receivers should pass: %v", err)
+	}
+	// 渠道查找失败（如不存在）时回退为要求接收地址（安全默认）
+	unknown := base(999999)
+	if err := svc.validate(unknown); err == nil {
+		t.Fatal("unknown channel should fall back to requiring receivers")
+	}
+}
