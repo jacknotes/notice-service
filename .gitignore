@@ -1,5 +1,6 @@
 # Build artifacts
 web/dist/
+web/node_modules/
 *.exe
 *.log
 
