@@ -1,0 +1,49 @@
+# Notice Service · Nginx 反向代理 + 负载均衡示例配置
+# 适用：多实例高可用部署（docker-compose 起 8080/8081 两个实例）
+# 用法：把本文件内容合并进宿主机 Nginx 配置（如 /etc/nginx/conf.d/notice.conf）后
+#       nginx -t && nginx -s reload
+
+# 负载均衡上游：notice-service 实例组
+upstream notice {
+    # 主备/轮询；可加 weight 调节权重
+    server 127.0.0.1:8080;
+    server 127.0.0.1:8081;
+    # 可选：最长失败时间等
+    keepalive 32;
+}
+
+server {
+    listen 80;
+    server_name notice.example.com;   # 改成你的域名
+
+    # 请求体上限（Webhook 变量可能较大）
+    client_max_body_size 2m;
+
+    # 主动健康检查（需 nginx-plus 或 openresty 的 lua 模块；普通 nginx 用被动检查即可，
+    # 连续失败会按 fail_timeout 自动摘除实例）
+    location /api/health {
+        proxy_pass http://notice;
+        proxy_set_header Host $host;
+    }
+
+    location / {
+        proxy_pass http://notice;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_connect_timeout 10s;
+        proxy_read_timeout 120s;   # 发送重试最长约 95s，需大于该值
+    }
+}
+
+# ---------- 可选：HTTPS（推荐生产使用） ----------
+# server {
+#     listen 443 ssl;
+#     server_name notice.example.com;
+#     ssl_certificate     /etc/nginx/ssl/notice.crt;
+#     ssl_certificate_key /etc/nginx/ssl/notice.key;
+#     ssl_protocols TLSv1.2 TLSv1.3;
+#     # ... 与上面 80 端口相同的 location 配置 ...
+# }
