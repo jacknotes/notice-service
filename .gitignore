@@ -3,6 +3,9 @@ web/dist/
 *.exe
 *.log
 
+# Local dev data (MariaDB datadir, Go caches, sockets)
+.dev/
+
 # Environment
 .env
 
