@@ -88,3 +88,80 @@ func TestUserManagementAPI(t *testing.T) {
 		t.Fatalf("admin deleting normal user = %d, want 200 body=%s", wok.Code, wok.Body.String())
 	}
 }
+
+func TestUserUpdateAPI(t *testing.T) {
+	r := testRouter(t)
+	adminTok := login(t, r)
+
+	// admin 创建普通用户 alice
+	w := authReq(t, r, adminTok, "POST", "/api/users", `{"username":"alice_upd","password":"secret1","role":"user"}`)
+	if w.Code != 200 {
+		t.Fatalf("admin create user = %d body=%s", w.Code, w.Body.String())
+	}
+	alice := mustJSON(t, w)
+	aliceID := int64(alice["id"].(float64))
+	t.Cleanup(func() { testDB(t).Exec("DELETE FROM users WHERE id=?", aliceID) })
+
+	// admin 创建另一个 admin
+	wa := authReq(t, r, adminTok, "POST", "/api/users", `{"username":"admin_upd","password":"secret1","role":"admin"}`)
+	if wa.Code != 200 {
+		t.Fatalf("admin create admin2 = %d body=%s", wa.Code, wa.Body.String())
+	}
+	admin2 := mustJSON(t, wa)
+	admin2ID := int64(admin2["id"].(float64))
+	t.Cleanup(func() { testDB(t).Exec("DELETE FROM users WHERE id=?", admin2ID) })
+
+	// 非 admin 访问 → 403（此时 alice 仍是普通用户）
+	nonTok := loginAs(t, r, "alice_upd", "secret1")
+	if w3 := authReq(t, r, nonTok, "PUT", "/api/users/"+num(aliceID), `{"role":"user"}`); w3.Code != 403 {
+		t.Fatalf("non-admin update = %d, want 403", w3.Code)
+	}
+
+	// PUT 修改普通用户角色 → 200，且列表反映角色变更
+	wu := authReq(t, r, adminTok, "PUT", "/api/users/"+num(aliceID), `{"role":"admin"}`)
+	if wu.Code != 200 {
+		t.Fatalf("update user role = %d, want 200 body=%s", wu.Code, wu.Body.String())
+	}
+	wl := authReq(t, r, adminTok, "GET", "/api/users", "")
+	var list []map[string]interface{}
+	if err := json.Unmarshal(wl.Body.Bytes(), &list); err != nil {
+		t.Fatal(err)
+	}
+	role := ""
+	for _, u := range list {
+		if int64(u["id"].(float64)) == aliceID {
+			role = u["role"].(string)
+		}
+	}
+	if role != "admin" {
+		t.Fatalf("role after update = %q, want admin", role)
+	}
+
+	// PUT 修改管理员角色 → 400（不能修改管理员角色）
+	wd := authReq(t, r, adminTok, "PUT", "/api/users/"+num(admin2ID), `{"role":"user"}`)
+	if wd.Code != 400 {
+		t.Fatalf("demote admin = %d, want 400 body=%s", wd.Code, wd.Body.String())
+	}
+
+	// 修改自己 → 400
+	me := mustJSON(t, authReq(t, r, adminTok, "GET", "/api/auth/me", ""))
+	meID := int64(me["id"].(float64))
+	if ws := authReq(t, r, adminTok, "PUT", "/api/users/"+num(meID), `{"role":"user"}`); ws.Code != 400 {
+		t.Fatalf("self update = %d, want 400 body=%s", ws.Code, ws.Body.String())
+	}
+
+	// 重置密码 → 200，新密码可登录、旧密码失效
+	wp := authReq(t, r, adminTok, "PUT", "/api/users/"+num(aliceID), `{"password":"newpass456"}`)
+	if wp.Code != 200 {
+		t.Fatalf("reset password = %d, want 200 body=%s", wp.Code, wp.Body.String())
+	}
+	_ = loginAs(t, r, "alice_upd", "newpass456") // 新密码可登录
+	oldBody, _ := json.Marshal(map[string]string{"username": "alice_upd", "password": "secret1"})
+	wOld := httptest.NewRecorder()
+	req, _ := http.NewRequest("POST", "/api/auth/login", bytes.NewBuffer(oldBody))
+	req.Header.Set("Content-Type", "application/json")
+	r.ServeHTTP(wOld, req)
+	if wOld.Code == 200 {
+		t.Fatal("old password should no longer work after reset")
+	}
+}

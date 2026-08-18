@@ -124,3 +124,82 @@ func TestUserServiceList(t *testing.T) {
 		t.Fatalf("List should include created users: %+v", list)
 	}
 }
+
+func TestUserServiceUpdate(t *testing.T) {
+	db := testDB(t)
+	svc := NewUserService(db)
+	auth := NewAuthService(db, "secret", "admin", "admin123")
+
+	adminOp, err := svc.Create(uniqueName("updop"), "secret1", "admin")
+	if err != nil {
+		t.Fatal(err)
+	}
+	adminTgt, err := svc.Create(uniqueName("updtgt"), "secret1", "admin")
+	if err != nil {
+		t.Fatal(err)
+	}
+	normal, err := svc.Create(uniqueName("updnorm"), "secret1", "user")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { db.Exec("DELETE FROM users WHERE id IN (?, ?, ?)", adminOp.ID, adminTgt.ID, normal.ID) })
+
+	// 非 admin 操作者无权操作
+	if err := svc.Update(normal.ID, "user", normal.ID, nil, nil); err == nil || !strings.Contains(err.Error(), "无权操作") {
+		t.Fatalf("non-admin update should fail with 无权操作, got %v", err)
+	}
+
+	// 不能修改当前登录账号
+	if err := svc.Update(adminOp.ID, "admin", adminOp.ID, strPtr("user"), nil); err == nil || !strings.Contains(err.Error(), "不能修改当前登录账号") {
+		t.Fatalf("self update should fail, got %v", err)
+	}
+
+	// 不能修改管理员角色
+	if err := svc.Update(adminOp.ID, "admin", adminTgt.ID, strPtr("user"), nil); err == nil || !strings.Contains(err.Error(), "不能修改管理员角色") {
+		t.Fatalf("demoting admin should fail, got %v", err)
+	}
+
+	// 非法角色 → 拒绝
+	if err := svc.Update(adminOp.ID, "admin", normal.ID, strPtr("superadmin"), nil); err == nil || !strings.Contains(err.Error(), "角色必须是 admin 或 user") {
+		t.Fatalf("invalid role should fail, got %v", err)
+	}
+
+	// 目标不存在 → 用户不存在
+	if err := svc.Update(adminOp.ID, "admin", 99999999, strPtr("user"), nil); err == nil || !strings.Contains(err.Error(), "用户不存在") {
+		t.Fatalf("missing target should fail, got %v", err)
+	}
+
+	// 修改普通用户角色成功：user → admin
+	if err := svc.Update(adminOp.ID, "admin", normal.ID, strPtr("admin"), nil); err != nil {
+		t.Fatalf("promote normal user to admin: %v", err)
+	}
+	got, err := svc.users.GetByID(normal.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Role != "admin" {
+		t.Fatalf("role = %q, want admin", got.Role)
+	}
+	// 提升后即视为管理员，不能再降级
+	if err := svc.Update(adminOp.ID, "admin", normal.ID, strPtr("user"), nil); err == nil || !strings.Contains(err.Error(), "不能修改管理员角色") {
+		t.Fatalf("demoting promoted user should fail, got %v", err)
+	}
+
+	// 重置密码成功 → 新密码可登录、旧密码失效
+	if err := svc.Update(adminOp.ID, "admin", normal.ID, nil, strPtr("newpass456")); err != nil {
+		t.Fatalf("reset password: %v", err)
+	}
+	if _, _, err := auth.Login(normal.Username, "secret1"); err == nil {
+		t.Error("old password should no longer work")
+	}
+	if _, _, err := auth.Login(normal.Username, "newpass456"); err != nil {
+		t.Error("new password should work")
+	}
+
+	// 密码过短 → 拒绝
+	if err := svc.Update(adminOp.ID, "admin", normal.ID, nil, strPtr("123")); err == nil || !strings.Contains(err.Error(), "密码至少 6 位") {
+		t.Fatalf("short password should fail, got %v", err)
+	}
+}
+
+func strPtr(s string) *string { return &s }

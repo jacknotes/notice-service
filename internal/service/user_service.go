@@ -68,3 +68,46 @@ func (s *UserService) Delete(operatorRole string, operatorID, targetID int64) er
 	}
 	return s.users.Delete(targetID)
 }
+
+// Update 修改用户角色或重置密码。operatorRole 为操作者角色；仅 admin 可操作。
+// 规则：不能修改管理员角色；不能修改当前登录账号（个人密码请走个人设置）。
+func (s *UserService) Update(operatorID int64, operatorRole string, targetID int64, role, newPass *string) error {
+	if operatorRole != "admin" {
+		return errors.New("无权操作")
+	}
+	if targetID == operatorID {
+		return errors.New("不能修改当前登录账号的角色/密码（请用个人设置修改密码）")
+	}
+	target, err := s.users.GetByID(targetID)
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return errors.New("用户不存在")
+		}
+		return err
+	}
+	if role != nil {
+		if *role != "admin" && *role != "user" {
+			return errors.New("角色必须是 admin 或 user")
+		}
+		if target.Role == "admin" && *role != "admin" {
+			return errors.New("不能修改管理员角色")
+		}
+	}
+	nextRole := target.Role
+	if role != nil {
+		nextRole = *role
+	}
+	nextHash := target.PasswordHash
+	if newPass != nil && *newPass != "" {
+		if len(*newPass) < 6 {
+			return errors.New("密码至少 6 位")
+		}
+		hash, err := bcrypt.GenerateFromPassword([]byte(*newPass), bcrypt.DefaultCost)
+		if err != nil {
+			return err
+		}
+		nextHash = string(hash)
+	}
+	u := &model.User{ID: targetID, Role: nextRole, PasswordHash: nextHash}
+	return s.users.Update(u)
+}

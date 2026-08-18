@@ -59,6 +59,7 @@ func NewRouter(db *sql.DB, authSvc *service.AuthService, cipher *crypto.Cipher, 
 
 		auth.GET("/users", userH.List)
 		auth.POST("/users", userH.Create)
+		auth.PUT("/users/:id", userH.Update)
 		auth.DELETE("/users/:id", userH.Delete)
 	}
 	api.POST("/webhook/:api_key", webhookH.Trigger)

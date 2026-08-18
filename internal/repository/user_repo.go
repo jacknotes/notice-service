@@ -63,6 +63,12 @@ func (r *UserRepo) UpdatePassword(userID int64, hash string) error {
 	return err
 }
 
+// Update 更新用户的角色与密码哈希（两字段均写当前值，保证幂等）。
+func (r *UserRepo) Update(u *model.User) error {
+	_, err := r.db.Exec("UPDATE users SET role=?, password_hash=? WHERE id=?", u.Role, u.PasswordHash, u.ID)
+	return err
+}
+
 func (r *UserRepo) List() ([]*model.User, error) {
 	rows, err := r.db.Query("SELECT id, username, password_hash, role, created_at, updated_at FROM users WHERE deleted_at IS NULL ORDER BY id")
 	if err != nil {

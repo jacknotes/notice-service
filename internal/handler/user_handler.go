@@ -55,6 +55,28 @@ func (h *UserHandler) Create(c *gin.Context) {
 	c.JSON(http.StatusOK, u)
 }
 
+// Update 修改用户角色 / 重置密码（仅 admin）。
+func (h *UserHandler) Update(c *gin.Context) {
+	if c.GetString("role") != "admin" {
+		c.JSON(http.StatusForbidden, gin.H{"error": "无权操作"})
+		return
+	}
+	id, _ := strconv.ParseInt(c.Param("id"), 10, 64)
+	var req struct {
+		Role     *string `json:"role"`
+		Password *string `json:"password"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "参数错误"})
+		return
+	}
+	if err := h.svc.Update(c.GetInt64("uid"), c.GetString("role"), id, req.Role, req.Password); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"ok": true})
+}
+
 // Delete 删除用户（仅 admin）。
 func (h *UserHandler) Delete(c *gin.Context) {
 	if c.GetString("role") != "admin" {
