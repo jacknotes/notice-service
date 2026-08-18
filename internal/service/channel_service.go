@@ -127,6 +127,10 @@ func (s *ChannelService) InstancedChannel(c *model.Channel) (channel.Channel, er
 	case "wechat":
 		return channel.NewWechatChannel(cfg), nil
 	}
+	// 注册表中已注册的类型（含测试/插件渠道）可直接复用。
+	if ch, ok := channel.Get(c.Type); ok {
+		return ch, nil
+	}
 	return nil, errors.New("不支持的渠道类型")
 }
 

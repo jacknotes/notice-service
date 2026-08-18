@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"notice-service/internal/channel"
+	"notice-service/internal/crypto"
 	"notice-service/internal/model"
 )
 
@@ -23,7 +24,7 @@ func (f *fakeChan) Send(m *channel.Message, r *channel.Receiver) error {
 
 func TestNotificationServiceSendsAndLogs(t *testing.T) {
 	db := testDB(t)
-	ns := NewNotificationService(db)
+	ns := NewNotificationService(db, nil)
 
 	uid := seedServiceUser(t, db)
 	chID := seedServiceChannel(t, db, uid)
@@ -49,7 +50,7 @@ func TestNotificationServiceSendsAndLogs(t *testing.T) {
 
 func TestNotificationServiceRetries(t *testing.T) {
 	db := testDB(t)
-	ns := NewNotificationService(db)
+	ns := NewNotificationService(db, nil)
 	ns.Instancer = func(c *model.Channel) (channel.Channel, error) { return &fakeChan{failTimes: 2}, nil }
 
 	uid := seedServiceUser(t, db)
@@ -59,5 +60,28 @@ func TestNotificationServiceRetries(t *testing.T) {
 
 	if err := ns.SendTask(tkID, map[string]string{}); err != nil {
 		t.Fatal(err) // 2 次失败后第 3 次成功
+	}
+}
+
+func TestNotificationServiceDefaultInstancerWithCipher(t *testing.T) {
+	db := testDB(t)
+	ciph, _ := crypto.New(key32())
+	ns := NewNotificationService(db, ciph)
+
+	uid := seedServiceUser(t, db)
+	// 注册 fake 渠道适配器，使默认 Instancer 在解密后能返回它（也满足创建时类型校验）。
+	channel.Register(&fakeChan{})
+	// create a REAL 'fake' channel whose config is AES-encrypted with a valid cipher
+	svc := NewChannelService(db, ciph)
+	ch := &model.Channel{Type: "fake", Name: "c", Config: map[string]string{"k": "v"}, Enabled: true}
+	if err := svc.Create(uid, ch); err != nil {
+		t.Fatal(err)
+	}
+	tplID := seedServiceTemplate(t, db, uid)
+	tkID := seedServiceTask(t, db, uid, ch.ID, tplID)
+
+	// default Instancer path: decrypt config + return the registered fake channel
+	if err := ns.SendTask(tkID, map[string]string{}); err != nil {
+		t.Fatal(err)
 	}
 }

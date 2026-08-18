@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"notice-service/internal/channel"
+	"notice-service/internal/crypto"
 	"notice-service/internal/model"
 	"notice-service/internal/render"
 	"notice-service/internal/repository"
@@ -27,8 +28,8 @@ type NotificationService struct {
 	Instancer    ChannelInstancer
 }
 
-func NewNotificationService(db *sql.DB) *NotificationService {
-	cs := &ChannelService{repo: repository.NewChannelRepo(db)}
+func NewNotificationService(db *sql.DB, cipher *crypto.Cipher) *NotificationService {
+	cs := &ChannelService{repo: repository.NewChannelRepo(db), cipher: cipher}
 	return &NotificationService{
 		taskRepo:     repository.NewTaskRepo(db),
 		templateRepo: repository.NewTemplateRepo(db),
