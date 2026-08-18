@@ -6,12 +6,33 @@
         <p class="sub">管理系统账号：创建普通用户与管理员，分配登录权限</p>
       </div>
       <div class="actions">
+        <el-button
+          type="danger"
+          plain
+          :icon="Delete"
+          :disabled="!selectedRows.length"
+          @click="batchDelete"
+        >
+          批量删除
+        </el-button>
         <el-button type="primary" :icon="Plus" @click="openCreate">新建用户</el-button>
       </div>
     </div>
 
     <div v-loading="loading" class="card table-card">
-      <el-table :data="users" style="width: 100%" empty-text="暂无用户，点击右上角「新建用户」开始">
+      <el-table
+        ref="tableRef"
+        :data="users"
+        style="width: 100%"
+        empty-text="暂无用户，点击右上角「新建用户」开始"
+        @selection-change="onSelectionChange"
+      >
+        <el-table-column
+          type="selection"
+          width="48"
+          align="center"
+          :selectable="isSelectableRow"
+        />
         <el-table-column prop="id" label="ID" width="72" align="center">
           <template #default="{ row }">
             <span class="mono id-cell">#{{ row.id }}</span>
@@ -166,8 +187,8 @@
 <script setup lang="ts">
 import { onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import type { FormInstance, FormRules } from 'element-plus'
-import { Plus } from '@element-plus/icons-vue'
+import type { FormInstance, FormRules, TableInstance } from 'element-plus'
+import { Plus, Delete } from '@element-plus/icons-vue'
 import { userApi } from '@/api'
 import { useAuthStore } from '@/stores/auth'
 
@@ -183,6 +204,17 @@ const auth = useAuthStore()
 
 const loading = ref(false)
 const users = ref<UserRow[]>([])
+const tableRef = ref<TableInstance>()
+const selectedRows = ref<UserRow[]>([])
+
+function onSelectionChange(rows: UserRow[]) {
+  selectedRows.value = rows
+}
+
+// 管理员账号、以及当前登录账号本身不可勾选（不能批量删除）
+function isSelectableRow(row: UserRow) {
+  return row.role !== 'admin' && row.id !== auth.user?.id
+}
 
 const dialogVisible = ref(false)
 const saving = ref(false)
@@ -344,6 +376,29 @@ async function removeUser(row: UserRow) {
     await load()
   } catch (e: any) {
     ElMessage.error(errMsg(e, '删除失败'))
+  }
+}
+
+/* ── Batch delete ─────────────────────────────────────────────────── */
+async function batchDelete() {
+  const rows = selectedRows.value
+  if (!rows.length) return
+  try {
+    await ElMessageBox.confirm(
+      `确认删除选中的 ${rows.length} 项？`,
+      '批量删除',
+      { confirmButtonText: '删除', cancelButtonText: '取消', type: 'warning' }
+    )
+  } catch {
+    return
+  }
+  try {
+    await userApi.batchRemove(rows.map((r) => r.id))
+    ElMessage.success(`已删除 ${rows.length} 个用户`)
+    tableRef.value?.clearSelection()
+    await load()
+  } catch (e: any) {
+    ElMessage.error(errMsg(e, '批量删除失败'))
   }
 }
 

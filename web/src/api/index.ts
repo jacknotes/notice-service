@@ -18,6 +18,7 @@ export const channelApi = {
   create: (d: any) => client.post('/channels', d).then((r) => r.data),
   update: (id: number, d: any) => client.put(`/channels/${id}`, d).then((r) => r.data),
   remove: (id: number) => client.delete(`/channels/${id}`).then((r) => r.data),
+  batchRemove: (ids: number[]) => client.post('/channels/batch-delete', { ids }).then((r) => r.data),
   test: (id: number, config?: any) => client.post(`/channels/${id}/test`, { config }).then((r) => r.data),
 }
 
@@ -26,6 +27,7 @@ export const templateApi = {
   create: (d: any) => client.post('/templates', d).then((r) => r.data),
   update: (id: number, d: any) => client.put(`/templates/${id}`, d).then((r) => r.data),
   remove: (id: number) => client.delete(`/templates/${id}`).then((r) => r.data),
+  batchRemove: (ids: number[]) => client.post('/templates/batch-delete', { ids }).then((r) => r.data),
   preview: (id: number, variables: any) => client.post(`/templates/${id}/preview`, { variables }).then((r) => r.data),
 }
 
@@ -34,6 +36,7 @@ export const taskApi = {
   create: (d: any) => client.post('/tasks', d).then((r) => r.data),
   update: (id: number, d: any) => client.put(`/tasks/${id}`, d).then((r) => r.data),
   remove: (id: number) => client.delete(`/tasks/${id}`).then((r) => r.data),
+  batchRemove: (ids: number[]) => client.post('/tasks/batch-delete', { ids }).then((r) => r.data),
   toggle: (id: number, enabled: boolean) => client.post(`/tasks/${id}/toggle`, { enabled }).then((r) => r.data),
   logs: (id: number) => client.get(`/tasks/${id}/logs`).then((r) => r.data),
 }
@@ -43,6 +46,7 @@ export const userApi = {
   create: (d: { username: string; password: string; role: string }) => client.post('/users', d).then((r) => r.data),
   update: (id: number, d: { role?: string; password?: string }) => client.put(`/users/${id}`, d).then((r) => r.data),
   remove: (id: number) => client.delete(`/users/${id}`).then((r) => r.data),
+  batchRemove: (ids: number[]) => client.post('/users/batch-delete', { ids }).then((r) => r.data),
 }
 
 export const dashboardApi = {

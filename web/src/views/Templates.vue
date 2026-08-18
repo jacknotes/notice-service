@@ -2,7 +2,10 @@
   <div class="page">
     <div class="page-head">
       <div>
-        <h1 class="grad-text">模板管理</h1>
+        <div class="title-row">
+          <h1 class="grad-text">模板管理</h1>
+          <el-tag v-if="!isAdmin" type="info" effect="plain" size="small">只读模式</el-tag>
+        </div>
         <p class="sub">维护通知模板：标题、Markdown 正文与可注入变量</p>
       </div>
       <div class="actions">
@@ -13,12 +16,29 @@
           :prefix-icon="Search"
           placeholder="搜索名称或标题…"
         />
-        <el-button type="primary" :icon="Plus" @click="openCreate">新建模板</el-button>
+        <el-button
+          v-if="isAdmin"
+          type="danger"
+          plain
+          :icon="Delete"
+          :disabled="!selectedRows.length"
+          @click="batchDelete"
+        >
+          批量删除
+        </el-button>
+        <el-button v-if="isAdmin" type="primary" :icon="Plus" @click="openCreate">新建模板</el-button>
       </div>
     </div>
 
     <div v-loading="loading" class="card table-card">
-      <el-table :data="filteredTemplates" style="width: 100%" empty-text="暂无模板，点击右上角「新建模板」开始">
+      <el-table
+        ref="tableRef"
+        :data="filteredTemplates"
+        style="width: 100%"
+        empty-text="暂无模板，点击右上角「新建模板」开始"
+        @selection-change="onSelectionChange"
+      >
+        <el-table-column v-if="isAdmin" type="selection" width="48" align="center" />
         <el-table-column prop="id" label="ID" width="72" align="center">
           <template #default="{ row }">
             <span class="mono id-cell">#{{ row.id }}</span>
@@ -52,8 +72,11 @@
 
         <el-table-column label="操作" width="150" align="center" fixed="right">
           <template #default="{ row }">
-            <el-button link type="primary" size="small" @click="openEdit(row)">编辑</el-button>
-            <el-button link type="danger" size="small" @click="removeTemplate(row)">删除</el-button>
+            <template v-if="isAdmin">
+              <el-button link type="primary" size="small" @click="openEdit(row)">编辑</el-button>
+              <el-button link type="danger" size="small" @click="removeTemplate(row)">删除</el-button>
+            </template>
+            <span v-else class="text-muted">—</span>
           </template>
         </el-table-column>
       </el-table>
@@ -158,10 +181,11 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import type { FormInstance, FormRules } from 'element-plus'
+import type { FormInstance, FormRules, TableInstance } from 'element-plus'
 import { Plus, Delete, View, Search } from '@element-plus/icons-vue'
 import { templateApi } from '@/api'
 import MarkdownPreview from '@/components/MarkdownPreview.vue'
+import { useAuthStore } from '@/stores/auth'
 
 interface TemplateVar { name: string; default: string }
 interface TemplateRow {
@@ -180,8 +204,17 @@ const SUBJECT_PLACEHOLDER = '邮件 / 卡片标题，支持 {{变量}}'
 const CONTENT_PLACEHOLDER =
   '支持 Markdown 语法，例如：\n## 标题\n**加粗** / `代码` / > 引用\n正文… 变量用 {{变量名}} 表示'
 
+const auth = useAuthStore()
+const isAdmin = computed(() => auth.user?.role === 'admin')
+
 const loading = ref(false)
 const templates = ref<TemplateRow[]>([])
+const tableRef = ref<TableInstance>()
+const selectedRows = ref<TemplateRow[]>([])
+
+function onSelectionChange(rows: TemplateRow[]) {
+  selectedRows.value = rows
+}
 
 const keyword = ref('')
 
@@ -359,11 +392,41 @@ async function removeTemplate(row: TemplateRow) {
   }
 }
 
+/* ── Batch delete ─────────────────────────────────────────────────── */
+async function batchDelete() {
+  const rows = selectedRows.value
+  if (!rows.length) return
+  try {
+    await ElMessageBox.confirm(
+      `确认删除选中的 ${rows.length} 项？`,
+      '批量删除',
+      { confirmButtonText: '删除', cancelButtonText: '取消', type: 'warning' }
+    )
+  } catch {
+    return
+  }
+  try {
+    await templateApi.batchRemove(rows.map((r) => r.id))
+    ElMessage.success(`已删除 ${rows.length} 个模板`)
+    tableRef.value?.clearSelection()
+    await load()
+  } catch (e: any) {
+    ElMessage.error(errMsg(e, '批量删除失败'))
+  }
+}
+
 onMounted(load)
 </script>
 
 <style scoped>
 .search-input { width: 220px; }
+
+.title-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
 
 .table-card {
   padding: 8px 14px 14px;

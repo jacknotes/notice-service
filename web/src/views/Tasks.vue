@@ -2,7 +2,10 @@
   <div class="page">
     <div class="page-head">
       <div>
-        <h1 class="grad-text">任务管理</h1>
+        <div class="title-row">
+          <h1 class="grad-text">任务管理</h1>
+          <el-tag v-if="!isAdmin" type="info" effect="plain" size="small">只读模式</el-tag>
+        </div>
         <p class="sub">配置定时 / Webhook 投递任务，绑定渠道与模板</p>
       </div>
       <div class="actions">
@@ -13,12 +16,29 @@
           :prefix-icon="Search"
           placeholder="搜索名称或渠道 / 模板…"
         />
-        <el-button type="primary" :icon="Plus" @click="openCreate">新建任务</el-button>
+        <el-button
+          v-if="isAdmin"
+          type="danger"
+          plain
+          :icon="Delete"
+          :disabled="!selectedRows.length"
+          @click="batchDelete"
+        >
+          批量删除
+        </el-button>
+        <el-button v-if="isAdmin" type="primary" :icon="Plus" @click="openCreate">新建任务</el-button>
       </div>
     </div>
 
     <div v-loading="loading" class="card table-card">
-      <el-table :data="filteredTasks" style="width: 100%" empty-text="暂无任务，点击右上角「新建任务」开始">
+      <el-table
+        ref="tableRef"
+        :data="filteredTasks"
+        style="width: 100%"
+        empty-text="暂无任务，点击右上角「新建任务」开始"
+        @selection-change="onSelectionChange"
+      >
+        <el-table-column v-if="isAdmin" type="selection" width="48" align="center" />
         <el-table-column prop="id" label="ID" width="64" align="center">
           <template #default="{ row }">
             <span class="mono id-cell">#{{ row.id }}</span>
@@ -58,6 +78,7 @@
             <el-switch
               :model-value="row.enabled"
               :loading="togglingId === row.id"
+              :disabled="!isAdmin"
               inline-prompt
               active-text="开"
               inactive-text="关"
@@ -78,8 +99,10 @@
               API Key
             </el-button>
             <el-button link type="primary" size="small" @click="goLogs(row)">日志</el-button>
-            <el-button link type="primary" size="small" @click="openEdit(row)">编辑</el-button>
-            <el-button link type="danger" size="small" @click="removeTask(row)">删除</el-button>
+            <template v-if="isAdmin">
+              <el-button link type="primary" size="small" @click="openEdit(row)">编辑</el-button>
+              <el-button link type="danger" size="small" @click="removeTask(row)">删除</el-button>
+            </template>
           </template>
         </el-table-column>
       </el-table>
@@ -227,9 +250,10 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import type { FormInstance, FormRules } from 'element-plus'
-import { Plus, CopyDocument, Search } from '@element-plus/icons-vue'
+import type { FormInstance, FormRules, TableInstance } from 'element-plus'
+import { Plus, CopyDocument, Search, Delete } from '@element-plus/icons-vue'
 import { channelApi, taskApi, templateApi } from '@/api'
+import { useAuthStore } from '@/stores/auth'
 
 interface TaskRow {
   id: number
@@ -256,11 +280,20 @@ interface TemplateVar {
 
 const router = useRouter()
 
+const auth = useAuthStore()
+const isAdmin = computed(() => auth.user?.role === 'admin')
+
 const loading = ref(false)
 const tasks = ref<TaskRow[]>([])
 const channels = ref<{ id: number; name: string; type: string }[]>([])
 const templates = ref<{ id: number; name: string; variables: TemplateVar[] }[]>([])
 const togglingId = ref<number | null>(null)
+const tableRef = ref<TableInstance>()
+const selectedRows = ref<TaskRow[]>([])
+
+function onSelectionChange(rows: TaskRow[]) {
+  selectedRows.value = rows
+}
 
 const keyword = ref('')
 
@@ -546,6 +579,29 @@ async function removeTask(row: TaskRow) {
   }
 }
 
+/* ── Batch delete ─────────────────────────────────────────────────── */
+async function batchDelete() {
+  const rows = selectedRows.value
+  if (!rows.length) return
+  try {
+    await ElMessageBox.confirm(
+      `确认删除选中的 ${rows.length} 项？`,
+      '批量删除',
+      { confirmButtonText: '删除', cancelButtonText: '取消', type: 'warning' }
+    )
+  } catch {
+    return
+  }
+  try {
+    await taskApi.batchRemove(rows.map((r) => r.id))
+    ElMessage.success(`已删除 ${rows.length} 个任务`)
+    tableRef.value?.clearSelection()
+    await load()
+  } catch (e: any) {
+    ElMessage.error(errMsg(e, '批量删除失败'))
+  }
+}
+
 onMounted(() => {
   load()
   loadOptions()
@@ -554,6 +610,13 @@ onMounted(() => {
 
 <style scoped>
 .search-input { width: 220px; }
+
+.title-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
 
 .table-card {
   padding: 8px 14px 14px;

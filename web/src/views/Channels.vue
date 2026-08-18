@@ -2,7 +2,10 @@
   <div class="page">
     <div class="page-head">
       <div>
-        <h1 class="grad-text">渠道管理</h1>
+        <div class="title-row">
+          <h1 class="grad-text">渠道管理</h1>
+          <el-tag v-if="!isAdmin" type="info" effect="plain" size="small">只读模式</el-tag>
+        </div>
         <p class="sub">配置通知投递渠道：SMTP 邮件、企业微信、钉钉、飞书、PushPlus</p>
       </div>
       <div class="actions">
@@ -13,14 +16,31 @@
           :prefix-icon="Search"
           placeholder="搜索名称或类型…"
         />
-        <el-button type="primary" :icon="Plus" @click="openCreate">
+        <el-button
+          v-if="isAdmin"
+          type="danger"
+          plain
+          :icon="Delete"
+          :disabled="!selectedRows.length"
+          @click="batchDelete"
+        >
+          批量删除
+        </el-button>
+        <el-button v-if="isAdmin" type="primary" :icon="Plus" @click="openCreate">
           新建渠道
         </el-button>
       </div>
     </div>
 
     <div v-loading="loading" class="card table-card">
-      <el-table :data="filteredChannels" style="width: 100%" empty-text="暂无渠道，点击右上角「新建渠道」开始">
+      <el-table
+        ref="tableRef"
+        :data="filteredChannels"
+        style="width: 100%"
+        empty-text="暂无渠道，点击右上角「新建渠道」开始"
+        @selection-change="onSelectionChange"
+      >
+        <el-table-column v-if="isAdmin" type="selection" width="48" align="center" />
         <el-table-column prop="id" label="ID" width="72" align="center">
           <template #default="{ row }">
             <span class="mono id-cell">#{{ row.id }}</span>
@@ -57,15 +77,18 @@
 
         <el-table-column label="操作" width="210" align="center" fixed="right">
           <template #default="{ row }">
-            <el-button link type="primary" size="small" :loading="testingId === row.id" @click="testChannel(row)">
-              测试
-            </el-button>
-            <el-button link type="primary" size="small" @click="openEdit(row)">
-              编辑
-            </el-button>
-            <el-button link type="danger" size="small" @click="removeChannel(row)">
-              删除
-            </el-button>
+            <template v-if="isAdmin">
+              <el-button link type="primary" size="small" :loading="testingId === row.id" @click="testChannel(row)">
+                测试
+              </el-button>
+              <el-button link type="primary" size="small" @click="openEdit(row)">
+                编辑
+              </el-button>
+              <el-button link type="danger" size="small" @click="removeChannel(row)">
+                删除
+              </el-button>
+            </template>
+            <span v-else class="text-muted">—</span>
           </template>
         </el-table-column>
       </el-table>
@@ -136,10 +159,11 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import type { FormInstance, FormRules } from 'element-plus'
+import type { FormInstance, FormRules, TableInstance } from 'element-plus'
 import { Plus, Edit, Delete, Promotion, Search } from '@element-plus/icons-vue'
 import client from '@/api/client'
 import { channelApi } from '@/api'
+import { useAuthStore } from '@/stores/auth'
 
 interface ChannelRow {
   id: number
@@ -193,12 +217,22 @@ const configFields: Record<string, ConfigField[]> = {
   ],
   wechat: [
     { key: 'pushplus_token', label: 'PushPlus Token', placeholder: 'https://www.pushplus.plus 获取的 token', type: 'password' },
+    { key: 'pushplus_topic', label: '群组编码(可选)', placeholder: 'PushPlus 群组 code，发送到群组', type: 'text' },
   ],
 }
+
+const auth = useAuthStore()
+const isAdmin = computed(() => auth.user?.role === 'admin')
 
 const loading = ref(false)
 const channels = ref<ChannelRow[]>([])
 const testingId = ref<number | null>(null)
+const tableRef = ref<TableInstance>()
+const selectedRows = ref<ChannelRow[]>([])
+
+function onSelectionChange(rows: ChannelRow[]) {
+  selectedRows.value = rows
+}
 
 const keyword = ref('')
 
@@ -358,11 +392,41 @@ async function removeChannel(row: ChannelRow) {
   }
 }
 
+/* ── Batch delete ─────────────────────────────────────────────────── */
+async function batchDelete() {
+  const rows = selectedRows.value
+  if (!rows.length) return
+  try {
+    await ElMessageBox.confirm(
+      `确认删除选中的 ${rows.length} 项？`,
+      '批量删除',
+      { confirmButtonText: '删除', cancelButtonText: '取消', type: 'warning' }
+    )
+  } catch {
+    return
+  }
+  try {
+    await channelApi.batchRemove(rows.map((r) => r.id))
+    ElMessage.success(`已删除 ${rows.length} 个渠道`)
+    tableRef.value?.clearSelection()
+    await load()
+  } catch (e: any) {
+    ElMessage.error(errMsg(e, '批量删除失败'))
+  }
+}
+
 onMounted(load)
 </script>
 
 <style scoped>
 .search-input { width: 220px; }
+
+.title-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
 
 .table-card {
   padding: 8px 14px 14px;
