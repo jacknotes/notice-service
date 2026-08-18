@@ -30,7 +30,7 @@ func Load() *Config {
 		DBPassword: getEnv("DB_PASSWORD", "notice123"),
 		DBName:     getEnv("DB_NAME", "notice_service"),
 		JWTSecret:  getEnv("JWT_SECRET", "change-me"),
-		EncryptKey: getEnv("ENCRYPT_KEY", randomHex(32)),
+		EncryptKey: getEnv("ENCRYPT_KEY", randomHex(16)),
 		Port:       getEnv("PORT", "8080"),
 		InstanceID: getEnv("INSTANCE_ID", uuid.NewString()),
 		AdminUser:  getEnv("ADMIN_USER", "admin"),
