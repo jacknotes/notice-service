@@ -53,8 +53,8 @@ CREATE TABLE IF NOT EXISTS tasks (
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     KEY idx_tasks_user (user_id),
     CONSTRAINT fk_tasks_user FOREIGN KEY (user_id) REFERENCES users(id),
-    CONSTRAINT fk_tasks_channel FOREIGN KEY (channel_id) REFERENCES channels(id),
-    CONSTRAINT fk_tasks_template FOREIGN KEY (template_id) REFERENCES templates(id)
+    CONSTRAINT fk_tasks_channel FOREIGN KEY (channel_id) REFERENCES channels(id) ON DELETE CASCADE,
+    CONSTRAINT fk_tasks_template FOREIGN KEY (template_id) REFERENCES templates(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS task_logs (
@@ -69,5 +69,5 @@ CREATE TABLE IF NOT EXISTS task_logs (
     sent_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     KEY idx_logs_task (task_id),
     KEY idx_logs_sent_at (sent_at),
-    CONSTRAINT fk_logs_task FOREIGN KEY (task_id) REFERENCES tasks(id)
+    CONSTRAINT fk_logs_task FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

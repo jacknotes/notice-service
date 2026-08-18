@@ -68,7 +68,11 @@ func (s *NotificationService) SendTask(taskID int64, vars map[string]string) err
 	_ = json.Unmarshal([]byte(tpl.VariablesJSON), &tplVars)
 	fullVars := mergeVars(tplVars, vars)
 	subject, content := render.RenderMessage(tpl.Subject, tpl.ContentMD, fullVars)
-	msg := &channel.Message{Subject: subject, Content: render.ToText(content)}
+	rendered := render.ToText(content)
+	if ch.Type == "email" {
+		rendered = render.ToHTML(content)
+	}
+	msg := &channel.Message{Subject: subject, Content: rendered}
 
 	var lastErr error
 	for _, addr := range receivers {

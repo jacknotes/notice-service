@@ -172,14 +172,17 @@
       :close-on-click-modal="false"
       destroy-on-close
     >
-      <p class="api-key-desc">调用该任务 Webhook 时，请在请求头携带此 Key 完成鉴权。</p>
+      <p class="api-key-desc">POST /api/webhook/&lt;api_key&gt;（把 api_key 放在 URL 路径中，无需登录，无需请求头）。</p>
       <div class="api-key-box">
         <code class="mono api-key-value">{{ apiKeyValue || '—' }}</code>
         <el-button size="small" type="primary" :icon="CopyDocument" @click="copyApiKey">
           复制
         </el-button>
       </div>
-      <p class="api-key-endpoint mono">POST /api/tasks/{{ apiKeyTaskId }}/run</p>
+      <p class="api-key-endpoint mono">POST /api/webhook/{{ apiKeyValue || '&lt;api_key&gt;' }}</p>
+      <pre class="api-key-curl mono">curl -X POST https://your-host/api/webhook/{{ apiKeyValue || '&lt;api_key&gt;' }} \
+  -H 'Content-Type: application/json' \
+  -d '{"variables":{"name":"张三"}}'</pre>
       <template #footer>
         <el-button @click="apiKeyVisible = false">关闭</el-button>
       </template>
@@ -519,6 +522,18 @@ onMounted(() => {
   color: var(--text-faint);
   font-size: 11px;
   letter-spacing: 0.02em;
+}
+.api-key-curl {
+  margin-top: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: rgba(11, 17, 32, 0.72);
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 1.6;
+  white-space: pre;
+  overflow-x: auto;
 }
 
 @media (max-width: 480px) {
