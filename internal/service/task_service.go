@@ -70,7 +70,7 @@ func (s *TaskService) Create(userID int64, in *model.Task) error {
 	if err := s.repo.Create(in); err != nil {
 		return err
 	}
-	if in.TriggerType == "cron" && in.Enabled {
+	if in.TriggerType == "cron" && in.Enabled && s.sched != nil {
 		s.sched.RegisterTask(in.ID, in.CronExpr)
 	}
 	return nil
@@ -89,14 +89,14 @@ func (s *TaskService) Update(userID, id int64, in *model.Task) error {
 	}
 	in.ID = id
 	in.UserID = userID
-	if ex.TriggerType == "cron" || in.TriggerType == "cron" {
+	if (ex.TriggerType == "cron" || in.TriggerType == "cron") && s.sched != nil {
 		s.sched.UnregisterTask(id)
 	}
 	s.toJSON(in)
 	if err := s.repo.Update(in); err != nil {
 		return err
 	}
-	if in.TriggerType == "cron" && in.Enabled {
+	if in.TriggerType == "cron" && in.Enabled && s.sched != nil {
 		s.sched.RegisterTask(id, in.CronExpr)
 	}
 	return nil
@@ -110,7 +110,7 @@ func (s *TaskService) Delete(userID, id int64) error {
 	if ex.UserID != userID {
 		return errors.New("无权操作")
 	}
-	if ex.TriggerType == "cron" {
+	if ex.TriggerType == "cron" && s.sched != nil {
 		s.sched.UnregisterTask(id)
 	}
 	return s.repo.Delete(id)
@@ -127,7 +127,7 @@ func (s *TaskService) Toggle(userID, id int64, enabled bool) error {
 	if err := s.repo.SetEnabled(id, enabled); err != nil {
 		return err
 	}
-	if ex.TriggerType == "cron" {
+	if ex.TriggerType == "cron" && s.sched != nil {
 		if enabled {
 			s.sched.RegisterTask(id, ex.CronExpr)
 		} else {

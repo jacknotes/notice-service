@@ -55,7 +55,10 @@ func (h *WebhookHandler) ipAllowed(task *model.Task, c *gin.Context) bool {
 		return true
 	}
 	var ips []string
-	if err := json.Unmarshal([]byte(task.AllowedIPsJSON), &ips); err != nil || len(ips) == 0 {
+	if err := json.Unmarshal([]byte(task.AllowedIPsJSON), &ips); err != nil {
+		return false // 配置损坏 → 拒绝
+	}
+	if len(ips) == 0 {
 		return true
 	}
 	remote := clientIP(c)
@@ -67,6 +70,9 @@ func (h *WebhookHandler) ipAllowed(task *model.Task, c *gin.Context) bool {
 	return false
 }
 
+// clientIP 解析客户端 IP。注意：X-Real-IP / X-Forwarded-For 头只有在服务部署于
+// 可信反向代理（Nginx）之后才是可信的；若直接暴露公网，调用方可以伪造这些头绕过
+// IP 白名单。生产环境务必通过 Nginx 反向代理暴露本服务。
 func clientIP(c *gin.Context) string {
 	if ip := c.GetHeader("X-Real-IP"); ip != "" {
 		return strings.TrimSpace(strings.Split(ip, ",")[0])

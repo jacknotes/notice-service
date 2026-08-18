@@ -95,3 +95,47 @@ func TestLoginAndAuthRequired(t *testing.T) {
 		t.Fatalf("authed access = %d", w3.Code)
 	}
 }
+
+func TestDashboardStats(t *testing.T) {
+	r := testRouter(t)
+	tok := login(t, r)
+
+	// 通过 API 建渠道/模板/任务，拿到合法的 task_id（task_logs 有外键约束）
+	wc := authReq(t, r, tok, "POST", "/api/channels", `{"type":"email","name":"邮箱","config":{"host":"smtp.x.com","port":"587","username":"u","password":"p","from":"a@x.com"},"enabled":true}`)
+	if wc.Code != 200 {
+		t.Fatalf("create channel = %d body=%s", wc.Code, wc.Body.String())
+	}
+	ch := mustJSON(t, wc)
+
+	wt := authReq(t, r, tok, "POST", "/api/templates", `{"name":"t","subject":"会议","content_md":"hi","variables":[]}`)
+	if wt.Code != 200 {
+		t.Fatalf("create template = %d body=%s", wt.Code, wt.Body.String())
+	}
+	tpl := mustJSON(t, wt)
+
+	payload := `{"name":"任务","channel_id":` + num(int64(ch["id"].(float64))) + `,"template_id":` + num(int64(tpl["id"].(float64))) + `,"trigger_type":"api","receivers":["a@x.com"],"enabled":true}`
+	wtk := authReq(t, r, tok, "POST", "/api/tasks", payload)
+	if wtk.Code != 200 {
+		t.Fatalf("create task = %d body=%s", wtk.Code, wtk.Body.String())
+	}
+	tk := mustJSON(t, wtk)
+	taskID := int64(tk["id"].(float64))
+	channelID := int64(ch["id"].(float64))
+
+	// 直接插一条今天的 task_log，验证 dashboard stats 能统计到
+	db := testDB(t)
+	if _, err := db.Exec("INSERT INTO task_logs (task_id, channel_id, status, retry_count, sent_at) VALUES (?, ?, 'success', 0, NOW())", taskID, channelID); err != nil {
+		t.Fatalf("insert task_log: %v", err)
+	}
+	t.Cleanup(func() { db.Exec("DELETE FROM task_logs WHERE task_id=?", taskID) })
+
+	w := authReq(t, r, tok, "GET", "/api/dashboard/stats", "")
+	if w.Code != 200 {
+		t.Fatalf("dashboard stats = %d body=%s", w.Code, w.Body.String())
+	}
+	s := mustJSON(t, w)
+	total, _ := s["today_total"].(float64)
+	if total < 1 {
+		t.Fatalf("today_total = %v, want >= 1", s["today_total"])
+	}
+}

@@ -3,6 +3,7 @@ package main
 import (
 	"crypto/sha256"
 	"log"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 
@@ -57,7 +58,11 @@ func main() {
 	engine.Static("/assets", "./web/dist/assets")
 	engine.StaticFile("/", "./web/dist/index.html")
 	engine.NoRoute(func(c *gin.Context) {
-		if c.Request.Method == "GET" && c.Request.URL.Path[:1] == "/" {
+		if strings.HasPrefix(c.Request.URL.Path, "/api/") {
+			c.JSON(404, gin.H{"error": "not found"})
+			return
+		}
+		if c.Request.Method == "GET" {
 			c.File("./web/dist/index.html")
 			return
 		}
