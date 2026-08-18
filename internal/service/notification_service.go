@@ -68,11 +68,9 @@ func (s *NotificationService) SendTask(taskID int64, vars map[string]string) err
 	_ = json.Unmarshal([]byte(tpl.VariablesJSON), &tplVars)
 	fullVars := mergeVars(tplVars, vars)
 	subject, content := render.RenderMessage(tpl.Subject, tpl.ContentMD, fullVars)
-	rendered := render.ToText(content)
-	if ch.Type == "email" {
-		rendered = render.ToHTML(content)
-	}
-	msg := &channel.Message{Subject: subject, Content: rendered}
+	// content 为渲染后的原始 Markdown，由各渠道决定如何呈现：
+	// 邮箱 → HTML；飞书 → 纯文本；企微/钉钉/PushPlus → 原生 Markdown
+	msg := &channel.Message{Subject: subject, Content: content}
 
 	var lastErr error
 	for _, addr := range receivers {

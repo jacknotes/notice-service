@@ -20,23 +20,17 @@ func (w *WechatChannel) ValidateConfig(c map[string]string) error {
 	return nil
 }
 
-func (w *WechatChannel) TestConnection(c map[string]string) error {
-	if err := w.ValidateConfig(c); err != nil {
-		return err
-	}
-	return nil
-}
-
-func (w *WechatChannel) Send(message *Message, receiver *Receiver) error {
-	if message == nil || receiver == nil {
-		return errors.New("message/receiver 不能为空")
-	}
+// sendPushPlus 调用 PushPlus API；template 可选 text/markdown 等。
+func sendPushPlus(cfg map[string]string, title, content, template string) error {
 	form := url.Values{}
-	form.Set("token", w.config["pushplus_token"])
-	form.Set("title", message.Subject)
-	form.Set("content", message.Content)
+	form.Set("token", cfg["pushplus_token"])
+	form.Set("title", title)
+	form.Set("content", content)
+	if template != "" {
+		form.Set("template", template)
+	}
 	endpoint := "https://www.pushplus.plus/send"
-	if u := w.config["pushplus_url"]; u != "" {
+	if u := cfg["pushplus_url"]; u != "" {
 		endpoint = u // 测试/自托管可用：指向本地端点
 	}
 	resp, err := webhookClient.PostForm(endpoint, form)
@@ -53,6 +47,22 @@ func (w *WechatChannel) Send(message *Message, receiver *Receiver) error {
 	}
 	// PushPlus 成功码为 200（不是 0）
 	return checkCodeResp(data, 200)
+}
+
+func (w *WechatChannel) TestConnection(c map[string]string) error {
+	if err := w.ValidateConfig(c); err != nil {
+		return err
+	}
+	// 真实推送一条测试消息，便于用户确认能收到
+	return sendPushPlus(c, "【notice-service】渠道连接测试", "渠道连接测试成功！", "text")
+}
+
+func (w *WechatChannel) Send(message *Message, receiver *Receiver) error {
+	if message == nil || receiver == nil {
+		return errors.New("message/receiver 不能为空")
+	}
+	// PushPlus 支持 markdown 模板，保留 Markdown 原文以获得列表/加粗等效果
+	return sendPushPlus(w.config, message.Subject, message.Content, "markdown")
 }
 
 func NewWechatChannel(config map[string]string) *WechatChannel {

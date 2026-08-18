@@ -51,14 +51,16 @@
           </template>
         </el-table-column>
 
-        <el-table-column prop="task_id" label="任务 ID" width="96" align="center">
+        <el-table-column label="任务" min-width="160">
           <template #default="{ row }">
+            <span class="task-name-cell">{{ taskName(row.task_id) }}</span>
             <span class="mono task-id-cell">#{{ row.task_id }}</span>
           </template>
         </el-table-column>
 
-        <el-table-column prop="channel_id" label="渠道 ID" width="96" align="center">
+        <el-table-column label="渠道" min-width="160">
           <template #default="{ row }">
+            <span class="task-name-cell">{{ channelName(row.channel_id) }}</span>
             <span class="mono task-id-cell">#{{ row.channel_id }}</span>
           </template>
         </el-table-column>
@@ -86,7 +88,7 @@
 
         <el-table-column label="时间" min-width="170">
           <template #default="{ row }">
-            <span class="mono time-cell">{{ row.sent_at || '—' }}</span>
+            <span class="mono time-cell">{{ fmtTime(row.sent_at) }}</span>
           </template>
         </el-table-column>
       </el-table>
@@ -104,7 +106,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { taskApi } from '@/api'
+import { channelApi, taskApi } from '@/api'
 
 interface LogRow {
   id: number
@@ -123,10 +125,23 @@ const route = useRoute()
 const loading = ref(false)
 const tasksLoaded = ref(false)
 const tasks = ref<{ id: number; name: string }[]>([])
+const channels = ref<{ id: number; name: string }[]>([])
 const logs = ref<LogRow[]>([])
 
 const taskFilter = ref<number | undefined>(undefined)
 const statusFilter = ref<'success' | 'failed' | ''>('')
+
+const taskName = (id: number) => tasks.value.find((t) => t.id === id)?.name || `任务 #${id}`
+const channelName = (id: number) => channels.value.find((c) => c.id === id)?.name || `渠道 #${id}`
+
+// 把 ISO 时间格式化为本地 "YYYY-MM-DD HH:mm:ss"；零值/非法显示 "—"
+function fmtTime(iso?: string) {
+  if (!iso) return '—'
+  const d = new Date(iso)
+  if (isNaN(d.getTime()) || d.getFullYear() <= 1) return '—'
+  const p = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`
+}
 
 const filteredLogs = computed<LogRow[]>(() =>
   logs.value.filter((l) => {
@@ -149,8 +164,9 @@ async function load() {
   loading.value = true
   tasksLoaded.value = false
   try {
-    const list = await taskApi.list()
+    const [list, chList] = await Promise.all([taskApi.list(), channelApi.list()])
     tasks.value = list || []
+    channels.value = chList || []
 
     const groups = await Promise.all(
       (list || []).map((t: { id: number }) =>
@@ -217,6 +233,11 @@ onMounted(load)
 .task-id-cell {
   color: var(--indigo-400);
   font-size: var(--text-xs);
+}
+.task-name-cell {
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+  margin-right: 8px;
 }
 .retry-cell {
   color: var(--text-secondary);

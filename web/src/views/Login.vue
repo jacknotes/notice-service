@@ -90,7 +90,7 @@ async function onSubmit() {
 
   loading.value = true
   try {
-    await auth.login(form.username, form.password)
+    await auth.login(form.username.trim(), form.password.trim())
     router.push('/dashboard')
   } catch (e: any) {
     error.value = e?.response?.data?.error || '登录失败，请检查网络连接'

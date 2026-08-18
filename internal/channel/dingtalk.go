@@ -35,7 +35,22 @@ func (d *DingtalkChannel) TestConnection(c map[string]string) error {
 	if err := d.ValidateConfig(c); err != nil {
 		return err
 	}
-	return nil
+	// 真实发送一条测试消息，便于用户确认能收到
+	u := c["webhook_url"]
+	if sec := c["secret"]; sec != "" {
+		u = d.signedURL(u, sec, strconv.FormatInt(nowUnix(), 10))
+	}
+	data, err := postJSON(u, map[string]interface{}{
+		"msgtype": "markdown",
+		"markdown": map[string]interface{}{
+			"title": "渠道连接测试",
+			"text":  "### 【notice-service】渠道连接测试\n\n连接测试成功！",
+		},
+	})
+	if err != nil {
+		return err
+	}
+	return checkWebhookResp(data)
 }
 
 func (d *DingtalkChannel) Send(message *Message, receiver *Receiver) error {

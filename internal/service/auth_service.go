@@ -3,6 +3,7 @@ package service
 import (
 	"database/sql"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/go-sql-driver/mysql"
@@ -90,6 +91,8 @@ func (s *AuthService) BootstrapAdmin() error {
 }
 
 func (s *AuthService) Login(username, password string) (string, *model.User, error) {
+	username = strings.TrimSpace(username) // 忽略首尾空格
+	password = strings.TrimSpace(password)
 	u, err := s.users.GetByUsername(username)
 	if errors.Is(err, repository.ErrNotFound) {
 		return "", nil, errors.New("用户名或密码错误")

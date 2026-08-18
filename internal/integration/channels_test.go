@@ -289,7 +289,7 @@ func buildFixture(t *testing.T, chType string, cfg map[string]string) *fixture {
 	ns.RetryBackoff = []time.Duration{time.Millisecond, time.Millisecond, time.Millisecond}
 	return &fixture{
 		db: db, ns: ns, userID: uid, chID: ch.ID, tplID: tpl.ID, taskID: tk.ID,
-		subject: "会议 10:00", content: "标题 大家好 张三，明天 10:00 开会",
+		subject: "会议 10:00", content: "## 标题\n\n大家好 **张三**，明天 10:00 开会",
 	}
 }
 

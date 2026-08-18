@@ -12,6 +12,9 @@ type TaskLogRepo struct{ db *sql.DB }
 func NewTaskLogRepo(db *sql.DB) *TaskLogRepo { return &TaskLogRepo{db: db} }
 
 func (r *TaskLogRepo) Create(l *model.TaskLog) error {
+	if l.SentAt.IsZero() {
+		l.SentAt = time.Now() // 未显式指定时用当前时间，避免零值覆盖 DB 默认
+	}
 	res, err := r.db.Exec(
 		"INSERT INTO task_logs (task_id, channel_id, status, request, response, error_msg, retry_count, sent_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
 		l.TaskID, l.ChannelID, l.Status, l.Request, l.Response, l.ErrorMsg, l.RetryCount, l.SentAt)

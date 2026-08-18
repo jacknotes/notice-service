@@ -3,6 +3,8 @@ package channel
 import (
 	"errors"
 	"fmt"
+
+	"notice-service/internal/render"
 )
 
 type FeishuChannel struct {
@@ -38,7 +40,7 @@ func (f *FeishuChannel) Send(message *Message, receiver *Receiver) error {
 	}
 	data, err := postJSON(f.config["webhook_url"], map[string]interface{}{
 		"msg_type": "text",
-		"content":  map[string]string{"text": fmt.Sprintf("%s\n%s", message.Subject, message.Content)},
+		"content":  map[string]string{"text": fmt.Sprintf("%s\n%s", message.Subject, render.ToText(message.Content))},
 	})
 	if err != nil {
 		return err
