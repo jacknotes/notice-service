@@ -1,6 +1,7 @@
 package scheduler
 
 import (
+	"log"
 	"sync"
 
 	"github.com/robfig/cron/v3"
@@ -19,13 +20,18 @@ type Scheduler struct {
 	taskEntries sync.Map // taskID -> cron.EntryID
 }
 
-func New(exec ExecFunc, repo *repository.TaskRepo) *Scheduler {
+// New 创建调度器。exec 为任务执行回调；repo 非空且 instanceID 非空时启用租约锁，
+// instanceID 标识本实例（ReleaseLease 的所有权校验依赖它，避免误释放其他实例的锁）。
+func New(exec ExecFunc, repo *repository.TaskRepo, instanceID string) *Scheduler {
 	s := &Scheduler{
-		cron: cron.New(cron.WithSeconds(), cron.WithChain(cron.SkipIfStillRunning(cron.DefaultLogger))),
+		cron: cron.New(cron.WithChain(
+			cron.Recover(cron.DefaultLogger),
+			cron.SkipIfStillRunning(cron.DefaultLogger),
+		)),
 		exec: exec,
 	}
-	if repo != nil {
-		s.leases = NewLease(repo, "sched")
+	if repo != nil && instanceID != "" {
+		s.leases = NewLease(repo, instanceID)
 	}
 	return s
 }
@@ -41,9 +47,11 @@ func (s *Scheduler) Len() int { return len(s.cron.Entries()) }
 // RegisterTask 注册任务；cronExpr 为标准 5 段表达式。实现 service.Scheduler 接口。
 func (s *Scheduler) RegisterTask(taskID int64, cronExpr string) {
 	eid, err := s.cron.AddFunc(cronExpr, s.makeJob(taskID))
-	if err == nil {
-		s.taskEntries.Store(taskID, eid)
+	if err != nil {
+		log.Printf("scheduler: register task %d failed: %v", taskID, err)
+		return
 	}
+	s.taskEntries.Store(taskID, eid)
 }
 
 // RegisterTaskWithSpec 测试辅助：直接注册任意 spec 并返回 entry id。

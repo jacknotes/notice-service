@@ -28,30 +28,59 @@ func testDB(t *testing.T) *sql.DB {
 	return db
 }
 
-func TestLeaseExclusiveAndExpiry(t *testing.T) {
-	db := testDB(t)
-	tr := repository.NewTaskRepo(db)
-	// 造一条任务：自备 user，并确保存在可用的 channel/template
-	ures, err := db.Exec("INSERT INTO users (username, password_hash, role) VALUES (?, 'h', 'user')", "lease_"+randSuffix())
+// seedUser 自备一条 user 并注册清理（t.Cleanup 为 LIFO，保证 task/channel/template 先删）。
+func seedUser(t *testing.T, db *sql.DB, prefix string) int64 {
+	t.Helper()
+	res, err := db.Exec("INSERT INTO users (username, password_hash, role) VALUES (?, 'h', 'user')", prefix+"_"+randSuffix())
 	if err != nil {
 		t.Fatal(err)
 	}
-	uid, _ := ures.LastInsertId()
-	t.Cleanup(func() { db.Exec("DELETE FROM users WHERE id=?", uid) })
+	id, _ := res.LastInsertId()
+	t.Cleanup(func() { db.Exec("DELETE FROM users WHERE id=?", id) })
+	return id
+}
 
-	var chID, tplID int64
-	if err := db.QueryRow("SELECT id FROM channels LIMIT 1").Scan(&chID); err != nil {
-		t.Fatalf("need a channel row: %v (run database migrate + a channel seeding test first)", err)
+func seedChannel(t *testing.T, db *sql.DB, uid int64) int64 {
+	t.Helper()
+	res, err := db.Exec("INSERT INTO channels (user_id, type, name, config_json, enabled) VALUES (?, 'email', 'c', '{}', 1)", uid)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if err := db.QueryRow("SELECT id FROM templates LIMIT 1").Scan(&tplID); err != nil {
-		t.Fatalf("need a template row: %v", err)
+	id, _ := res.LastInsertId()
+	t.Cleanup(func() { db.Exec("DELETE FROM channels WHERE id=?", id) })
+	return id
+}
+
+func seedTemplate(t *testing.T, db *sql.DB, uid int64) int64 {
+	t.Helper()
+	res, err := db.Exec("INSERT INTO templates (user_id, name, subject, content_md, variables) VALUES (?, 't', 's', 'c', '[]')", uid)
+	if err != nil {
+		t.Fatal(err)
 	}
+	id, _ := res.LastInsertId()
+	t.Cleanup(func() { db.Exec("DELETE FROM templates WHERE id=?", id) })
+	return id
+}
+
+func seedTask(t *testing.T, db *sql.DB, uid, chID, tplID int64) int64 {
+	t.Helper()
 	res, err := db.Exec("INSERT INTO tasks (user_id, name, channel_id, template_id, trigger_type, receivers, enabled) VALUES (?, 't', ?, ?, 'cron', '[]', 1)", uid, chID, tplID)
 	if err != nil {
 		t.Fatal(err)
 	}
 	id, _ := res.LastInsertId()
 	t.Cleanup(func() { db.Exec("DELETE FROM tasks WHERE id=?", id) })
+	return id
+}
+
+func TestLeaseExclusiveAndExpiry(t *testing.T) {
+	db := testDB(t)
+	tr := repository.NewTaskRepo(db)
+	// 自备 user/channel/template/task，不依赖数据库里已存在的行。
+	uid := seedUser(t, db, "lease")
+	chID := seedChannel(t, db, uid)
+	tplID := seedTemplate(t, db, uid)
+	id := seedTask(t, db, uid, chID, tplID)
 
 	l1 := NewLease(tr, "inst-a")
 	l2 := NewLease(tr, "inst-b")

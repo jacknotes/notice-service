@@ -1,12 +1,8 @@
 package scheduler
 
 import (
-	"time"
-
 	"notice-service/internal/repository"
 )
-
-const LeaseDuration = 60 * time.Second
 
 // Lease 封装任务仓库的租约锁语义。
 type Lease struct {
