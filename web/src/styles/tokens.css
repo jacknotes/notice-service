@@ -1,0 +1,119 @@
+/* ==========================================================================
+   Notice Service · Design Tokens
+   --------------------------------------------------------------------------
+   Single source of truth for the "Signal Relay" design system — a dark
+   notification / signals control-room. Every page, component and chart in
+   later batches should draw its values from here.
+   ========================================================================== */
+
+:root {
+  /* --- Base surfaces (deep blue-black control room) --------------------- */
+  --bg-base: #0f172a;            /* app background                          */
+  --bg-deep: #0b1120;            /* recessed wells, page base               */
+  --bg-elev: #1e293b;            /* elevated panels                         */
+  --bg-elev-2: #263349;          /* hover wells, overlays                   */
+  --bg-card: rgba(30, 41, 59, 0.55);
+  --bg-glass: rgba(15, 23, 42, 0.5);
+  --bg-scrim: rgba(2, 6, 23, 0.62);
+
+  /* --- Brand gradient (signal energy: indigo → violet) ------------------ */
+  --indigo-400: #818cf8;
+  --indigo-500: #6366f1;
+  --indigo-600: #4f46e5;
+  --violet-400: #a78bfa;
+  --violet-500: #8b5cf6;
+  --grad-primary: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  --grad-primary-soft: linear-gradient(135deg, rgba(99, 102, 241, 0.16), rgba(139, 92, 246, 0.16));
+  --grad-text: linear-gradient(100deg, #a5b4fc 0%, #818cf8 40%, #a78bfa 72%, #c4b5fd 100%);
+
+  /* --- Sharp accent (live / success signal: emerald) -------------------- */
+  --emerald-400: #34d399;
+  --emerald-500: #10b981;
+  --rose-400: #f87171;
+  --rose-500: #ef4444;
+  --amber-400: #fbbf24;
+  --sky-400: #38bdf8;
+
+  /* --- Text ------------------------------------------------------------- */
+  --text-primary: #e2e8f0;
+  --text-secondary: #94a3b8;
+  --text-muted: #64748b;
+  --text-faint: #475569;
+  --text-on-grad: #ffffff;
+
+  /* --- Borders ---------------------------------------------------------- */
+  --border: rgba(148, 163, 184, 0.15);
+  --border-strong: rgba(148, 163, 184, 0.26);
+  --border-faint: rgba(148, 163, 184, 0.09);
+  --border-accent: rgba(129, 140, 248, 0.42);
+
+  /* --- Radii ------------------------------------------------------------ */
+  --radius-xs: 6px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 22px;
+  --radius-pill: 999px;
+
+  /* --- Shadows ---------------------------------------------------------- */
+  --shadow-card: 0 4px 24px rgba(2, 6, 23, 0.35);
+  --shadow-float: 0 14px 40px rgba(2, 6, 23, 0.5);
+  --shadow-glow: 0 0 0 1px rgba(129, 140, 248, 0.18), 0 8px 32px rgba(99, 102, 241, 0.22);
+  --shadow-glow-strong: 0 0 0 1px rgba(129, 140, 248, 0.32), 0 10px 44px rgba(99, 102, 241, 0.35);
+  --shadow-inset: inset 0 1px 0 rgba(148, 163, 184, 0.08);
+
+  /* --- Fonts ------------------------------------------------------------ */
+  /* Display: Chakra Petch — angular, signal-notch terminals (Latin only).
+     Chinese falls through to the CJK stack below. */
+  --font-display: 'Chakra Petch', 'Outfit', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', sans-serif;
+  /* Body: Outfit — refined geometric sans (Latin); system CJK for Chinese. */
+  --font-sans: 'Outfit', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', -apple-system, 'Segoe UI', sans-serif;
+  /* Mono: JetBrains Mono — cron expressions, API keys, JSON, code.        */
+  --font-mono: 'JetBrains Mono', 'SFMono-Regular', 'Cascadia Code', Consolas, monospace;
+
+  /* --- Type scale ------------------------------------------------------- */
+  --text-xs: 12px;
+  --text-sm: 13px;
+  --text-base: 14px;
+  --text-md: 16px;
+  --text-lg: 18px;
+  --text-xl: 22px;
+  --text-2xl: 28px;
+  --text-3xl: 36px;
+  --leading-tight: 1.2;
+  --leading-normal: 1.55;
+
+  /* --- Spacing (4px base) ----------------------------------------------- */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+
+  /* --- Layout ----------------------------------------------------------- */
+  --sidebar-w: 248px;
+  --topbar-h: 64px;
+  --page-pad: 28px;
+  --content-max: 1440px;
+  --bp-md: 768px;
+  --bp-lg: 1080px;
+
+  /* --- Motion ----------------------------------------------------------- */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+  --dur-fast: 140ms;
+  --dur-base: 240ms;
+  --dur-slow: 420ms;
+  --dur-enter: 620ms;
+
+  /* --- Elevation / z ---------------------------------------------------- */
+  --z-bg: 0;
+  --z-base: 1;
+  --z-sticky: 100;
+  --z-overlay: 1000;
+  --z-top: 2000;
+}

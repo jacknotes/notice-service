@@ -1,0 +1,456 @@
+/* ==========================================================================
+   Notice Service · Global styles
+   --------------------------------------------------------------------------
+   Atmosphere: layered radial glows + faint signal grid + grain noise.
+   Components: glass cards, gradient text, stagger reveal, live-pulse dots.
+   Element Plus: dark-theme variable overrides so every EP component blends
+   with the Signal Relay aesthetic.
+   ========================================================================== */
+
+@import './tokens.css';
+
+/* --- Reset --------------------------------------------------------------- */
+*,
+*::before,
+*::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html { scroll-behavior: smooth; }
+
+html,
+body,
+#app { height: 100%; }
+
+body {
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  line-height: var(--leading-normal);
+  color: var(--text-primary);
+  background-color: var(--bg-base);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  overflow-x: hidden;
+}
+
+a { color: inherit; text-decoration: none; }
+button { font-family: inherit; }
+
+h1, h2, h3, h4 {
+  font-family: var(--font-display);
+  font-weight: 600;
+  line-height: var(--leading-tight);
+  letter-spacing: 0.01em;
+}
+
+/* --- Atmosphere: glows + signal grid ------------------------------------ */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-bg);
+  pointer-events: none;
+  background:
+    radial-gradient(1100px 540px at 10% -12%, rgba(99, 102, 241, 0.22), transparent 62%),
+    radial-gradient(900px 520px at 94% -10%, rgba(139, 92, 246, 0.18), transparent 62%),
+    radial-gradient(760px 460px at 88% 112%, rgba(16, 185, 129, 0.05), transparent 60%),
+    linear-gradient(rgba(148, 163, 184, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(148, 163, 184, 0.05) 1px, transparent 1px);
+  background-size: auto, auto, auto, 44px 44px, 44px 44px;
+  -webkit-mask-image: radial-gradient(ellipse 140% 100% at 50% 0%, #000 35%, transparent 78%);
+  mask-image: radial-gradient(ellipse 140% 100% at 50% 0%, #000 35%, transparent 78%);
+}
+
+/* --- Atmosphere: grain noise ------------------------------------------- */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-bg);
+  pointer-events: none;
+  opacity: 0.05;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140' viewBox='0 0 140 140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+#app { position: relative; z-index: var(--z-base); min-height: 100vh; }
+
+/* --- Selection / focus --------------------------------------------------- */
+::selection { background: rgba(99, 102, 241, 0.35); color: #fff; }
+
+:focus-visible {
+  outline: 2px solid var(--indigo-400);
+  outline-offset: 2px;
+  border-radius: var(--radius-xs);
+}
+
+/* --- Scrollbars (signature: gradient thumb) ------------------------------ */
+* { scrollbar-width: thin; scrollbar-color: rgba(148, 163, 184, 0.35) transparent; }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(var(--indigo-500), var(--violet-500));
+  border: 3px solid var(--bg-base);
+  border-radius: var(--radius-pill);
+}
+::-webkit-scrollbar-thumb:hover { background: linear-gradient(var(--indigo-400), var(--violet-400)); }
+::-webkit-scrollbar-corner { background: transparent; }
+
+/* --- Glass card ----------------------------------------------------------- */
+.card {
+  position: relative;
+  background: var(--bg-card);
+  backdrop-filter: blur(14px) saturate(1.2);
+  -webkit-backdrop-filter: blur(14px) saturate(1.2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card), var(--shadow-inset);
+  transition:
+    transform var(--dur-base) var(--ease-out),
+    box-shadow var(--dur-base) var(--ease-out),
+    border-color var(--dur-base) var(--ease-out);
+}
+.card:hover {
+  transform: translateY(-2px);
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow-float);
+}
+.card--glow:hover {
+  border-color: var(--border-accent);
+  box-shadow: var(--shadow-glow);
+}
+
+/* --- Page scaffold -------------------------------------------------------- */
+.page {
+  max-width: var(--content-max);
+  margin: 0 auto;
+  padding: var(--space-6) var(--page-pad) var(--space-12);
+}
+@media (max-width: 768px) {
+  .page { padding: var(--space-4) var(--space-4) var(--space-12); }
+}
+
+.page-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+  margin-bottom: var(--space-6);
+}
+.page-head h1 {
+  font-size: var(--text-2xl);
+  font-weight: 700;
+  letter-spacing: 0.005em;
+}
+.page-head .sub {
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  margin-top: 4px;
+}
+.page-head .actions { display: flex; gap: var(--space-3); align-items: center; }
+
+/* --- Signature helpers ---------------------------------------------------- */
+.grad-text {
+  background-image: var(--grad-text);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.grad-bar {
+  height: 3px;
+  width: 44px;
+  border-radius: var(--radius-pill);
+  background-image: var(--grad-primary);
+  margin-top: 10px;
+}
+
+.text-secondary { color: var(--text-secondary); }
+.text-muted { color: var(--text-muted); }
+
+.mono { font-family: var(--font-mono); font-size: 0.9em; letter-spacing: 0.01em; }
+
+.flex { display: flex; }
+.items-center { align-items: center; }
+.gap-2 { gap: var(--space-2); }
+.gap-3 { gap: var(--space-3); }
+.gap-4 { gap: var(--space-4); }
+.mt-2 { margin-top: var(--space-2); }
+.mt-4 { margin-top: var(--space-4); }
+.mb-2 { margin-bottom: var(--space-2); }
+.mb-4 { margin-bottom: var(--space-4); }
+
+/* --- Motion: staggered page-load reveal ---------------------------------- */
+.reveal {
+  opacity: 0;
+  animation: rise var(--dur-enter) var(--ease-out) forwards;
+  animation-delay: calc(var(--d, 0) * 70ms);
+}
+@keyframes rise {
+  from { opacity: 0; transform: translateY(16px); filter: blur(4px); }
+  to   { opacity: 1; transform: translateY(0);    filter: blur(0); }
+}
+.d-0 { --d: 0; } .d-1 { --d: 1; } .d-2 { --d: 2; }
+.d-3 { --d: 3; } .d-4 { --d: 4; } .d-5 { --d: 5; } .d-6 { --d: 6; }
+
+/* --- Motion: live-pulse dot (emerald signal) ------------------------------ */
+.dot-live {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--emerald-400);
+  box-shadow: 0 0 0 0 rgba(52, 211, 153, 0.5);
+  animation: pulse 2.2s var(--ease-in-out) infinite;
+}
+@keyframes pulse {
+  0%   { box-shadow: 0 0 0 0 rgba(52, 211, 153, 0.5); }
+  70%  { box-shadow: 0 0 0 9px rgba(52, 211, 153, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(52, 211, 153, 0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ==========================================================================
+   Element Plus · dark theme blend
+   --------------------------------------------------------------------------
+   main.ts imports the light EP stylesheet; these variable overrides re-skin
+   every EP component into the Signal Relay palette.
+   ========================================================================== */
+
+:root {
+  /* brand */
+  --el-color-primary: #6366f1;
+  --el-color-primary-light-3: #818cf8;
+  --el-color-primary-light-5: #a5b4fc;
+  --el-color-primary-light-7: #c7d2fe;
+  --el-color-primary-light-8: #dbe4ff;
+  --el-color-primary-light-9: #eef0fe;
+  --el-color-primary-dark-2: #4f46e5;
+
+  --el-color-success: #34d399;
+  --el-color-success-light-3: #6fdcc0;
+  --el-color-success-light-5: #9ee8d2;
+  --el-color-success-light-7: #c8f2e5;
+  --el-color-success-light-8: #e0f8ef;
+  --el-color-success-light-9: #effcf7;
+  --el-color-success-dark-2: #0f9f74;
+
+  --el-color-warning: #fbbf24;
+  --el-color-warning-light-3: #fcd268;
+  --el-color-warning-light-5: #fde19a;
+  --el-color-warning-light-7: #fdedc6;
+  --el-color-warning-light-8: #fef4dc;
+  --el-color-warning-light-9: #fffaf0;
+  --el-color-warning-dark-2: #d99e10;
+
+  --el-color-danger: #f87171;
+  --el-color-danger-light-3: #fa9e9e;
+  --el-color-danger-light-5: #fcbfbf;
+  --el-color-danger-light-7: #fddede;
+  --el-color-danger-light-8: #feecec;
+  --el-color-danger-light-9: #fef5f5;
+  --el-color-danger-dark-2: #d64f4f;
+
+  --el-color-error: #f87171;
+  --el-color-info: #94a3b8;
+
+  /* surfaces */
+  --el-bg-color: #1e293b;
+  --el-bg-color-overlay: #1c2740;
+  --el-bg-color-page: #0f172a;
+  --el-fill-color-blank: #1e293b;
+  --el-fill-color: rgba(148, 163, 184, 0.12);
+  --el-fill-color-light: rgba(148, 163, 184, 0.1);
+  --el-fill-color-lighter: rgba(148, 163, 184, 0.08);
+  --el-fill-color-extra-light: rgba(148, 163, 184, 0.06);
+  --el-fill-color-dark: rgba(148, 163, 184, 0.16);
+  --el-fill-color-darker: rgba(148, 163, 184, 0.2);
+
+  /* text */
+  --el-text-color-primary: #e2e8f0;
+  --el-text-color-regular: #cbd5e1;
+  --el-text-color-secondary: #94a3b8;
+  --el-text-color-placeholder: #64748b;
+  --el-text-color-disabled: #475569;
+
+  /* borders */
+  --el-border-color: rgba(148, 163, 184, 0.2);
+  --el-border-color-light: rgba(148, 163, 184, 0.16);
+  --el-border-color-lighter: rgba(148, 163, 184, 0.13);
+  --el-border-color-extra-light: rgba(148, 163, 184, 0.1);
+  --el-border-color-dark: rgba(148, 163, 184, 0.3);
+  --el-border-color-hover: rgba(148, 163, 184, 0.36);
+
+  --el-mask-color: rgba(2, 6, 23, 0.6);
+  --el-mask-color-extra-light: rgba(2, 6, 23, 0.4);
+
+  /* elevation + geometry */
+  --el-box-shadow: 0 4px 24px rgba(2, 6, 23, 0.4);
+  --el-box-shadow-light: 0 4px 16px rgba(2, 6, 23, 0.35);
+  --el-box-shadow-lighter: 0 2px 10px rgba(2, 6, 23, 0.3);
+  --el-box-shadow-dark: 0 10px 40px rgba(2, 6, 23, 0.55);
+  --el-border-radius-base: 8px;
+  --el-border-radius-small: 6px;
+  --el-border-radius-round: 999px;
+  --el-font-family: var(--font-sans);
+  --el-font-size-base: 14px;
+}
+
+/* --- Primary buttons get the signal gradient ------------------------------ */
+.el-button--primary {
+  --el-button-bg-color: var(--indigo-500);
+  --el-button-border-color: var(--indigo-500);
+  --el-button-hover-bg-color: var(--violet-500);
+  --el-button-hover-border-color: var(--violet-500);
+  --el-button-active-bg-color: var(--violet-500);
+  --el-button-active-border-color: var(--violet-500);
+  background-image: var(--grad-primary);
+  border: none;
+  font-weight: 600;
+  box-shadow: 0 4px 18px rgba(99, 102, 241, 0.28);
+  transition: transform var(--dur-fast) var(--ease-out),
+              box-shadow var(--dur-fast) var(--ease-out),
+              filter var(--dur-fast) var(--ease-out);
+}
+.el-button--primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 26px rgba(99, 102, 241, 0.4);
+  filter: brightness(1.06);
+}
+.el-button--primary:active { transform: translateY(0); }
+.el-button.is-text { color: var(--text-secondary); }
+.el-button.is-text:hover { color: var(--text-primary); background: rgba(148, 163, 184, 0.08); }
+
+/* --- Menu / sidebar (active item = gradient pill) ------------------------- */
+.el-menu {
+  --el-menu-bg-color: transparent;
+  --el-menu-text-color: var(--text-secondary);
+  --el-menu-active-color: #fff;
+  --el-menu-hover-bg-color: rgba(99, 102, 241, 0.1);
+  --el-menu-item-height: 46px;
+  border-right: none;
+  background: transparent;
+}
+.el-menu-item,
+.el-sub-menu__title {
+  border-radius: var(--radius-sm);
+  margin: 2px 10px;
+  font-weight: 500;
+}
+.el-menu-item:hover,
+.el-sub-menu__title:hover { color: var(--text-primary); }
+.el-menu-item.is-active {
+  background-image: var(--grad-primary);
+  color: #fff;
+  box-shadow: 0 6px 18px rgba(99, 102, 241, 0.35);
+}
+
+/* --- Table ----------------------------------------------------------------- */
+.el-table {
+  --el-table-bg-color: transparent;
+  --el-table-tr-bg-color: transparent;
+  --el-table-header-bg-color: rgba(148, 163, 184, 0.06);
+  --el-table-header-text-color: var(--text-secondary);
+  --el-table-text-color: var(--text-primary);
+  --el-table-border-color: var(--border);
+  --el-table-row-hover-bg-color: rgba(99, 102, 241, 0.06);
+  background: transparent;
+}
+.el-table th.el-table__cell { font-weight: 600; letter-spacing: 0.02em; }
+.el-table__inner-wrapper::before { display: none; }
+
+/* --- Dialog / message-box -------------------------------------------------- */
+.el-dialog {
+  --el-dialog-bg-color: var(--bg-elev);
+  --el-dialog-border-radius: var(--radius-lg);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-float);
+}
+.el-dialog__title { font-family: var(--font-display); font-weight: 600; }
+.el-message { border-radius: var(--radius-md); }
+.el-message-box {
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-float);
+}
+
+/* --- Inputs / selects ------------------------------------------------------ */
+.el-input,
+.el-select,
+.el-textarea {
+  --el-input-bg-color: rgba(15, 23, 42, 0.6);
+  --el-input-border-color: var(--border);
+  --el-input-hover-border-color: var(--border-strong);
+  --el-input-focus-border-color: var(--indigo-500);
+  --el-input-text-color: var(--text-primary);
+  --el-input-placeholder-color: var(--text-muted);
+}
+.el-input__wrapper,
+.el-select__wrapper,
+.el-textarea__inner { border-radius: var(--radius-sm); }
+.el-input__wrapper { box-shadow: 0 0 0 1px var(--border) inset; }
+.el-input__wrapper.is-focus { box-shadow: 0 0 0 1px var(--indigo-500) inset; }
+
+/* --- Form ------------------------------------------------------------------- */
+.el-form-item__label { color: var(--text-secondary); }
+.el-select__popper.el-popper.is-light,
+.el-dropdown__popper.el-popper.is-light { background: var(--bg-elev-2); border-color: var(--border); }
+.el-dropdown-menu { background: var(--bg-elev-2); }
+.el-dropdown-menu__item:not(.is-disabled):hover { background: rgba(99, 102, 241, 0.12); color: var(--text-primary); }
+
+/* --- Card ------------------------------------------------------------------- */
+.el-card {
+  --el-card-bg-color: var(--bg-card);
+  --el-card-border-color: var(--border);
+  border-radius: var(--radius-lg);
+}
+
+/* --- Tabs -------------------------------------------------------------------- */
+.el-tabs__item { color: var(--text-secondary); font-weight: 500; }
+.el-tabs__item.is-active { color: var(--indigo-400); }
+.el-tabs__active-bar { background-image: var(--grad-primary); height: 2px; }
+.el-tabs__nav-wrap::after { background-color: var(--border-faint); }
+
+/* --- Tag / badge ------------------------------------------------------------- */
+.el-tag { border-radius: var(--radius-pill); font-weight: 500; }
+
+/* --- Pagination -------------------------------------------------------------- */
+.el-pagination {
+  --el-pagination-bg-color: transparent;
+  --el-pagination-button-bg-color: rgba(148, 163, 184, 0.08);
+  --el-pagination-hover-color: var(--indigo-400);
+}
+.el-pagination.is-background .btn-prev,
+.el-pagination.is-background .btn-next,
+.el-pagination.is-background .el-pager li {
+  background-color: rgba(148, 163, 184, 0.08);
+  border-radius: var(--radius-sm);
+}
+.el-pagination.is-background .el-pager li.is-active {
+  background-image: var(--grad-primary);
+  color: #fff;
+}
+
+/* --- Overlays / misc ---------------------------------------------------------- */
+.el-loading-mask { background-color: rgba(15, 23, 42, 0.7); backdrop-filter: blur(2px); }
+.el-drawer {
+  --el-drawer-bg-color: var(--bg-elev);
+  border-left: 1px solid var(--border);
+}
+.el-empty__description p { color: var(--text-secondary); }
+.el-descriptions {
+  --el-descriptions-table-border: 1px solid var(--border);
+  --el-descriptions-item-bordered-label-background: rgba(148, 163, 184, 0.06);
+}
+.el-popper.is-light,
+.el-popper.is-light .el-popper__arrow::before { background: var(--bg-elev-2); border-color: var(--border); }
