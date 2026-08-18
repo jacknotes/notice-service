@@ -41,6 +41,7 @@ export const taskApi = {
 export const userApi = {
   list: () => client.get('/users').then((r) => r.data),
   create: (d: { username: string; password: string; role: string }) => client.post('/users', d).then((r) => r.data),
+  update: (id: number, d: { role?: string; password?: string }) => client.put(`/users/${id}`, d).then((r) => r.data),
   remove: (id: number) => client.delete(`/users/${id}`).then((r) => r.data),
 }
 

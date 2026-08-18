@@ -20,10 +20,6 @@
       </el-menu>
 
       <div class="sidebar-foot">
-        <button class="logout-btn" @click="onLogout">
-          <el-icon><SwitchButton /></el-icon>
-          <span>退出登录</span>
-        </button>
         <p class="ver mono">Notice Service · v1</p>
       </div>
     </aside>
@@ -126,7 +122,6 @@ const navItems: NavItem[] = [
   { path: '/tasks', label: '任务管理', icon: AlarmClock },
   { path: '/logs', label: '发送日志', icon: MessageBox },
   { path: '/users', label: '用户管理', icon: User, adminOnly: true },
-  { path: '/settings', label: '个人设置', icon: Setting },
 ]
 
 // 用户管理仅对 admin 可见
@@ -234,26 +229,6 @@ async function onLogout() {
 .sidebar-foot {
   padding: 14px 6px 0;
   border-top: 1px solid var(--border-faint);
-}
-.logout-btn {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  padding: 10px 12px;
-  border: none;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--text-secondary);
-  font-size: var(--text-sm);
-  font-weight: 500;
-  cursor: pointer;
-  transition: color var(--dur-fast) var(--ease-out),
-              background var(--dur-fast) var(--ease-out);
-}
-.logout-btn:hover {
-  color: var(--rose-400);
-  background: rgba(248, 113, 113, 0.1);
 }
 .ver {
   margin-top: 12px;

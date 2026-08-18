@@ -6,12 +6,19 @@
         <p class="sub">配置定时 / Webhook 投递任务，绑定渠道与模板</p>
       </div>
       <div class="actions">
+        <el-input
+          v-model="keyword"
+          class="search-input"
+          clearable
+          :prefix-icon="Search"
+          placeholder="搜索名称或渠道 / 模板…"
+        />
         <el-button type="primary" :icon="Plus" @click="openCreate">新建任务</el-button>
       </div>
     </div>
 
     <div v-loading="loading" class="card table-card">
-      <el-table :data="tasks" style="width: 100%" empty-text="暂无任务，点击右上角「新建任务」开始">
+      <el-table :data="filteredTasks" style="width: 100%" empty-text="暂无任务，点击右上角「新建任务」开始">
         <el-table-column prop="id" label="ID" width="64" align="center">
           <template #default="{ row }">
             <span class="mono id-cell">#{{ row.id }}</span>
@@ -221,7 +228,7 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
-import { Plus, CopyDocument } from '@element-plus/icons-vue'
+import { Plus, CopyDocument, Search } from '@element-plus/icons-vue'
 import { channelApi, taskApi, templateApi } from '@/api'
 
 interface TaskRow {
@@ -254,6 +261,23 @@ const tasks = ref<TaskRow[]>([])
 const channels = ref<{ id: number; name: string; type: string }[]>([])
 const templates = ref<{ id: number; name: string; variables: TemplateVar[] }[]>([])
 const togglingId = ref<number | null>(null)
+
+const keyword = ref('')
+
+// 按任务名称、或绑定的渠道 / 模板名称做客户端过滤
+const filteredTasks = computed<TaskRow[]>(() => {
+  const kw = keyword.value.trim().toLowerCase()
+  if (!kw) return tasks.value
+  return tasks.value.filter((t) => {
+    const chName = channels.value.find((c) => c.id === t.channel_id)?.name || ''
+    const tplName = templates.value.find((p) => p.id === t.template_id)?.name || ''
+    return (
+      (t.name || '').toLowerCase().includes(kw) ||
+      chName.toLowerCase().includes(kw) ||
+      tplName.toLowerCase().includes(kw)
+    )
+  })
+})
 
 const dialogVisible = ref(false)
 const saving = ref(false)
@@ -529,6 +553,8 @@ onMounted(() => {
 </script>
 
 <style scoped>
+.search-input { width: 220px; }
+
 .table-card {
   padding: 8px 14px 14px;
   overflow: hidden;

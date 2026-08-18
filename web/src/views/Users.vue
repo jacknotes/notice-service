@@ -39,8 +39,24 @@
           </template>
         </el-table-column>
 
-        <el-table-column label="操作" width="120" align="center" fixed="right">
+        <el-table-column label="操作" width="150" align="center" fixed="right">
           <template #default="{ row }">
+            <el-tooltip
+              :disabled="row.id !== auth.user?.id"
+              content="请用个人设置修改"
+            >
+              <span>
+                <el-button
+                  link
+                  type="primary"
+                  size="small"
+                  :disabled="row.id === auth.user?.id"
+                  @click="openEdit(row)"
+                >
+                  编辑
+                </el-button>
+              </span>
+            </el-tooltip>
             <el-tooltip
               :disabled="canDelete(row)"
               :content="row.id === auth.user?.id ? '不能删除当前登录账号' : '管理员账号不可删除'"
@@ -100,6 +116,50 @@
         </div>
       </template>
     </el-dialog>
+
+    <!-- ── Edit user dialog ────────────────────────────────────────── -->
+    <el-dialog
+      v-model="editVisible"
+      title="编辑用户"
+      width="460px"
+      :close-on-click-modal="false"
+      destroy-on-close
+    >
+      <el-form ref="editFormRef" :model="editForm" :rules="editRules" label-position="top">
+        <el-form-item label="用户名">
+          <el-input :model-value="editingUser?.username || ''" disabled />
+        </el-form-item>
+
+        <el-form-item label="角色" prop="role">
+          <el-select
+            v-model="editForm.role"
+            style="width: 100%"
+            :disabled="editingUser?.role === 'admin'"
+          >
+            <el-option label="管理员" value="admin" />
+            <el-option label="普通用户" value="user" />
+          </el-select>
+          <div v-if="editingUser?.role === 'admin'" class="edit-hint">管理员角色不可修改</div>
+        </el-form-item>
+
+        <el-form-item label="新密码" prop="password">
+          <el-input
+            v-model="editForm.password"
+            type="password"
+            show-password
+            placeholder="留空则不修改"
+          />
+        </el-form-item>
+      </el-form>
+
+      <template #footer>
+        <div class="dialog-footer">
+          <span class="footer-grow"></span>
+          <el-button @click="editVisible = false">取消</el-button>
+          <el-button type="primary" :loading="editSaving" @click="saveEdit">保存</el-button>
+        </div>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -141,6 +201,31 @@ const rules: FormRules = {
     { min: 6, message: '密码至少 6 位', trigger: 'blur' },
   ],
   role: [{ required: true, message: '请选择角色', trigger: 'change' }],
+}
+
+/* ── Edit state ────────────────────────────────────────────────────── */
+const editVisible = ref(false)
+const editSaving = ref(false)
+const editFormRef = ref<FormInstance>()
+const editingUser = ref<UserRow | null>(null)
+
+const editForm = reactive<{ role: 'admin' | 'user'; password: string }>({
+  role: 'user',
+  password: '',
+})
+
+const editRules: FormRules = {
+  role: [{ required: true, message: '请选择角色', trigger: 'change' }],
+  // 密码可选：留空表示不修改；填写时至少 6 位
+  password: [
+    {
+      validator: (_rule: unknown, value: string, callback: (err?: Error) => void) => {
+        if (value && value.length < 6) callback(new Error('密码至少 6 位'))
+        else callback()
+      },
+      trigger: 'blur',
+    },
+  ],
 }
 
 // 角色标签：admin → violet，user → blue（与 Signal Relay 色板一致）
@@ -208,6 +293,40 @@ async function saveUser() {
   }
 }
 
+/* ── Edit ───────────────────────────────────────────────────────────── */
+function openEdit(row: UserRow) {
+  editingUser.value = row
+  editForm.role = row.role
+  editForm.password = ''
+  editFormRef.value?.clearValidate()
+  editVisible.value = true
+}
+
+async function saveEdit() {
+  const valid = await editFormRef.value?.validate().catch(() => false)
+  if (!valid) return
+
+  const row = editingUser.value
+  if (!row) return
+
+  // 只提交发生变更的字段：管理员角色不可改，密码留空不修改
+  const d: { role?: string; password?: string } = {}
+  if (row.role !== 'admin' && editForm.role !== row.role) d.role = editForm.role
+  if (editForm.password) d.password = editForm.password
+
+  editSaving.value = true
+  try {
+    await userApi.update(row.id, d)
+    ElMessage.success('用户已更新')
+    editVisible.value = false
+    await load()
+  } catch (e: any) {
+    ElMessage.error(errMsg(e, '更新失败'))
+  } finally {
+    editSaving.value = false
+  }
+}
+
 /* ── Delete ────────────────────────────────────────────────────────── */
 async function removeUser(row: UserRow) {
   try {
@@ -254,6 +373,12 @@ onMounted(load)
 .time-cell {
   color: var(--text-secondary);
   font-size: var(--text-xs);
+}
+
+.edit-hint {
+  margin-top: 4px;
+  color: var(--text-faint);
+  font-size: 11px;
 }
 
 .dialog-footer {

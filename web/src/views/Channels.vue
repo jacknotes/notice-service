@@ -6,6 +6,13 @@
         <p class="sub">配置通知投递渠道：SMTP 邮件、企业微信、钉钉、飞书、PushPlus</p>
       </div>
       <div class="actions">
+        <el-input
+          v-model="keyword"
+          class="search-input"
+          clearable
+          :prefix-icon="Search"
+          placeholder="搜索名称或类型…"
+        />
         <el-button type="primary" :icon="Plus" @click="openCreate">
           新建渠道
         </el-button>
@@ -13,7 +20,7 @@
     </div>
 
     <div v-loading="loading" class="card table-card">
-      <el-table :data="channels" style="width: 100%" empty-text="暂无渠道，点击右上角「新建渠道」开始">
+      <el-table :data="filteredChannels" style="width: 100%" empty-text="暂无渠道，点击右上角「新建渠道」开始">
         <el-table-column prop="id" label="ID" width="72" align="center">
           <template #default="{ row }">
             <span class="mono id-cell">#{{ row.id }}</span>
@@ -130,7 +137,7 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
-import { Plus, Edit, Delete, Promotion } from '@element-plus/icons-vue'
+import { Plus, Edit, Delete, Promotion, Search } from '@element-plus/icons-vue'
 import client from '@/api/client'
 import { channelApi } from '@/api'
 
@@ -192,6 +199,19 @@ const configFields: Record<string, ConfigField[]> = {
 const loading = ref(false)
 const channels = ref<ChannelRow[]>([])
 const testingId = ref<number | null>(null)
+
+const keyword = ref('')
+
+// 按名称或类型（原始值 / 中文标签）做客户端过滤
+const filteredChannels = computed<ChannelRow[]>(() => {
+  const kw = keyword.value.trim().toLowerCase()
+  if (!kw) return channels.value
+  return channels.value.filter((c) =>
+    (c.name || '').toLowerCase().includes(kw) ||
+    (c.type || '').toLowerCase().includes(kw) ||
+    (typeLabel(c.type) || '').toLowerCase().includes(kw)
+  )
+})
 
 const dialogVisible = ref(false)
 const saving = ref(false)
@@ -342,6 +362,8 @@ onMounted(load)
 </script>
 
 <style scoped>
+.search-input { width: 220px; }
+
 .table-card {
   padding: 8px 14px 14px;
   overflow: hidden;

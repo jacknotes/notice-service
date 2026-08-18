@@ -33,6 +33,17 @@
         </el-select>
       </div>
 
+      <div class="filter-item">
+        <span class="filter-label">关键词</span>
+        <el-input
+          v-model="keyword"
+          class="search-input"
+          clearable
+          :prefix-icon="Search"
+          placeholder="搜索任务 / 渠道 / 标题 / 内容 / 错误…"
+        />
+      </div>
+
       <div class="filter-meta mono">
         {{ filteredLogs.length }} 条记录
       </div>
@@ -144,6 +155,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
+import { Search } from '@element-plus/icons-vue'
 import { channelApi, taskApi } from '@/api'
 
 interface LogRow {
@@ -170,6 +182,7 @@ const logs = ref<LogRow[]>([])
 
 const taskFilter = ref<number | undefined>(undefined)
 const statusFilter = ref<'success' | 'failed' | ''>('')
+const keyword = ref('')
 
 const taskName = (id: number) => tasks.value.find((t) => t.id === id)?.name || `任务 #${id}`
 const channelName = (id: number) => channels.value.find((c) => c.id === id)?.name || `渠道 #${id}`
@@ -187,12 +200,22 @@ const filteredLogs = computed<LogRow[]>(() =>
   logs.value.filter((l) => {
     if (taskFilter.value !== undefined && l.task_id !== taskFilter.value) return false
     if (statusFilter.value && l.status !== statusFilter.value) return false
+    if (keyword.value.trim()) {
+      const kw = keyword.value.trim().toLowerCase()
+      const hit =
+        taskName(l.task_id).toLowerCase().includes(kw) ||
+        channelName(l.channel_id).toLowerCase().includes(kw) ||
+        (l.subject || '').toLowerCase().includes(kw) ||
+        (l.content || '').toLowerCase().includes(kw) ||
+        (l.error_msg || '').toLowerCase().includes(kw)
+      if (!hit) return false
+    }
     return true
   })
 )
 
 const emptyDescription = computed(() => {
-  if (taskFilter.value !== undefined || statusFilter.value) return '没有符合条件的日志，试试调整筛选条件'
+  if (taskFilter.value !== undefined || statusFilter.value || keyword.value.trim()) return '没有符合条件的日志，试试调整筛选条件'
   return '暂无发送日志，任务触发投递后这里会实时记录'
 })
 
@@ -237,6 +260,8 @@ onMounted(load)
 </script>
 
 <style scoped>
+.search-input { width: 220px; }
+
 .table-card {
   padding: 8px 14px 14px;
   overflow: hidden;

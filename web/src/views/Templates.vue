@@ -6,12 +6,19 @@
         <p class="sub">维护通知模板：标题、Markdown 正文与可注入变量</p>
       </div>
       <div class="actions">
+        <el-input
+          v-model="keyword"
+          class="search-input"
+          clearable
+          :prefix-icon="Search"
+          placeholder="搜索名称或标题…"
+        />
         <el-button type="primary" :icon="Plus" @click="openCreate">新建模板</el-button>
       </div>
     </div>
 
     <div v-loading="loading" class="card table-card">
-      <el-table :data="templates" style="width: 100%" empty-text="暂无模板，点击右上角「新建模板」开始">
+      <el-table :data="filteredTemplates" style="width: 100%" empty-text="暂无模板，点击右上角「新建模板」开始">
         <el-table-column prop="id" label="ID" width="72" align="center">
           <template #default="{ row }">
             <span class="mono id-cell">#{{ row.id }}</span>
@@ -152,7 +159,7 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
-import { Plus, Delete, View } from '@element-plus/icons-vue'
+import { Plus, Delete, View, Search } from '@element-plus/icons-vue'
 import { templateApi } from '@/api'
 import MarkdownPreview from '@/components/MarkdownPreview.vue'
 
@@ -175,6 +182,18 @@ const CONTENT_PLACEHOLDER =
 
 const loading = ref(false)
 const templates = ref<TemplateRow[]>([])
+
+const keyword = ref('')
+
+// 按名称或标题做客户端过滤
+const filteredTemplates = computed<TemplateRow[]>(() => {
+  const kw = keyword.value.trim().toLowerCase()
+  if (!kw) return templates.value
+  return templates.value.filter((t) =>
+    (t.name || '').toLowerCase().includes(kw) ||
+    (t.subject || '').toLowerCase().includes(kw)
+  )
+})
 
 const dialogVisible = ref(false)
 const saving = ref(false)
@@ -344,6 +363,8 @@ onMounted(load)
 </script>
 
 <style scoped>
+.search-input { width: 220px; }
+
 .table-card {
   padding: 8px 14px 14px;
   overflow: hidden;
