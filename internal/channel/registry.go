@@ -29,3 +29,11 @@ func Types() []string {
 	}
 	return out
 }
+
+func init() {
+	Register(NewEmailChannel(nil))
+	Register(NewWecomChannel(nil))
+	Register(NewDingtalkChannel(nil))
+	Register(NewFeishuChannel(nil))
+	Register(NewWechatChannel(nil))
+}
