@@ -81,3 +81,27 @@
 
 [Unreleased]: https://github.com/jacknotes/notice-service/compare/v1.0.0...HEAD
 [1.0.0]: https://github.com/jacknotes/notice-service/releases/tag/v1.0.0
+
+## [1.1.0] - 2026-08-18
+
+### ✨ 新增
+- 前端白天/夜晚主题切换（localStorage 记忆，默认深色）
+- 发送日志展示消息标题与内容（task_logs 新增 subject/content 列）
+- 任务表单：非邮件渠道时提示"接收地址不生效"
+- 支持 `.env` 配置文件（环境变量优先）
+- Makefile：生命周期管理（build/run/dev/test/docker 等）
+- 邮箱渠道支持 465 隐式 TLS（SMTPS）
+- PushPlus 渠道支持 markdown 模板
+
+### 🐛 修复
+- PushPlus 连接测试模板值 text→txt（code=600）
+- ENCRYPT_KEY 未设置时持久化到本地文件，重启不再导致渠道配置解密失败
+- 登录用户名/密码自动去空格
+- 日志 sent_at 零值导致时间/仪表盘错误
+- 测试改用独立测试库 notice_service_test，不再影响真实数据
+- 邮箱渠道 STARTTLS/超时、Webhook 渠道错误检测等
+
+### ✅ 真实渠道联调
+- 126 邮箱、PushPlus、钉钉、飞书、企业微信 5 渠道全部真实发送验证通过
+
+[1.1.0]: https://github.com/jacknotes/notice-service/releases/tag/v1.1.0
