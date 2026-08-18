@@ -1,0 +1,15 @@
+# Local dev data (MariaDB, Go/npm caches) — large, must not ship
+.dev
+
+# VCS / tooling
+.git
+.superpowers
+docs
+
+# Node
+**/node_modules
+web/dist
+
+# Env / logs
+.env
+*.log
