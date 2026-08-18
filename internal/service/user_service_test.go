@@ -154,9 +154,16 @@ func TestUserServiceUpdate(t *testing.T) {
 		t.Fatalf("self update should fail, got %v", err)
 	}
 
-	// 不能修改管理员角色
-	if err := svc.Update(adminOp.ID, "admin", adminTgt.ID, strPtr("user"), nil); err == nil || !strings.Contains(err.Error(), "不能修改管理员角色") {
-		t.Fatalf("demoting admin should fail, got %v", err)
+	// 降级管理员：还有其它管理员（adminOp）时允许
+	if err := svc.Update(adminOp.ID, "admin", adminTgt.ID, strPtr("user"), nil); err != nil {
+		t.Fatalf("demoting admin with another admin remaining should succeed, got %v", err)
+	}
+	gotTgt, err := svc.users.GetByID(adminTgt.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if gotTgt.Role != "user" {
+		t.Fatalf("role after demote = %q, want user", gotTgt.Role)
 	}
 
 	// 非法角色 → 拒绝
@@ -180,9 +187,9 @@ func TestUserServiceUpdate(t *testing.T) {
 	if got.Role != "admin" {
 		t.Fatalf("role = %q, want admin", got.Role)
 	}
-	// 提升后即视为管理员，不能再降级
-	if err := svc.Update(adminOp.ID, "admin", normal.ID, strPtr("user"), nil); err == nil || !strings.Contains(err.Error(), "不能修改管理员角色") {
-		t.Fatalf("demoting promoted user should fail, got %v", err)
+	// 提升为管理员后，仍有其它管理员（adminOp）时可降级
+	if err := svc.Update(adminOp.ID, "admin", normal.ID, strPtr("user"), nil); err != nil {
+		t.Fatalf("demoting promoted admin should succeed, got %v", err)
 	}
 
 	// 重置密码成功 → 新密码可登录、旧密码失效

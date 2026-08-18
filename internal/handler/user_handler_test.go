@@ -137,10 +137,10 @@ func TestUserUpdateAPI(t *testing.T) {
 		t.Fatalf("role after update = %q, want admin", role)
 	}
 
-	// PUT 修改管理员角色 → 400（不能修改管理员角色）
+	// PUT 降级管理员（还有其它管理员时）→ 200
 	wd := authReq(t, r, adminTok, "PUT", "/api/users/"+num(admin2ID), `{"role":"user"}`)
-	if wd.Code != 400 {
-		t.Fatalf("demote admin = %d, want 400 body=%s", wd.Code, wd.Body.String())
+	if wd.Code != 200 {
+		t.Fatalf("demote admin = %d, want 200 body=%s", wd.Code, wd.Body.String())
 	}
 
 	// 修改自己 → 400

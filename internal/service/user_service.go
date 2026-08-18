@@ -70,7 +70,7 @@ func (s *UserService) Delete(operatorRole string, operatorID, targetID int64) er
 }
 
 // Update 修改用户角色或重置密码。operatorRole 为操作者角色；仅 admin 可操作。
-// 规则：不能修改管理员角色；不能修改当前登录账号（个人密码请走个人设置）。
+// 规则：管理员角色可降级，但至少保留一个管理员；不能修改当前登录账号（个人密码请走个人设置）。
 func (s *UserService) Update(operatorID int64, operatorRole string, targetID int64, role, newPass *string) error {
 	if operatorRole != "admin" {
 		return errors.New("无权操作")
@@ -90,7 +90,14 @@ func (s *UserService) Update(operatorID int64, operatorRole string, targetID int
 			return errors.New("角色必须是 admin 或 user")
 		}
 		if target.Role == "admin" && *role != "admin" {
-			return errors.New("不能修改管理员角色")
+			// 允许降级管理员，但至少要保留一个管理员（防止系统锁死）
+			admins, err := s.users.CountAdmins()
+			if err != nil {
+				return err
+			}
+			if admins <= 1 {
+				return errors.New("至少需要保留一个管理员")
+			}
 		}
 	}
 	nextRole := target.Role

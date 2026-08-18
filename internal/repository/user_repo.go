@@ -90,3 +90,10 @@ func (r *UserRepo) Delete(id int64) error {
 	_, err := r.db.Exec("UPDATE users SET deleted_at = NOW() WHERE id = ? AND deleted_at IS NULL", id)
 	return err
 }
+
+// CountAdmins 统计未删除的管理员数量。
+func (r *UserRepo) CountAdmins() (int, error) {
+	var n int
+	err := r.db.QueryRow("SELECT COUNT(*) FROM users WHERE role = 'admin' AND deleted_at IS NULL").Scan(&n)
+	return n, err
+}
