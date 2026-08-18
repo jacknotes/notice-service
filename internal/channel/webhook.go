@@ -44,3 +44,16 @@ func checkWebhookResp(data []byte) error {
 	}
 	return nil
 }
+
+// checkCodeResp 校验 code 字段是否等于指定成功值。
+// 不同厂商成功码不同：飞书 code=0，PushPlus code=200。
+func checkCodeResp(data []byte, successCode int) error {
+	var m map[string]interface{}
+	if err := json.Unmarshal(data, &m); err != nil {
+		return nil
+	}
+	if code, ok := m["code"].(float64); ok && int(code) != successCode {
+		return fmt.Errorf("webhook code=%v msg=%v", code, m["msg"])
+	}
+	return nil
+}

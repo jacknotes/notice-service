@@ -51,7 +51,8 @@ func (w *WechatChannel) Send(message *Message, receiver *Receiver) error {
 	if err != nil {
 		return err
 	}
-	return checkWebhookResp(data)
+	// PushPlus 成功码为 200（不是 0）
+	return checkCodeResp(data, 200)
 }
 
 func NewWechatChannel(config map[string]string) *WechatChannel {

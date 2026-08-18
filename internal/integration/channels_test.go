@@ -404,7 +404,7 @@ func TestIntegrationFeishu(t *testing.T) {
 }
 
 func TestIntegrationPushPlus(t *testing.T) {
-	sink := newHookSink(t, map[string]interface{}{"code": 0, "msg": "success"})
+	sink := newHookSink(t, map[string]interface{}{"code": 200, "msg": "success"}) // 真实 PushPlus 成功码为 200
 	fx := buildFixture(t, "wechat", map[string]string{
 		"pushplus_token": "tok123", "pushplus_url": sink.url(),
 	})
