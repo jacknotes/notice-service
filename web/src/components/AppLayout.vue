@@ -37,6 +37,21 @@
         </div>
 
         <div class="topbar-right">
+          <el-tooltip
+            :content="theme === 'dark' ? '切换到白天模式' : '切换到夜晚模式'"
+            placement="bottom"
+            :show-after="320"
+          >
+            <button
+              class="theme-btn"
+              :class="{ 'is-light': theme === 'light' }"
+              :aria-label="theme === 'dark' ? '切换到白天模式' : '切换到夜晚模式'"
+              @click="toggleTheme"
+            >
+              <el-icon :size="18"><component :is="theme === 'dark' ? Sunny : Moon" /></el-icon>
+            </button>
+          </el-tooltip>
+
           <el-dropdown trigger="click" @command="onCommand">
             <div class="user-chip">
               <span class="avatar mono">{{ avatarLetter }}</span>
@@ -87,9 +102,10 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessageBox } from 'element-plus'
 import {
   Odometer, Connection, Document, AlarmClock, MessageBox,
-  Setting, SwitchButton, User, ArrowDown,
+  Setting, SwitchButton, User, ArrowDown, Sunny, Moon,
 } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
+import { theme, toggleTheme } from '@/composables/useTheme'
 
 const route = useRoute()
 const router = useRouter()
@@ -147,7 +163,7 @@ async function onLogout() {
   display: flex;
   flex-direction: column;
   padding: 24px 14px 18px;
-  background: linear-gradient(180deg, rgba(11, 17, 32, 0.96), rgba(11, 17, 32, 0.88));
+  background: var(--sidebar-bg);
   border-right: 1px solid var(--border-faint);
   backdrop-filter: blur(14px);
 }
@@ -251,7 +267,7 @@ async function onLogout() {
   gap: var(--space-4);
   height: var(--topbar-h);
   padding: 0 var(--page-pad);
-  background: rgba(15, 23, 42, 0.72);
+  background: var(--topbar-bg);
   border-bottom: 1px solid var(--border-faint);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
@@ -264,7 +280,30 @@ async function onLogout() {
   text-transform: lowercase;
 }
 
-.topbar-right { display: flex; align-items: center; }
+.topbar-right { display: flex; align-items: center; gap: 12px; }
+.theme-btn {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: color var(--dur-fast) var(--ease-out),
+              border-color var(--dur-fast) var(--ease-out),
+              box-shadow var(--dur-fast) var(--ease-out),
+              transform var(--dur-fast) var(--ease-out);
+}
+.theme-btn:hover {
+  color: var(--amber-400);
+  border-color: var(--border-accent);
+  box-shadow: var(--shadow-glow);
+  transform: translateY(-1px);
+}
+.theme-btn.is-light { color: var(--indigo-500); }
+.theme-btn.is-light:hover { color: var(--indigo-500); }
 .user-chip {
   display: flex;
   align-items: center;
@@ -326,7 +365,7 @@ async function onLogout() {
     display: flex;
     justify-content: space-around;
     padding: 6px 4px calc(6px + env(safe-area-inset-bottom));
-    background: rgba(11, 17, 32, 0.92);
+    background: var(--bottomnav-bg);
     border-top: 1px solid var(--border);
     backdrop-filter: blur(14px);
   }

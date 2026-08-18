@@ -45,9 +45,47 @@
         style="width: 100%"
         empty-text="没有符合条件的日志，试试调整筛选条件"
       >
+        <el-table-column type="expand">
+          <template #default="{ row }">
+            <div class="log-detail">
+              <div v-if="row.subject" class="detail-block">
+                <span class="detail-label">标题</span>
+                <p class="detail-subject">{{ row.subject }}</p>
+              </div>
+
+              <div v-if="row.content" class="detail-block">
+                <span class="detail-label">发送内容</span>
+                <pre class="detail-code mono">{{ row.content }}</pre>
+              </div>
+
+              <div v-if="row.request" class="detail-block">
+                <span class="detail-label">请求</span>
+                <pre class="detail-code mono">{{ row.request }}</pre>
+              </div>
+
+              <div v-if="row.response" class="detail-block">
+                <span class="detail-label">响应</span>
+                <pre class="detail-code mono">{{ row.response }}</pre>
+              </div>
+
+              <div v-if="row.error_msg" class="detail-block">
+                <span class="detail-label">错误信息</span>
+                <pre class="detail-code mono detail-error">{{ row.error_msg }}</pre>
+              </div>
+            </div>
+          </template>
+        </el-table-column>
+
         <el-table-column prop="id" label="ID" width="72" align="center">
           <template #default="{ row }">
             <span class="mono id-cell">#{{ row.id }}</span>
+          </template>
+        </el-table-column>
+
+        <el-table-column label="标题" min-width="180" show-overflow-tooltip>
+          <template #default="{ row }">
+            <span v-if="row.subject" class="subject-cell">{{ row.subject }}</span>
+            <span v-else class="ok-cell">—</span>
           </template>
         </el-table-column>
 
@@ -112,6 +150,8 @@ interface LogRow {
   id: number
   task_id: number
   channel_id: number
+  subject?: string
+  content?: string
   status: 'success' | 'failed'
   request?: string
   response?: string
@@ -230,6 +270,11 @@ onMounted(load)
   color: var(--text-faint);
   font-size: var(--text-xs);
 }
+.subject-cell {
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+  font-weight: 500;
+}
 .task-id-cell {
   color: var(--indigo-400);
   font-size: var(--text-xs);
@@ -258,5 +303,57 @@ onMounted(load)
 
 .logs-empty {
   padding: var(--space-8) 0;
+}
+
+/* ── Expandable detail panel ───────────────────────────────────────── */
+.table-card :deep(.el-table__expanded-cell) {
+  padding: 0;
+}
+.log-detail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-4) var(--space-6);
+  background: rgba(148, 163, 184, 0.04);
+  border-left: 2px solid var(--indigo-500);
+}
+.detail-block {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.detail-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+.detail-subject {
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  line-height: 1.6;
+  word-break: break-word;
+}
+.detail-code {
+  margin: 0;
+  max-height: 220px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  padding: var(--space-3);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: rgba(148, 163, 184, 0.06);
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.65;
+}
+.detail-code.detail-error {
+  color: var(--rose-400);
+  border-color: rgba(248, 113, 113, 0.3);
+  background: rgba(248, 113, 113, 0.06);
 }
 </style>

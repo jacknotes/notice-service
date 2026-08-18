@@ -1,0 +1,153 @@
+/* ==========================================================================
+   Notice Service · Light theme ("白天")
+   --------------------------------------------------------------------------
+   The Signal Relay control-room is dark by default. This file re-paints the
+   same token set into a warm, soft-white daylight mode. Import AFTER
+   styles/index.css in main.ts. Every override is scoped to
+   `[data-theme='light']` so the dark design system stays untouched.
+   ========================================================================== */
+
+[data-theme='light'] {
+  color-scheme: light;
+
+  /* --- Base surfaces: soft warm-white ----------------------------------- */
+  --bg-base: #f4f5fb;            /* app background (soft slate-white)       */
+  --bg-deep: #eef0f8;            /* recessed wells / page base              */
+  --bg-elev: #ffffff;            /* elevated panels (solid white)           */
+  --bg-elev-2: #f2f3fa;          /* hover wells, overlays                   */
+  --bg-card: rgba(255, 255, 255, 0.82);
+  --bg-glass: rgba(255, 255, 255, 0.78);
+  --bg-scrim: rgba(15, 23, 42, 0.38);
+
+  /* --- Brand gradient: keep indigo→violet, just tuned for light --------- */
+  --grad-text: linear-gradient(100deg, #4338ca 0%, #6366f1 42%, #7c3aed 74%, #8b5cf6 100%);
+
+  /* --- Text: dark slate on near-white ----------------------------------- */
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-muted: #64748b;
+  --text-faint: #94a3b8;
+  --text-on-grad: #ffffff;
+
+  /* --- Borders: subtle slate-gray --------------------------------------- */
+  --border: rgba(100, 116, 139, 0.18);
+  --border-strong: rgba(100, 116, 139, 0.3);
+  --border-faint: rgba(100, 116, 139, 0.1);
+  --border-accent: rgba(99, 102, 241, 0.38);
+
+  /* --- Shadows: softer, cooler ------------------------------------------ */
+  --shadow-card: 0 4px 24px rgba(15, 23, 42, 0.06);
+  --shadow-float: 0 14px 40px rgba(15, 23, 42, 0.12);
+  --shadow-glow: 0 0 0 1px rgba(99, 102, 241, 0.14), 0 8px 32px rgba(99, 102, 241, 0.12);
+  --shadow-glow-strong: 0 0 0 1px rgba(99, 102, 241, 0.26), 0 10px 44px rgba(99, 102, 241, 0.18);
+  --shadow-inset: inset 0 1px 0 rgba(255, 255, 255, 0.72);
+
+  /* --- Chromatic shell surfaces ------------------------------------------ */
+  --sidebar-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(244, 245, 251, 0.96));
+  --topbar-bg: rgba(255, 255, 255, 0.78);
+  --bottomnav-bg: rgba(255, 255, 255, 0.92);
+
+  /* ======================================================================
+     Atmosphere: soften the dark glows, keep a whisper of the signal grid
+     ====================================================================== */
+}
+
+[data-theme='light'] body::before {
+  background:
+    radial-gradient(1100px 540px at 10% -12%, rgba(99, 102, 241, 0.1), transparent 62%),
+    radial-gradient(900px 520px at 94% -10%, rgba(139, 92, 246, 0.08), transparent 62%),
+    radial-gradient(760px 460px at 88% 112%, rgba(16, 185, 129, 0.05), transparent 60%),
+    linear-gradient(rgba(100, 116, 139, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(100, 116, 139, 0.06) 1px, transparent 1px);
+  background-size: auto, auto, auto, 44px 44px, 44px 44px;
+  -webkit-mask-image: none;
+  mask-image: none;
+}
+
+[data-theme='light'] body::after {
+  opacity: 0.035;
+  mix-blend-mode: normal;
+}
+
+/* --- Selection on light -------------------------------------------------- */
+[data-theme='light'] ::selection {
+  background: rgba(99, 102, 241, 0.2);
+  color: #1e1b4b;
+}
+
+/* --- Glass card: less blur, more solid white ----------------------------- */
+[data-theme='light'] .card {
+  background: var(--bg-card);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow: var(--shadow-card), var(--shadow-inset);
+}
+
+/* ========================================================================
+   Element Plus · light re-skin
+   ------------------------------------------------------------------------
+   The dark --el-* overrides in index.css are scoped to :root; these replace
+   the key surfaces/text/borders/fills for light mode so every EP component
+   reads as a native light UI instead of a broken dark/light mix.
+   ======================================================================== */
+
+[data-theme='light'] {
+  /* surfaces */
+  --el-bg-color: #ffffff;
+  --el-bg-color-overlay: #ffffff;
+  --el-bg-color-page: #f4f5fb;
+  --el-fill-color-blank: #ffffff;
+  --el-fill-color: rgba(100, 116, 139, 0.1);
+  --el-fill-color-light: rgba(100, 116, 139, 0.07);
+  --el-fill-color-lighter: rgba(100, 116, 139, 0.05);
+  --el-fill-color-extra-light: rgba(100, 116, 139, 0.04);
+  --el-fill-color-dark: rgba(100, 116, 139, 0.12);
+  --el-fill-color-darker: rgba(100, 116, 139, 0.16);
+
+  /* text */
+  --el-text-color-primary: #0f172a;
+  --el-text-color-regular: #334155;
+  --el-text-color-secondary: #475569;
+  --el-text-color-placeholder: #94a3b8;
+  --el-text-color-disabled: #cbd5e1;
+
+  /* borders */
+  --el-border-color: rgba(100, 116, 139, 0.22);
+  --el-border-color-light: rgba(100, 116, 139, 0.18);
+  --el-border-color-lighter: rgba(100, 116, 139, 0.15);
+  --el-border-color-extra-light: rgba(100, 116, 139, 0.12);
+  --el-border-color-dark: rgba(100, 116, 139, 0.3);
+  --el-border-color-hover: rgba(100, 116, 139, 0.38);
+
+  --el-mask-color: rgba(15, 23, 42, 0.5);
+  --el-mask-color-extra-light: rgba(15, 23, 42, 0.32);
+
+  /* elevation */
+  --el-box-shadow: 0 4px 24px rgba(15, 23, 42, 0.08);
+  --el-box-shadow-light: 0 4px 16px rgba(15, 23, 42, 0.06);
+  --el-box-shadow-lighter: 0 2px 10px rgba(15, 23, 42, 0.05);
+  --el-box-shadow-dark: 0 10px 40px rgba(15, 23, 42, 0.14);
+}
+
+/* --- Inputs on light: solid white fields ---------------------------------- */
+[data-theme='light'] .el-input,
+[data-theme='light'] .el-select,
+[data-theme='light'] .el-textarea {
+  --el-input-bg-color: #ffffff;
+}
+
+/* --- Loading mask on light ------------------------------------------------ */
+[data-theme='light'] .el-loading-mask {
+  background-color: rgba(244, 245, 251, 0.72);
+}
+
+/* --- Tables: slightly stronger header wash on light ----------------------- */
+[data-theme='light'] .el-table {
+  --el-table-header-bg-color: rgba(100, 116, 139, 0.06);
+  --el-table-row-hover-bg-color: rgba(99, 102, 241, 0.05);
+}
+
+/* --- Text buttons hover wash on light -------------------------------------- */
+[data-theme='light'] .el-button.is-text:hover {
+  background: rgba(100, 116, 139, 0.08);
+}

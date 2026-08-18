@@ -5,6 +5,9 @@ import 'element-plus/dist/index.css'
 import App from './App.vue'
 import router from './router'
 import './styles/index.css'
+import './styles/light.css'
+// Side-effect: applies the persisted theme to <html data-theme> before mount.
+import './composables/useTheme'
 
 const app = createApp(App)
 app.use(createPinia())

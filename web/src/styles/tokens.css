@@ -7,6 +7,8 @@
    ========================================================================== */
 
 :root {
+  color-scheme: dark;
+
   /* --- Base surfaces (deep blue-black control room) --------------------- */
   --bg-base: #0f172a;            /* app background                          */
   --bg-deep: #0b1120;            /* recessed wells, page base               */
@@ -15,6 +17,14 @@
   --bg-card: rgba(30, 41, 59, 0.55);
   --bg-glass: rgba(15, 23, 42, 0.5);
   --bg-scrim: rgba(2, 6, 23, 0.62);
+
+  /* --- Chromatic shell surfaces (sidebar / topbar / bottom nav) ---------- */
+  /* Component surfaces that are too dark for token-only light override, so  */
+  /* they live as variables and get re-painted by the [data-theme='light']   */
+  /* block in styles/light.css.                                              */
+  --sidebar-bg: linear-gradient(180deg, rgba(11, 17, 32, 0.96), rgba(11, 17, 32, 0.88));
+  --topbar-bg: rgba(15, 23, 42, 0.72);
+  --bottomnav-bg: rgba(11, 17, 32, 0.92);
 
   /* --- Brand gradient (signal energy: indigo → violet) ------------------ */
   --indigo-400: #818cf8;

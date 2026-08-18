@@ -2,6 +2,14 @@
   <div class="login-wrap">
     <div class="login-glow"></div>
 
+    <button
+      class="theme-toggle"
+      :aria-label="theme === 'dark' ? '切换到白天模式' : '切换到夜晚模式'"
+      @click="toggleTheme"
+    >
+      <el-icon :size="18"><component :is="theme === 'dark' ? Sunny : Moon" /></el-icon>
+    </button>
+
     <div class="login-card reveal">
       <div class="brand">
         <span class="brand-mark">✦</span>
@@ -65,8 +73,9 @@
 import { reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import type { FormInstance, FormRules } from 'element-plus'
-import { User, Lock, WarningFilled } from '@element-plus/icons-vue'
+import { User, Lock, WarningFilled, Sunny, Moon } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
+import { theme, toggleTheme } from '@/composables/useTheme'
 
 const router = useRouter()
 const auth = useAuthStore()
@@ -120,6 +129,41 @@ async function onSubmit() {
     radial-gradient(420px 320px at 82% 74%, rgba(139, 92, 246, 0.16), transparent 68%),
     radial-gradient(320px 240px at 12% 82%, rgba(52, 211, 153, 0.07), transparent 64%);
   filter: blur(2px);
+}
+
+/* day / night toggle — pinned to the top-right corner */
+.theme-toggle {
+  position: absolute;
+  top: var(--space-5);
+  right: var(--space-5);
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  cursor: pointer;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  transition: color var(--dur-fast) var(--ease-out),
+              border-color var(--dur-fast) var(--ease-out),
+              box-shadow var(--dur-fast) var(--ease-out),
+              transform var(--dur-fast) var(--ease-out);
+}
+.theme-toggle:hover {
+  color: var(--amber-400);
+  border-color: var(--border-accent);
+  box-shadow: var(--shadow-glow);
+  transform: translateY(-1px);
+}
+
+/* soften the glow in daylight mode */
+[data-theme='light'] .login-glow {
+  opacity: 0.5;
+  filter: blur(3px);
 }
 
 .login-card {

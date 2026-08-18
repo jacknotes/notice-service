@@ -133,7 +133,15 @@
             :rows="4"
             :placeholder="RECEIVER_PLACEHOLDER"
           />
-          <div class="field-hint mono">{{ RECEIVER_HINT }}</div>
+          <div v-if="nonEmailChannel" class="receiver-alert" role="note">
+            <el-icon class="receiver-alert-icon"><InfoFilled /></el-icon>
+            <span>
+              当前渠道为 <b class="receiver-alert-strong">{{ channelTypeLabel }}</b>，
+              消息将发送到机器人 / token 绑定的目标，<b class="receiver-alert-strong">接收地址不生效</b>；
+              如需发送到指定邮箱请选择「邮件」渠道。
+            </span>
+          </div>
+          <div v-else class="field-hint mono">{{ RECEIVER_HINT }}</div>
         </el-form-item>
 
         <el-form-item v-if="form.trigger_type === 'api'" label="IP 白名单（可选）">
@@ -191,11 +199,11 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
-import { Plus, CopyDocument } from '@element-plus/icons-vue'
+import { Plus, CopyDocument, InfoFilled } from '@element-plus/icons-vue'
 import { channelApi, taskApi, templateApi } from '@/api'
 
 interface TaskRow {
@@ -217,7 +225,7 @@ const router = useRouter()
 
 const loading = ref(false)
 const tasks = ref<TaskRow[]>([])
-const channels = ref<{ id: number; name: string }[]>([])
+const channels = ref<{ id: number; name: string; type: string }[]>([])
 const templates = ref<{ id: number; name: string }[]>([])
 const togglingId = ref<number | null>(null)
 
@@ -266,6 +274,29 @@ const rules: FormRules = {
 
 const RECEIVER_PLACEHOLDER = '每行一个接收地址，例如：\nuser@example.com\nalert@example.com'
 const RECEIVER_HINT = '支持 {{变量}}，例如 {{email}} 会在发送时被替换'
+
+/* ── Receiver field: only meaningful for the email channel ────────────
+   渠道类型 → 显示名（与 Channels.vue 保持一致）。 */
+const CHANNEL_TYPE_LABELS: Record<string, string> = {
+  email: 'SMTP 邮件',
+  wecom: '企业微信',
+  dingtalk: '钉钉',
+  feishu: '飞书',
+  wechat: 'PushPlus',
+}
+
+const selectedChannel = computed(() =>
+  channels.value.find((c) => c.id === form.channel_id)
+)
+const nonEmailChannel = computed(
+  () => !!selectedChannel.value && selectedChannel.value.type !== 'email'
+)
+const channelTypeLabel = computed(
+  () =>
+    (selectedChannel.value &&
+      (CHANNEL_TYPE_LABELS[selectedChannel.value.type] || selectedChannel.value.type)) ||
+    ''
+)
 
 const webhookTagStyle = {
   color: 'var(--violet-400)',
@@ -474,6 +505,31 @@ onMounted(() => {
   margin-top: 4px;
   color: var(--text-faint);
   font-size: 11px;
+}
+
+.receiver-alert {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  width: 100%;
+  margin-top: 6px;
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(251, 191, 36, 0.35);
+  background: rgba(251, 191, 36, 0.08);
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+  line-height: 1.7;
+}
+.receiver-alert-icon {
+  flex-shrink: 0;
+  margin-top: 2px;
+  color: var(--amber-400);
+  font-size: 14px;
+}
+.receiver-alert-strong {
+  color: var(--amber-400);
+  font-weight: 600;
 }
 
 .enabled-row {
