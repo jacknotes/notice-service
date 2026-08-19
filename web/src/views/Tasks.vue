@@ -67,6 +67,12 @@
           </template>
         </el-table-column>
 
+        <el-table-column label="投递渠道" min-width="170">
+          <template #default="{ row }">
+            <span class="channels-cell">{{ channelNames(row) || '—' }}</span>
+          </template>
+        </el-table-column>
+
         <el-table-column label="接收地址" min-width="200" show-overflow-tooltip>
           <template #default="{ row }">
             <span class="mono receivers-cell">{{ (row.receivers || []).join(', ') || '—' }}</span>
@@ -87,7 +93,7 @@
           </template>
         </el-table-column>
 
-        <el-table-column label="操作" width="230" align="center" fixed="right">
+        <el-table-column label="操作" width="300" align="center" fixed="right">
           <template #default="{ row }">
             <el-button
               v-if="row.trigger_type === 'api'"
@@ -97,6 +103,16 @@
               @click="showApiKey(row)"
             >
               API Key
+            </el-button>
+            <el-button
+              v-if="isAdmin"
+              link
+              type="warning"
+              size="small"
+              :loading="sendingId === row.id"
+              @click="sendNow(row)"
+            >
+              立即发送
             </el-button>
             <el-button link type="primary" size="small" @click="goLogs(row)">日志</el-button>
             <template v-if="isAdmin">
@@ -296,6 +312,7 @@ const tasks = ref<TaskRow[]>([])
 const channels = ref<{ id: number; name: string; type: string }[]>([])
 const templates = ref<{ id: number; name: string; variables: TemplateVar[] }[]>([])
 const togglingId = ref<number | null>(null)
+const sendingId = ref<number | null>(null)
 const tableRef = ref<TableInstance>()
 const selectedRows = ref<TaskRow[]>([])
 
@@ -429,6 +446,15 @@ const webhookTagStyle = {
   backgroundColor: 'rgba(139, 92, 246, 0.14)',
 }
 
+// 任务绑定的渠道名（多选时逗号分隔）
+function channelNames(row: TaskRow): string {
+  const ids = row.channel_ids?.length ? row.channel_ids : [row.channel_id]
+  return ids
+    .map((id) => channels.value.find((c) => c.id === id)?.name || '')
+    .filter(Boolean)
+    .join('、')
+}
+
 /* ── API Key dialog ────────────────────────────────────────────────── */
 const apiKeyVisible = ref(false)
 const apiKeyValue = ref('')
@@ -488,6 +514,28 @@ async function toggleTask(row: TaskRow, enabled: boolean) {
     ElMessage.error(errMsg(e, '状态切换失败'))
   } finally {
     togglingId.value = null
+  }
+}
+
+/* ── 立即发送 ─────────────────────────────────────────────────────── */
+async function sendNow(row: TaskRow) {
+  try {
+    await ElMessageBox.confirm(
+      `立即发送任务「${row.name}」？将向绑定的 ${channelNames(row) || '渠道'} 投递一次。`,
+      '立即发送',
+      { confirmButtonText: '发送', cancelButtonText: '取消', type: 'warning' }
+    )
+  } catch {
+    return
+  }
+  sendingId.value = row.id
+  try {
+    await taskApi.sendNow(row.id)
+    ElMessage.success('已加入发送队列')
+  } catch (e: any) {
+    ElMessage.error(errMsg(e, '发送失败'))
+  } finally {
+    sendingId.value = null
   }
 }
 
@@ -660,6 +708,11 @@ onMounted(() => {
 .receivers-cell {
   color: var(--text-secondary);
   font-size: var(--text-xs);
+}
+.channels-cell {
+  color: var(--sky-400);
+  font-size: var(--text-xs);
+  font-weight: 500;
 }
 
 /* ── Dialog ────────────────────────────────────────────────────────── */

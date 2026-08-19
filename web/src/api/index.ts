@@ -11,6 +11,8 @@ export const authApi = {
   me: () => client.get('/auth/me').then((r) => r.data),
   changePassword: (old_password: string, new_password: string) =>
     client.post('/auth/change-password', { old_password, new_password }).then((r) => r.data),
+  forgotPassword: (username: string, token: string, new_password: string) =>
+    client.post('/auth/forgot-password', { username, token, new_password }).then((r) => r.data),
 }
 
 export const channelApi = {
@@ -38,7 +40,19 @@ export const taskApi = {
   remove: (id: number) => client.delete(`/tasks/${id}`).then((r) => r.data),
   batchRemove: (ids: number[]) => client.post('/tasks/batch-delete', { ids }).then((r) => r.data),
   toggle: (id: number, enabled: boolean) => client.post(`/tasks/${id}/toggle`, { enabled }).then((r) => r.data),
+  sendNow: (id: number) => client.post(`/tasks/${id}/send`).then((r) => r.data),
   logs: (id: number) => client.get(`/tasks/${id}/logs`).then((r) => r.data),
+}
+
+export const logApi = {
+  query: (params: {
+    task_id?: number
+    status?: string
+    from?: string
+    to?: string
+    page?: number
+    page_size?: number
+  }) => client.get('/logs', { params }).then((r) => r.data),
 }
 
 export const userApi = {
@@ -47,6 +61,7 @@ export const userApi = {
   update: (id: number, d: { role?: string; password?: string }) => client.put(`/users/${id}`, d).then((r) => r.data),
   remove: (id: number) => client.delete(`/users/${id}`).then((r) => r.data),
   batchRemove: (ids: number[]) => client.post('/users/batch-delete', { ids }).then((r) => r.data),
+  resetToken: (id: number) => client.post(`/users/${id}/reset-token`).then((r) => r.data),
 }
 
 export const dashboardApi = {

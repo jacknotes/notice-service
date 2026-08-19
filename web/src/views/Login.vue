@@ -62,20 +62,58 @@
         >
           {{ loading ? '验证中…' : '登 录' }}
         </el-button>
+
+        <div class="forgot-row">
+          <el-button link type="primary" size="small" @click="openForgot">忘记密码？</el-button>
+        </div>
       </el-form>
 
       <p class="foot mono">NOTICE-SERVICE / WEB CONSOLE</p>
     </div>
+
+    <!-- 忘记密码：用管理员生成的一次性令牌自助重置 -->
+    <el-dialog v-model="forgotVisible" title="重置密码" width="440px" :close-on-click-modal="false">
+      <el-form ref="forgotFormRef" :model="forgotForm" :rules="forgotRules" label-position="top">
+        <p class="forgot-hint">
+          请输入用户名，以及管理员生成的一次性重置令牌（15 分钟内有效，使用后即失效）。
+        </p>
+        <el-form-item label="用户名" prop="username">
+          <el-input v-model="forgotForm.username" placeholder="登录用户名" />
+        </el-form-item>
+        <el-form-item label="重置令牌" prop="token">
+          <el-input v-model="forgotForm.token" placeholder="向管理员索取的一次性令牌" class="mono" />
+        </el-form-item>
+        <el-form-item label="新密码" prop="newPassword">
+          <el-input
+            v-model="forgotForm.newPassword"
+            type="password"
+            show-password
+            placeholder="至少 12 位，含大小写字母、数字、特殊字符"
+          />
+        </el-form-item>
+        <el-form-item label="确认新密码" prop="confirm">
+          <el-input v-model="forgotForm.confirm" type="password" show-password placeholder="再次输入新密码" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <div class="dialog-footer">
+          <span class="footer-grow"></span>
+          <el-button @click="forgotVisible = false">取消</el-button>
+          <el-button type="primary" :loading="forgotLoading" @click="submitForgot">重置密码</el-button>
+        </div>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
 import { reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import type { FormInstance, FormRules } from 'element-plus'
+import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import { User, Lock, WarningFilled, Sunny, Moon } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 import { theme, toggleTheme } from '@/composables/useTheme'
+import { authApi } from '@/api'
 
 const router = useRouter()
 const auth = useAuthStore()
@@ -105,6 +143,62 @@ async function onSubmit() {
     error.value = e?.response?.data?.error || '登录失败，请检查网络连接'
   } finally {
     loading.value = false
+  }
+}
+
+/* ── 忘记密码（方案A：一次性令牌自助重置） ───────────────────────────── */
+const PASSWORD_RE = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{12,}$/
+const forgotVisible = ref(false)
+const forgotLoading = ref(false)
+const forgotFormRef = ref<FormInstance>()
+const forgotForm = reactive({ username: '', token: '', newPassword: '', confirm: '' })
+const forgotRules: FormRules = {
+  username: [{ required: true, message: '请输入用户名', trigger: 'blur' }],
+  token: [{ required: true, message: '请输入重置令牌', trigger: 'blur' }],
+  newPassword: [
+    { required: true, message: '请输入新密码', trigger: 'blur' },
+    {
+      validator: (_r, v, cb) => {
+        if (v && !PASSWORD_RE.test(v)) cb(new Error('密码至少 12 位，且需包含大小写字母、数字、特殊字符'))
+        else cb()
+      },
+      trigger: 'blur',
+    },
+  ],
+  confirm: [
+    { required: true, message: '请再次输入新密码', trigger: 'blur' },
+    {
+      validator: (_r, v, cb) => {
+        if (v !== forgotForm.newPassword) cb(new Error('两次输入的密码不一致'))
+        else cb()
+      },
+      trigger: 'blur',
+    },
+  ],
+}
+
+function openForgot() {
+  forgotForm.username = ''
+  forgotForm.token = ''
+  forgotForm.newPassword = ''
+  forgotForm.confirm = ''
+  forgotFormRef.value?.clearValidate()
+  forgotVisible.value = true
+}
+
+async function submitForgot() {
+  const valid = await forgotFormRef.value?.validate().catch(() => false)
+  if (!valid) return
+  forgotLoading.value = true
+  try {
+    await authApi.forgotPassword(forgotForm.username.trim(), forgotForm.token.trim(), forgotForm.newPassword)
+    ElMessage.success('密码已重置，请使用新密码登录')
+    forgotVisible.value = false
+    form.username = forgotForm.username.trim()
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.error || '重置失败，请检查令牌是否正确')
+  } finally {
+    forgotLoading.value = false
   }
 }
 </script>
@@ -234,6 +328,26 @@ async function onSubmit() {
   font-size: 10px;
   letter-spacing: 0.24em;
 }
+
+.forgot-row {
+  margin-top: 12px;
+  display: flex;
+  justify-content: center;
+}
+
+.forgot-hint {
+  margin: 0 0 6px;
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+  line-height: 1.6;
+}
+
+.dialog-footer {
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+.footer-grow { flex: 1; }
 
 @media (max-width: 768px) {
   .login-card { padding: 34px 26px 28px; }

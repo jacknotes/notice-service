@@ -60,7 +60,7 @@
           </template>
         </el-table-column>
 
-        <el-table-column label="操作" width="150" align="center" fixed="right">
+        <el-table-column label="操作" width="210" align="center" fixed="right">
           <template #default="{ row }">
             <el-tooltip
               :disabled="row.id !== auth.user?.id"
@@ -78,6 +78,9 @@
                 </el-button>
               </span>
             </el-tooltip>
+            <el-button link type="warning" size="small" @click="generateResetToken(row)">
+              重置密码
+            </el-button>
             <el-tooltip
               :disabled="canDelete(row)"
               :content="row.id === auth.user?.id ? '不能删除当前登录账号' : '管理员账号不可删除'"
@@ -98,6 +101,32 @@
         </el-table-column>
       </el-table>
     </div>
+
+    <!-- ── 重置密码：生成一次性令牌，线下交给用户自助重置 ─────────────── -->
+    <el-dialog
+      v-model="resetTokenVisible"
+      title="重置密码（一次性令牌）"
+      width="480px"
+      :close-on-click-modal="false"
+    >
+      <p class="token-hint">
+        已为用户 <b class="token-user">{{ resetTokenUser }}</b> 生成一次性重置令牌。
+        请线下转交给该用户，其在登录页「忘记密码」输入用户名 + 令牌 + 新密码即可自助重置。
+      </p>
+      <div class="token-box">
+        <code class="mono token-value">{{ resetTokenValue || '—' }}</code>
+        <el-button size="small" type="primary" :icon="CopyDocument" @click="copyResetToken">
+          复制
+        </el-button>
+      </div>
+      <p class="token-expire mono">令牌有效期至 {{ resetTokenExpires }}，使用一次后即失效</p>
+      <template #footer>
+        <div class="dialog-footer">
+          <span class="footer-grow"></span>
+          <el-button @click="resetTokenVisible = false">关闭</el-button>
+        </div>
+      </template>
+    </el-dialog>
 
     <!-- ── Create user dialog ────────────────────────────────────────── -->
     <el-dialog
@@ -188,7 +217,7 @@
 import { onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { FormInstance, FormRules, TableInstance } from 'element-plus'
-import { Plus, Delete } from '@element-plus/icons-vue'
+import { Plus, Delete, CopyDocument } from '@element-plus/icons-vue'
 import { userApi } from '@/api'
 import { useAuthStore } from '@/stores/auth'
 
@@ -370,6 +399,34 @@ async function saveEdit() {
   }
 }
 
+/* ── 重置密码：生成一次性令牌 ───────────────────────────────────────── */
+const resetTokenVisible = ref(false)
+const resetTokenValue = ref('')
+const resetTokenExpires = ref('')
+const resetTokenUser = ref('')
+
+async function generateResetToken(row: UserRow) {
+  try {
+    const data = await userApi.resetToken(row.id)
+    resetTokenValue.value = data.token || ''
+    resetTokenExpires.value = data.expires_at || ''
+    resetTokenUser.value = row.username
+    resetTokenVisible.value = true
+  } catch (e: any) {
+    ElMessage.error(errMsg(e, '生成重置令牌失败'))
+  }
+}
+
+async function copyResetToken() {
+  if (!resetTokenValue.value) return
+  try {
+    await navigator.clipboard.writeText(resetTokenValue.value)
+    ElMessage.success('令牌已复制')
+  } catch {
+    ElMessage.warning('复制失败，请手动选择复制')
+  }
+}
+
 /* ── Delete ────────────────────────────────────────────────────────── */
 async function removeUser(row: UserRow) {
   try {
@@ -449,6 +506,48 @@ onMounted(load)
   color: var(--text-faint);
   font-size: 11px;
 }
+
+/* ── 重置令牌弹窗 ──────────────────────────────────────────────────── */
+.token-hint {
+  margin: 0 0 12px;
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+  line-height: 1.7;
+}
+.token-user {
+  color: var(--indigo-400);
+  font-weight: 600;
+}
+.token-box {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: rgba(11, 17, 32, 0.72);
+}
+.token-value {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--violet-400);
+  font-size: var(--text-sm);
+}
+.token-expire {
+  margin-top: var(--space-3);
+  color: var(--text-faint);
+  font-size: 11px;
+}
+
+.dialog-footer {
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+.footer-grow { flex: 1; }
 
 .dialog-footer {
   display: flex;

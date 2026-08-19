@@ -175,6 +175,19 @@
         class="logs-empty"
       />
     </div>
+
+    <div v-if="total > 0" class="pager-row">
+      <el-pagination
+        v-model:current-page="page"
+        v-model:page-size="pageSize"
+        :total="total"
+        :page-sizes="[20, 50, 100]"
+        layout="total, sizes, prev, pager, next, jumper"
+        background
+        @current-change="loadLogs"
+        @size-change="onPageSizeChange"
+      />
+    </div>
   </div>
 </template>
 
@@ -183,7 +196,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Search } from '@element-plus/icons-vue'
-import { channelApi, taskApi } from '@/api'
+import { channelApi, logApi, taskApi } from '@/api'
 
 interface LogRow {
   id: number
@@ -272,31 +285,20 @@ function fmtTime(iso?: string) {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`
 }
 
-const filteredLogs = computed<LogRow[]>(() =>
-  logs.value.filter((l) => {
-    if (taskFilter.value !== undefined && l.task_id !== taskFilter.value) return false
-    if (statusFilter.value && l.status !== statusFilter.value) return false
-    if (keyword.value.trim()) {
-      const kw = keyword.value.trim().toLowerCase()
-      const hit =
-        taskName(l.task_id).toLowerCase().includes(kw) ||
-        channelName(l.channel_id).toLowerCase().includes(kw) ||
-        (l.subject || '').toLowerCase().includes(kw) ||
-        (l.content || '').toLowerCase().includes(kw) ||
-        (l.error_msg || '').toLowerCase().includes(kw)
-      if (!hit) return false
-    }
-    if (dateRange.value) {
-      if (!l.sent_at) return false
-      const d = new Date(l.sent_at)
-      if (isNaN(d.getTime())) return false
-      const day = fmtDate(d)
-      const [s, e] = dateRange.value
-      if (day < s || day >= e) return false
-    }
-    return true
+// 任务/状态/日期已由后端过滤，前端仅做关键词二次过滤（针对当前页）
+const filteredLogs = computed<LogRow[]>(() => {
+  const kw = keyword.value.trim().toLowerCase()
+  if (!kw) return logs.value
+  return logs.value.filter((l) => {
+    const hit =
+      taskName(l.task_id).toLowerCase().includes(kw) ||
+      channelName(l.channel_id).toLowerCase().includes(kw) ||
+      (l.subject || '').toLowerCase().includes(kw) ||
+      (l.content || '').toLowerCase().includes(kw) ||
+      (l.error_msg || '').toLowerCase().includes(kw)
+    return hit
   })
-)
+})
 
 const emptyDescription = computed(() => {
   if (taskFilter.value !== undefined || statusFilter.value || keyword.value.trim() || dateRange.value)
@@ -308,27 +310,55 @@ function errMsg(e: any, fallback: string) {
   return e?.response?.data?.error || e?.message || fallback
 }
 
-async function load() {
-  loading.value = true
-  tasksLoaded.value = false
-  try {
-    const [list, chList] = await Promise.all([taskApi.list(), channelApi.list()])
-    tasks.value = list || []
-    channels.value = chList || []
+/* ── 后端分页加载 ──────────────────────────────────────────────────── */
+const total = ref(0)
+const page = ref(1)
+const pageSize = ref(20)
 
-    const groups = await Promise.all(
-      (list || []).map((t: { id: number }) =>
-        taskApi.logs(t.id).catch(() => [])
-      )
-    )
-    logs.value = groups.flat() as LogRow[]
-    tasksLoaded.value = true
+async function loadLogs() {
+  loading.value = true
+  try {
+    const params: { task_id?: number; status?: string; from?: string; to?: string; page: number; page_size: number } = {
+      page: page.value,
+      page_size: pageSize.value,
+    }
+    if (taskFilter.value !== undefined) params.task_id = taskFilter.value
+    if (statusFilter.value) params.status = statusFilter.value
+    if (dateRange.value) {
+      params.from = dateRange.value[0]
+      params.to = dateRange.value[1]
+    }
+    const data = await logApi.query(params)
+    logs.value = (data?.items || []) as LogRow[]
+    total.value = data?.total || 0
   } catch (e: any) {
     ElMessage.error(errMsg(e, '日志加载失败'))
   } finally {
     loading.value = false
+    tasksLoaded.value = true
   }
 }
+
+async function loadMeta() {
+  try {
+    const [list, chList] = await Promise.all([taskApi.list(), channelApi.list()])
+    tasks.value = list || []
+    channels.value = chList || []
+  } catch (e: any) {
+    ElMessage.error(errMsg(e, '任务 / 渠道加载失败'))
+  }
+}
+
+function onPageSizeChange() {
+  page.value = 1
+  loadLogs()
+}
+
+// 任务/状态/日期变化时回到第一页并重新查询
+watch([taskFilter, statusFilter, dateRange], () => {
+  page.value = 1
+  loadLogs()
+})
 
 // 从「任务管理」跳转过来时按任务预筛选
 watch(
@@ -341,7 +371,10 @@ watch(
   { immediate: true }
 )
 
-onMounted(load)
+onMounted(() => {
+  loadMeta()
+  loadLogs()
+})
 </script>
 
 <style scoped>
@@ -374,6 +407,12 @@ onMounted(load)
   color: var(--text-faint);
   font-size: 11px;
   letter-spacing: 0.04em;
+}
+
+.pager-row {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: var(--space-4);
 }
 
 /* ── 日期筛选 ───────────────────────────────────────────────────────── */
