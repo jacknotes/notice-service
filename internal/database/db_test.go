@@ -29,10 +29,24 @@ func TestMigrateRunsTwice(t *testing.T) {
 		t.Fatalf("second migrate should be idempotent: %v", err)
 	}
 	var n int
-	if err := db.QueryRow("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='notice_service' AND table_name IN ('users','channels','templates','tasks','task_logs')").Scan(&n); err != nil {
+	if err := db.QueryRow("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='notice_service_test' AND table_name IN ('users','channels','templates','tasks','task_logs','send_jobs')").Scan(&n); err != nil {
 		t.Fatal(err)
 	}
-	if n != 5 {
-		t.Errorf("expected 5 tables, got %d", n)
+	if n != 6 {
+		t.Errorf("expected 6 tables, got %d", n)
+	}
+}
+
+func TestMigrateCreatesSendJobs(t *testing.T) {
+	db := testDB(t)
+	if err := Migrate(db); err != nil {
+		t.Fatal(err)
+	}
+	var n int
+	if err := db.QueryRow("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='notice_service_test' AND table_name='send_jobs'").Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	if n != 1 {
+		t.Errorf("send_jobs table should exist, got %d", n)
 	}
 }
