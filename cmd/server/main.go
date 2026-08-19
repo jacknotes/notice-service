@@ -43,13 +43,13 @@ func main() {
 
 	// 发送队列：入队即落库，worker 池后台消费（重试/崩溃接管/清理都在这层）
 	qcfg := service.QueueConfig{
-		Workers:           cfg.QueueWorkers,
-		PollInterval:      time.Duration(cfg.QueuePollMS) * time.Millisecond,
-		MaxAttempts:       cfg.QueueMaxAttempts,
-		RetryBackoff:      cfg.QueueRetryBackoff,
-		ClaimTTL:          cfg.QueueClaimTTL,
-		LogRetentionDays:  cfg.LogRetentionDays,
-		JobRetentionDays:  cfg.QueueJobRetentionDays,
+		Workers:          cfg.QueueWorkers,
+		PollInterval:     time.Duration(cfg.QueuePollMS) * time.Millisecond,
+		MaxAttempts:      cfg.QueueMaxAttempts,
+		RetryBackoff:     cfg.QueueRetryBackoff,
+		ClaimTTL:         cfg.QueueClaimTTL,
+		LogRetentionDays: cfg.LogRetentionDays,
+		JobRetentionDays: cfg.QueueJobRetentionDays,
 	}
 	queue := service.NewQueueService(db, ns, qcfg, cfg.InstanceID)
 	queue.Start()
