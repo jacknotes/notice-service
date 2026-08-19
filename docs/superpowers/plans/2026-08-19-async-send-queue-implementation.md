@@ -2048,3 +2048,13 @@ git commit -m "docs: document send queue config and changelog"
 3. **Task 6 `TestEnqueueAndWorkerConsumes`**：计划里先轮询 `sink.count()` 再断言 `status=="done"`/`last_run_at` 存在竞态（`Send` 返回先于 `MarkDone`/`SetLastRunAt`）；改为轮询直到 job `done` 且 `last_run_at` 有效。
 
 另：Task 1 测试的 `table_schema` 断言从 `notice_service` 修正为 `notice_service_test`（测试实际迁移的库，修复原有潜在 bug）。最终 `go build ./...`、`go vet ./...`、`go test ./... -count=1` 全绿。
+
+### 最终整体 code review 修复（commit 49b5af2 / 0015431）
+
+整体 review 发现并修复以下问题：
+
+1. **测试封闭性**：队列/仓库测试共享单个 `notice_service_test` 库，`send_jobs` 行跨包/跨次运行残留，且各包测试进程并行时会互相消费/清空对方的 job 导致偶发失败。修复：`openTestDB`（repository）与 `newTestQueue`（service）在测试开始时 `DELETE FROM send_jobs`；`make test` 与 CI 改为 `go test -p 1 ./...` 串行化包（共享测试库的标准做法）。验证：`go test -p 1 ./... -count=2`、`go test -race ./internal/service/ ./internal/repository/` 均绿。
+2. **陈旧恢复无上限**：`RecoverStale` 原实现把崩溃循环的 job 无限放回 pending，永远到不了 `failed`。修复：签名改为 `RecoverStale(ttl, maxAttempts)`——`attempts < maxAttempts` 放回 pending 接管；`attempts >= maxAttempts` 直接终止为 `failed`。新增 `TestSendJobRecoverStaleTerminatesAtMaxAttempts`。
+3. **worker 无 panic 恢复**：单次 panic 会永久杀死 worker 协程。修复：`process` 内 `defer recover()`，记录日志并按一次失败计入重试上限。
+4. **cron 入队错误被吞**：`main.go` 调度回调改为出错时 `log.Printf`。
+5. **webhook 测试不严**：`TestWebhookTriggerAndIPWhitelist` 改为严格断言 202 + `job_id`（白名单内 202、白名单外 403）。
