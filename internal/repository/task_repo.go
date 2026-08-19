@@ -189,6 +189,12 @@ func (r *TaskRepo) SetEnabled(taskID int64, enabled bool) error {
 	return err
 }
 
+// SetLastRunAt 记录任务最近一次执行时间（成功发送后由队列 worker 调用）。
+func (r *TaskRepo) SetLastRunAt(taskID int64, t time.Time) error {
+	_, err := r.db.Exec("UPDATE tasks SET last_run_at=? WHERE id=?", t, taskID)
+	return err
+}
+
 func nullableTime(t *time.Time) interface{} {
 	if t == nil {
 		return nil
