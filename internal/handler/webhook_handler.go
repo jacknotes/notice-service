@@ -9,19 +9,18 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"notice-service/internal/crypto"
 	"notice-service/internal/model"
 	"notice-service/internal/repository"
 	"notice-service/internal/service"
 )
 
 type WebhookHandler struct {
-	repo *repository.TaskRepo
-	ns   *service.NotificationService
+	repo  *repository.TaskRepo
+	queue *service.QueueService
 }
 
-func NewWebhookHandler(db *sql.DB, cipher *crypto.Cipher) *WebhookHandler {
-	return &WebhookHandler{repo: repository.NewTaskRepo(db), ns: service.NewNotificationService(db, cipher)}
+func NewWebhookHandler(db *sql.DB, queue *service.QueueService) *WebhookHandler {
+	return &WebhookHandler{repo: repository.NewTaskRepo(db), queue: queue}
 }
 
 func (h *WebhookHandler) Trigger(c *gin.Context) {
@@ -43,11 +42,13 @@ func (h *WebhookHandler) Trigger(c *gin.Context) {
 		Variables map[string]string `json:"variables"`
 	}
 	_ = c.ShouldBindJSON(&req)
-	if err := h.ns.SendTask(task.ID, req.Variables); err != nil {
+	// 异步入队：请求立即返回 202，发送由后台 worker 池消费（含重试/崩溃接管）。
+	jobID, err := h.queue.Enqueue(task.ID, req.Variables, "")
+	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"ok": true})
+	c.JSON(http.StatusAccepted, gin.H{"ok": true, "job_id": jobID})
 }
 
 func (h *WebhookHandler) ipAllowed(task *model.Task, c *gin.Context) bool {

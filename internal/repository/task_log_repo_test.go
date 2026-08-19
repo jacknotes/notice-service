@@ -31,3 +31,40 @@ func TestTaskLogRepo(t *testing.T) {
 		t.Fatalf("recent err=%v n=%d", err, len(recent))
 	}
 }
+
+func TestTaskLogCleanupOlderThan(t *testing.T) {
+	db := openTestDB(t)
+	r := NewTaskLogRepo(db)
+	uid := seedUser(t, db)
+	chID := seedChannel(t, db, uid)
+	tplID := seedTemplate(t, db, uid)
+	tk := &model.Task{UserID: uid, Name: "t", ChannelID: chID, TemplateID: tplID, TriggerType: "api", ReceiversJSON: "[]", Enabled: true}
+	tr := NewTaskRepo(db)
+	if err := tr.Create(tk); err != nil {
+		t.Fatal(err)
+	}
+
+	old := &model.TaskLog{TaskID: tk.ID, ChannelID: chID, Status: "success", SentAt: time.Now().Add(-40 * 24 * time.Hour)}
+	fresh := &model.TaskLog{TaskID: tk.ID, ChannelID: chID, Status: "success", SentAt: time.Now()}
+	if err := r.Create(old); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.Create(fresh); err != nil {
+		t.Fatal(err)
+	}
+
+	n, err := r.CleanupOlderThan(30)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n != 1 {
+		t.Errorf("cleaned %d, want 1", n)
+	}
+	var left int
+	if err := db.QueryRow("SELECT COUNT(*) FROM task_logs WHERE task_id=?", tk.ID).Scan(&left); err != nil {
+		t.Fatal(err)
+	}
+	if left != 1 {
+		t.Errorf("expected 1 log left, got %d", left)
+	}
+}

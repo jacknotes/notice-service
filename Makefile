@@ -27,8 +27,8 @@ run: build ## 编译并启动后端（:$(PORT)）
 dev: ## 本地开发：后端 + 前端 dev server（:8080 + :5173，/api 自动代理）
 	$(MAKE) -j2 run frontend-dev
 
-test: ## 运行全部 Go 测试（使用独立测试库 notice_service_test）
-	$(GO_ENV) go test ./... -count=1
+test: ## 运行全部 Go 测试（使用独立测试库 notice_service_test；-p 1 串行化包避免共享库跨包干扰）
+	$(GO_ENV) go test -p 1 ./... -count=1
 
 vet: ## 静态检查
 	$(GO_ENV) go vet ./...

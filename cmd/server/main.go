@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"log"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 
@@ -40,9 +41,25 @@ func main() {
 
 	ns := service.NewNotificationService(db, ciph)
 
-	// 调度器：加载已启用 cron 任务，用本实例 UUID 作租约锁身份
-	sched := scheduler.New(func(taskID int64) {
-		_ = ns.SendTask(taskID, nil)
+	// 发送队列：入队即落库，worker 池后台消费（重试/崩溃接管/清理都在这层）
+	qcfg := service.QueueConfig{
+		Workers:          cfg.QueueWorkers,
+		PollInterval:     time.Duration(cfg.QueuePollMS) * time.Millisecond,
+		MaxAttempts:      cfg.QueueMaxAttempts,
+		RetryBackoff:     cfg.QueueRetryBackoff,
+		ClaimTTL:         cfg.QueueClaimTTL,
+		LogRetentionDays: cfg.LogRetentionDays,
+		JobRetentionDays: cfg.QueueJobRetentionDays,
+	}
+	queue := service.NewQueueService(db, ns, qcfg, cfg.InstanceID)
+	queue.Start()
+	defer queue.Stop()
+
+	// 调度器：cron 到点只做快速入队（毫秒级），带 dedupe key 防极端竞态重复
+	sched := scheduler.New(func(taskID int64, dedupeKey string) {
+		if _, err := queue.Enqueue(taskID, nil, dedupeKey); err != nil {
+			log.Printf("scheduler: enqueue task %d failed: %v", taskID, err)
+		}
 	}, repository.NewTaskRepo(db), cfg.InstanceID)
 	sched.Start()
 	tasks, err := repository.NewTaskRepo(db).ListEnabledCron()
@@ -54,7 +71,7 @@ func main() {
 	}
 	defer sched.Stop()
 
-	engine := router.NewRouter(db, authSvc, ciph, sched)
+	engine := router.NewRouter(db, authSvc, ciph, sched, queue)
 	engine.Static("/assets", "./web/dist/assets")
 	engine.StaticFile("/", "./web/dist/index.html")
 	engine.NoRoute(func(c *gin.Context) {

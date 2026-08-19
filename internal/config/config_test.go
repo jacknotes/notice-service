@@ -1,6 +1,9 @@
 package config
 
-import "testing"
+import (
+	"testing"
+	"time"
+)
 
 func TestLoadDefaults(t *testing.T) {
 	t.Setenv("DB_HOST", "")
@@ -30,5 +33,68 @@ func TestLoadFromEnv(t *testing.T) {
 	}
 	if cfg.Port != "9090" {
 		t.Errorf("Port = %q, want 9090", cfg.Port)
+	}
+}
+
+func TestParseDurations(t *testing.T) {
+	d := parseDurations("1s,30s,60s", nil)
+	if len(d) != 3 || d[0] != time.Second || d[1] != 30*time.Second || d[2] != time.Minute {
+		t.Errorf("parseDurations = %v", d)
+	}
+	fallback := []time.Duration{time.Second}
+	if d2 := parseDurations("bad", fallback); len(d2) != 1 || d2[0] != time.Second {
+		t.Errorf("bad input should fall back, got %v", d2)
+	}
+	if d3 := parseDurations("", fallback); len(d3) != 1 {
+		t.Errorf("empty input should fall back, got %v", d3)
+	}
+}
+
+func TestGetEnvInt(t *testing.T) {
+	t.Setenv("Q_X", "7")
+	if n := getEnvInt("Q_X", 1); n != 7 {
+		t.Errorf("getEnvInt = %d, want 7", n)
+	}
+	if n := getEnvInt("Q_UNSET", 3); n != 3 {
+		t.Errorf("getEnvInt default = %d, want 3", n)
+	}
+	t.Setenv("Q_BAD", "abc")
+	if n := getEnvInt("Q_BAD", 3); n != 3 {
+		t.Errorf("getEnvInt bad = %d, want 3", n)
+	}
+}
+
+func TestLoadQueueDefaults(t *testing.T) {
+	t.Setenv("QUEUE_WORKERS", "")
+	t.Setenv("QUEUE_POLL_MS", "")
+	t.Setenv("QUEUE_MAX_ATTEMPTS", "")
+	t.Setenv("QUEUE_RETRY_BACKOFF", "")
+	t.Setenv("QUEUE_CLAIM_TTL", "")
+	t.Setenv("LOG_RETENTION_DAYS", "")
+	t.Setenv("QUEUE_JOB_RETENTION_DAYS", "")
+	cfg := Load()
+	if cfg.QueueWorkers != 4 || cfg.QueuePollMS != 1000 || cfg.QueueMaxAttempts != 3 {
+		t.Errorf("queue numeric defaults = %d/%d/%d", cfg.QueueWorkers, cfg.QueuePollMS, cfg.QueueMaxAttempts)
+	}
+	if len(cfg.QueueRetryBackoff) != 3 || cfg.QueueRetryBackoff[0] != 5*time.Second {
+		t.Errorf("backoff default = %v", cfg.QueueRetryBackoff)
+	}
+	if cfg.QueueClaimTTL != 120*time.Second {
+		t.Errorf("claim ttl default = %v", cfg.QueueClaimTTL)
+	}
+	if cfg.LogRetentionDays != 90 || cfg.QueueJobRetentionDays != 30 {
+		t.Errorf("retention defaults = %d/%d", cfg.LogRetentionDays, cfg.QueueJobRetentionDays)
+	}
+}
+
+func TestLoadQueueFromEnv(t *testing.T) {
+	t.Setenv("QUEUE_WORKERS", "8")
+	t.Setenv("QUEUE_RETRY_BACKOFF", "1s,2s,3s")
+	cfg := Load()
+	if cfg.QueueWorkers != 8 {
+		t.Errorf("QueueWorkers = %d, want 8", cfg.QueueWorkers)
+	}
+	if len(cfg.QueueRetryBackoff) != 3 || cfg.QueueRetryBackoff[2] != 3*time.Second {
+		t.Errorf("QueueRetryBackoff = %v", cfg.QueueRetryBackoff)
 	}
 }

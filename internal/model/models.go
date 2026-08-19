@@ -83,3 +83,19 @@ type TaskLog struct {
 	RetryCount int       `json:"retry_count"`
 	SentAt     time.Time `json:"sent_at"`
 }
+
+type SendJob struct {
+	ID          int64      `json:"id"`
+	TaskID      int64      `json:"task_id"`
+	VarsJSON    string     `json:"-"`
+	Status      string     `json:"status"`
+	ClaimedBy   string     `json:"-"`
+	ClaimedAt   *time.Time `json:"-"`
+	Attempts    int        `json:"attempts"`
+	NextRetryAt *time.Time `json:"-"`
+	LastError   string     `json:"-"`
+	CreatedAt   time.Time  `json:"created_at"`
+	UpdatedAt   time.Time  `json:"updated_at"`
+	SentAt      *time.Time `json:"-"`
+	DedupeKey   string     `json:"-"`
+}

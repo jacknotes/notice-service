@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
 
@@ -42,11 +43,18 @@ func testRouter(t *testing.T) *gin.Engine {
 	ciph, _ := crypto.New(make([]byte, 32))
 	authSvc := service.NewAuthService(db, "secret-secret-secret", "admin", "admin123")
 	_ = authSvc.BootstrapAdmin()
-	return router.NewRouter(db, authSvc, ciph, nil)
+	// 队列：webhook 测试只需入队语义，不起 worker（Workers=0，不调用 Start）
+	q := service.NewQueueService(db, nil, service.QueueConfig{
+		Workers: 0, PollInterval: time.Millisecond, MaxAttempts: 3,
+		RetryBackoff: []time.Duration{time.Second}, ClaimTTL: time.Second,
+		LogRetentionDays: 30, JobRetentionDays: 30,
+	}, "test-inst")
+	return router.NewRouter(db, authSvc, ciph, nil, q)
 }
 
 // resetAdminData 删除 admin 用户及其关联的渠道/模板/任务/日志，使测试幂等。
 func resetAdminData(db *sql.DB) {
+	db.Exec("DELETE FROM send_jobs WHERE task_id IN (SELECT id FROM tasks WHERE user_id IN (SELECT id FROM users WHERE username='admin'))")
 	db.Exec("DELETE FROM task_logs WHERE task_id IN (SELECT id FROM tasks WHERE user_id IN (SELECT id FROM users WHERE username='admin'))")
 	db.Exec("DELETE FROM tasks WHERE user_id IN (SELECT id FROM users WHERE username='admin')")
 	db.Exec("DELETE FROM channels WHERE user_id IN (SELECT id FROM users WHERE username='admin')")

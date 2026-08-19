@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"time"
 
 	"notice-service/internal/channel"
 	"notice-service/internal/crypto"
@@ -12,10 +11,6 @@ import (
 	"notice-service/internal/render"
 	"notice-service/internal/repository"
 )
-
-const maxRetries = 3
-
-var defaultRetryBackoff = []time.Duration{5 * time.Second, 30 * time.Second, 60 * time.Second}
 
 // ChannelInstancer 从渠道模型构造可发送的渠道实例（测试可替换）。
 type ChannelInstancer func(c *model.Channel) (channel.Channel, error)
@@ -26,8 +21,6 @@ type NotificationService struct {
 	channelRepo  *repository.ChannelRepo
 	logRepo      *repository.TaskLogRepo
 	Instancer    ChannelInstancer
-	// RetryBackoff 可被测试替换为毫秒级值以加速测试。
-	RetryBackoff []time.Duration
 }
 
 func NewNotificationService(db *sql.DB, cipher *crypto.Cipher) *NotificationService {
@@ -38,11 +31,10 @@ func NewNotificationService(db *sql.DB, cipher *crypto.Cipher) *NotificationServ
 		channelRepo:  repository.NewChannelRepo(db),
 		logRepo:      repository.NewTaskLogRepo(db),
 		Instancer:    func(c *model.Channel) (channel.Channel, error) { return cs.InstancedChannel(c) },
-		RetryBackoff: defaultRetryBackoff,
 	}
 }
 
-// SendTask 渲染并发送任务（对每个接收者发送，带重试与日志）。
+// SendTask 渲染并发送任务（对每个接收者发送，单次尝试；重试由发送队列负责）。
 func (s *NotificationService) SendTask(taskID int64, vars map[string]string) error {
 	task, err := s.taskRepo.GetByID(taskID)
 	if err != nil {
@@ -84,7 +76,7 @@ func (s *NotificationService) SendTask(taskID int64, vars map[string]string) err
 	var lastErr error
 	if len(receivers) > 0 {
 		for _, addr := range receivers {
-			if err := s.sendWithRetry(inst, msg, addr, task, ch); err != nil {
+			if err := s.sendOnce(inst, msg, addr, task, ch); err != nil {
 				lastErr = err
 			}
 		}
@@ -93,34 +85,24 @@ func (s *NotificationService) SendTask(taskID int64, vars map[string]string) err
 	// 无接收地址：非邮箱渠道发送一次到机器人/token 绑定的目标（空地址）；
 	// 邮箱渠道缺少接收地址则报错。
 	if ch.Type != "email" {
-		if err := s.sendWithRetry(inst, msg, "", task, ch); err != nil {
-			return err
-		}
-		return nil
+		return s.sendOnce(inst, msg, "", task, ch)
 	}
 	return fmt.Errorf("邮件渠道至少需要一个接收地址")
 }
 
-func (s *NotificationService) sendWithRetry(inst channel.Channel, msg *channel.Message, addr string, task *model.Task, ch *model.Channel) error {
+// sendOnce 单次发送并写一条日志（成功或失败各一条；重试由队列调度）。
+func (s *NotificationService) sendOnce(inst channel.Channel, msg *channel.Message, addr string, task *model.Task, ch *model.Channel) error {
 	reqBody, _ := json.Marshal(map[string]string{"address": addr})
-	var err error
-	backoff := s.RetryBackoff
-	for attempt := 0; attempt <= maxRetries; attempt++ {
-		if attempt > 0 {
-			time.Sleep(backoff[min(attempt-1, len(backoff)-1)])
-		}
-		err = inst.Send(msg, &channel.Receiver{Address: addr})
-		if err == nil {
-			_ = s.logRepo.Create(&model.TaskLog{
-				TaskID: task.ID, ChannelID: ch.ID, Subject: msg.Subject, Content: msg.Content,
-				Status: "success", Request: string(reqBody), Response: "ok", RetryCount: attempt,
-			})
-			return nil
-		}
+	if err := inst.Send(msg, &channel.Receiver{Address: addr}); err != nil {
+		_ = s.logRepo.Create(&model.TaskLog{
+			TaskID: task.ID, ChannelID: ch.ID, Subject: msg.Subject, Content: msg.Content,
+			Status: "failed", Request: string(reqBody), ErrorMsg: err.Error(),
+		})
+		return err
 	}
 	_ = s.logRepo.Create(&model.TaskLog{
 		TaskID: task.ID, ChannelID: ch.ID, Subject: msg.Subject, Content: msg.Content,
-		Status: "failed", Request: string(reqBody), Response: "", ErrorMsg: err.Error(), RetryCount: maxRetries,
+		Status: "success", Request: string(reqBody), Response: "ok",
 	})
-	return fmt.Errorf("发送失败(已重试%d次): %w", maxRetries, err)
+	return nil
 }
