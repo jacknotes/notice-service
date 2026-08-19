@@ -1,16 +1,18 @@
 package scheduler
 
 import (
+	"fmt"
 	"log"
 	"sync"
+	"time"
 
 	"github.com/robfig/cron/v3"
 
 	"notice-service/internal/repository"
 )
 
-// ExecFunc 任务执行回调；taskID 为任务主键。
-type ExecFunc func(taskID int64)
+// ExecFunc 任务执行回调；taskID 为任务主键，dedupeKey 为本次触发的幂等键（cron 用）。
+type ExecFunc func(taskID int64, dedupeKey string)
 
 // Scheduler 包装 robfig/cron，提供按任务注册/注销。
 type Scheduler struct {
@@ -64,8 +66,11 @@ func (s *Scheduler) UnregisterTask(taskID int64) {
 
 func (s *Scheduler) makeJob(taskID int64) func() {
 	return func() {
+		// cron 为 5 字段（分钟级）表达式：以触发时刻的分钟作为 dedupe 键，
+		// 同一触发时刻在多个实例间稳定，防止租约极端竞态下的重复入队。
+		dedupeKey := fmt.Sprintf("%d:%d", taskID, time.Now().Truncate(time.Minute).Unix())
 		if s.leases == nil {
-			s.exec(taskID)
+			s.exec(taskID, dedupeKey)
 			return
 		}
 		ok, err := s.leases.Acquire(taskID)
@@ -73,6 +78,6 @@ func (s *Scheduler) makeJob(taskID int64) func() {
 			return // 其他实例持锁或出错，跳过
 		}
 		defer s.leases.Release(taskID)
-		s.exec(taskID)
+		s.exec(taskID, dedupeKey)
 	}
 }

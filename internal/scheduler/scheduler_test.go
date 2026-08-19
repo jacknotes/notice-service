@@ -42,7 +42,7 @@ func TestCronParsing(t *testing.T) {
 func TestSchedulerTick(t *testing.T) {
 	var fired int32
 	done := make(chan struct{})
-	s := New(func(taskID int64) {
+	s := New(func(taskID int64, dedupeKey string) {
 		if atomic.AddInt32(&fired, 1) == 1 {
 			close(done)
 		}
@@ -78,7 +78,7 @@ func TestSchedulerLeasePath(t *testing.T) {
 
 	var fired int32
 	done := make(chan struct{})
-	s := New(func(taskID int64) {
+	s := New(func(taskID int64, dedupeKey string) {
 		if atomic.AddInt32(&fired, 1) == 1 {
 			close(done)
 		}
