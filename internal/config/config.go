@@ -5,7 +5,9 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"os"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -22,6 +24,14 @@ type Config struct {
 	InstanceID string
 	AdminUser  string
 	AdminPass  string
+
+	QueueWorkers          int
+	QueuePollMS           int
+	QueueMaxAttempts      int
+	QueueRetryBackoff     []time.Duration
+	QueueClaimTTL         time.Duration
+	LogRetentionDays      int
+	QueueJobRetentionDays int
 }
 
 func Load() *Config {
@@ -38,6 +48,14 @@ func Load() *Config {
 		InstanceID: getEnv("INSTANCE_ID", uuid.NewString()),
 		AdminUser:  getEnv("ADMIN_USER", "admin"),
 		AdminPass:  getEnv("ADMIN_PASS", "admin123"),
+
+		QueueWorkers:          getEnvInt("QUEUE_WORKERS", 4),
+		QueuePollMS:           getEnvInt("QUEUE_POLL_MS", 1000),
+		QueueMaxAttempts:      getEnvInt("QUEUE_MAX_ATTEMPTS", 3),
+		QueueRetryBackoff:     parseDurations(getEnv("QUEUE_RETRY_BACKOFF", "5s,30s,60s"), []time.Duration{5 * time.Second, 30 * time.Second, 60 * time.Second}),
+		QueueClaimTTL:         time.Duration(getEnvInt("QUEUE_CLAIM_TTL", 120)) * time.Second,
+		LogRetentionDays:      getEnvInt("LOG_RETENTION_DAYS", 90),
+		QueueJobRetentionDays: getEnvInt("QUEUE_JOB_RETENTION_DAYS", 30),
 	}
 }
 
@@ -67,6 +85,35 @@ func getEnv(key, def string) string {
 		return v
 	}
 	return def
+}
+
+func getEnvInt(key string, def int) int {
+	if v := os.Getenv(key); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			return n
+		}
+	}
+	return def
+}
+
+// parseDurations 解析逗号分隔的 duration 列表；任一解析失败或为空时回退到 def。
+func parseDurations(s string, def []time.Duration) []time.Duration {
+	if strings.TrimSpace(s) == "" {
+		return def
+	}
+	parts := strings.Split(s, ",")
+	out := make([]time.Duration, 0, len(parts))
+	for _, p := range parts {
+		d, err := time.ParseDuration(strings.TrimSpace(p))
+		if err != nil {
+			return def
+		}
+		out = append(out, d)
+	}
+	if len(out) == 0 {
+		return def
+	}
+	return out
 }
 
 // loadDotEnv 读取简单的 KEY=VALUE 配置文件（每行一条，支持 # 注释与引号）。
