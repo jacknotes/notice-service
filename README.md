@@ -8,7 +8,7 @@
 - **模板 + 变量**：Markdown 模板，`{{变量}}` 占位符，实时预览
 - **任务触发**：Cron 定时触发 或 Webhook API 触发（唯一 api_key，可选 IP 白名单）
 - **分布式高可用**：多实例部署时基于 MySQL 租约锁保证 Cron 任务不重复执行，单实例宕机自动接管
-- **可靠性**：发送失败自动重试 3 次（间隔 5s→30s→60s），完整发送日志
+- **可靠性**：异步持久化发送队列（Webhook 立即返回 202），失败自动重试 3 次（5s→30s→60s），多副本原子认领不重复 + 崩溃自动接管，完整发送日志与保留期自动清理
 - **安全**：JWT 无状态认证、bcrypt 密码、渠道敏感配置 AES-256-GCM 加密
 - **仪表盘**：今日发送量、成功率、近 7/30 天发送趋势
 - **前端**：Vue3 + Element Plus 深色主题（"Signal Relay" 设计），PC/移动端响应式
@@ -71,6 +71,13 @@ docker compose up -d
 | `PORT` | 8080 | HTTP 端口 |
 | `INSTANCE_ID` | 自动 UUID | 实例标识（租约锁所有权） |
 | `ADMIN_USER` / `ADMIN_PASS` | admin / admin123 | 默认管理员（首启创建） |
+| `QUEUE_WORKERS` | 4 | 每实例发送 worker 数 |
+| `QUEUE_POLL_MS` | 1000 | 队列认领轮询间隔（毫秒） |
+| `QUEUE_MAX_ATTEMPTS` | 3 | 队列级最大尝试次数（含首次） |
+| `QUEUE_RETRY_BACKOFF` | 5s,30s,60s | 重试间隔（逗号分隔） |
+| `QUEUE_CLAIM_TTL` | 120 | 认领后多久算陈旧（秒），超时由其它实例接管 |
+| `LOG_RETENTION_DAYS` | 90 | 发送日志保留天数 |
+| `QUEUE_JOB_RETENTION_DAYS` | 30 | 已完成 job 保留天数 |
 
 ## API 概览
 
@@ -80,7 +87,7 @@ GET   /api/health               健康检查
 渠道  GET/POST /api/channels  PUT/DELETE /api/channels/:id  POST /api/channels/:id/test
 模板  GET/POST /api/templates  PUT/DELETE /api/templates/:id  POST /api/templates/:id/preview
 任务  GET/POST /api/tasks  PUT/DELETE /api/tasks/:id  POST /api/tasks/:id/toggle  GET /api/tasks/:id/logs
-外部  POST /api/webhook/:api_key   （无需登录，可选 IP 白名单）
+外部  POST /api/webhook/:api_key   （无需登录，可选 IP 白名单；异步入队，返回 202）
 仪表盘 GET /api/dashboard/stats   GET /api/dashboard/trend
 ```
 

@@ -6,12 +6,17 @@
 
 ## [Unreleased]
 
+### 已实现
+- 异步持久化发送队列：Webhook 触发立即返回 202，发送由后台 worker 池消费
+- 多副本正确性：MySQL 原子认领保证不重复；陈旧认领自动接管（替代任务锁续期）
+- 队列级重试（5s/30s/60s），取代发送内部 sleep 重试
+- task_logs / send_jobs 保留期自动清理（LOG_RETENTION_DAYS / QUEUE_JOB_RETENTION_DAYS）
+- cron 任务 last_run_at / next_run_at 现已写入
+
 ### 计划中
 - 用户管理（多用户注册/禁用/角色管理）
 - 忘记密码 / 邮箱验证
 - 发送日志详情页
-- Webhook 异步确认（202 排队语义）
-- 租约自动续期（超长任务防双发）
 
 ## [1.0.0] - 2026-08-18
 
