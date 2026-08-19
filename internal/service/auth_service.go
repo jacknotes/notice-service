@@ -26,6 +26,7 @@ type AuthService struct {
 	adminUser string
 	adminPass string
 	tokenTTL  time.Duration
+	limiter   *loginLimiter
 }
 
 func NewAuthService(db *sql.DB, jwtSecret, adminUser, adminPass string) *AuthService {
@@ -35,6 +36,7 @@ func NewAuthService(db *sql.DB, jwtSecret, adminUser, adminPass string) *AuthSer
 		adminUser: adminUser,
 		adminPass: adminPass,
 		tokenTTL:  24 * time.Hour,
+		limiter:   newLoginLimiter(5, 15*time.Minute),
 	}
 }
 
@@ -93,16 +95,22 @@ func (s *AuthService) BootstrapAdmin() error {
 func (s *AuthService) Login(username, password string) (string, *model.User, error) {
 	username = strings.TrimSpace(username) // 忽略首尾空格
 	password = strings.TrimSpace(password)
+	if err := s.limiter.checkLocked(username); err != nil {
+		return "", nil, err
+	}
 	u, err := s.users.GetByUsername(username)
 	if errors.Is(err, repository.ErrNotFound) {
+		s.limiter.recordFailure(username)
 		return "", nil, errors.New("用户名或密码错误")
 	}
 	if err != nil {
 		return "", nil, err
 	}
 	if bcrypt.CompareHashAndPassword([]byte(u.PasswordHash), []byte(password)) != nil {
+		s.limiter.recordFailure(username)
 		return "", nil, errors.New("用户名或密码错误")
 	}
+	s.limiter.reset(username)
 	tok, err := s.IssueToken(u.ID, u.Role)
 	if err != nil {
 		return "", nil, err
@@ -127,4 +135,25 @@ func (s *AuthService) ChangePassword(userID int64, oldPass, newPass string) erro
 		return err
 	}
 	return s.users.UpdatePassword(u.ID, string(hash))
+}
+
+// ResetPassword 忘记密码：用管理员生成的一次性令牌重置密码（公开接口）。
+// 令牌一次性且带过期时间，重置成功后即失效。
+func (s *AuthService) ResetPassword(username, token, newPass string) error {
+	username = strings.TrimSpace(username)
+	if err := validatePassword(newPass); err != nil {
+		return err
+	}
+	hash, err := bcrypt.GenerateFromPassword([]byte(newPass), bcrypt.DefaultCost)
+	if err != nil {
+		return err
+	}
+	ok, err := s.users.ResetPasswordByToken(username, token, string(hash))
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return errors.New("重置令牌无效或已过期，请向管理员重新申请")
+	}
+	return nil
 }

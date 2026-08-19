@@ -15,10 +15,16 @@ import (
 func NewRouter(db *sql.DB, authSvc *service.AuthService, cipher *crypto.Cipher, sched *scheduler.Scheduler, queue *service.QueueService) *gin.Engine {
 	r := gin.Default()
 
-	authH := handler.NewAuthHandler(authSvc)
+	authH := handler.NewAuthHandler(db, authSvc)
 	channelH := handler.NewChannelHandler(db, cipher)
 	templateH := handler.NewTemplateHandler(db)
-	taskH := handler.NewTaskHandler(db, sched)
+	// 显式把 *scheduler.Scheduler 转成 service.Scheduler 接口：sched 为 nil 时保持
+	// 真正的 nil 接口（避免 typed-nil 陷阱导致 TaskService 误判非空而调用 nil 指针）。
+	var schedIf service.Scheduler
+	if sched != nil {
+		schedIf = sched
+	}
+	taskH := handler.NewTaskHandler(db, schedIf, queue)
 	webhookH := handler.NewWebhookHandler(db, queue)
 	dashH := handler.NewDashboardHandler(db)
 	userH := handler.NewUserHandler(db)
@@ -27,6 +33,7 @@ func NewRouter(db *sql.DB, authSvc *service.AuthService, cipher *crypto.Cipher, 
 
 	api := r.Group("/api")
 	api.POST("/auth/login", authH.Login)
+	api.POST("/auth/forgot-password", authH.ForgotPassword) // 公开：一次性令牌自助重置密码
 
 	auth := api.Group("")
 	auth.Use(middleware.Auth(authSvc))
@@ -41,6 +48,7 @@ func NewRouter(db *sql.DB, authSvc *service.AuthService, cipher *crypto.Cipher, 
 		auth.POST("/templates/:id/preview", templateH.Preview)
 		auth.GET("/tasks", taskH.List)
 		auth.GET("/tasks/:id/logs", taskH.Logs)
+		auth.GET("/logs", taskH.LogsAll) // 日志分页/筛选（后端下推）
 
 		auth.GET("/dashboard/stats", dashH.Stats)
 		auth.GET("/dashboard/trend", dashH.Trend)
@@ -64,12 +72,14 @@ func NewRouter(db *sql.DB, authSvc *service.AuthService, cipher *crypto.Cipher, 
 			admin.PUT("/tasks/:id", taskH.Update)
 			admin.DELETE("/tasks/:id", taskH.Delete)
 			admin.POST("/tasks/:id/toggle", taskH.Toggle)
+			admin.POST("/tasks/:id/send", taskH.SendNow) // 立即发送（入队）
 			admin.POST("/tasks/batch-delete", taskH.BatchDelete)
 
 			admin.GET("/users", userH.List)
 			admin.POST("/users", userH.Create)
 			admin.PUT("/users/:id", userH.Update)
 			admin.DELETE("/users/:id", userH.Delete)
+			admin.POST("/users/:id/reset-token", userH.ResetToken) // 生成一次性重置令牌
 			admin.POST("/users/batch-delete", userH.BatchDelete)
 		}
 	}

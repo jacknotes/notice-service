@@ -20,6 +20,11 @@ import (
 func main() {
 	cfg := config.Load()
 
+	// 弱默认密钥告警：防止以默认/示例密钥裸跑
+	for _, w := range cfg.WeakSecretWarnings() {
+		log.Printf("[警告] %s", w)
+	}
+
 	db, err := database.Open(cfg.DSN())
 	if err != nil {
 		log.Fatalf("db connect: %v", err)

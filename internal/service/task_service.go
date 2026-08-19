@@ -114,17 +114,30 @@ func (s *TaskService) Delete(userID, id int64) error {
 	return s.repo.Delete(id)
 }
 
-// BatchDelete 批量软删除任务：cron 任务先从调度器注销（sched 为 nil 时跳过）。
+// BatchDelete 批量软删除任务：cron 任务先从调度器注销（sched 为 nil 时跳过），
+// 删除本身用单条 UPDATE（一次 List 定位 cron + 一次 BatchDelete）。
 func (s *TaskService) BatchDelete(ids []int64) error {
-	for _, id := range ids {
-		if ex, err := s.repo.GetByID(id); err == nil && ex.TriggerType == "cron" && s.sched != nil {
-			s.sched.UnregisterTask(id)
-		}
-		if err := s.repo.Delete(id); err != nil {
+	if len(ids) == 0 {
+		return nil
+	}
+	if s.sched != nil {
+		all, err := s.repo.List()
+		if err != nil {
 			return err
 		}
+		cronIDs := map[int64]bool{}
+		for _, t := range all {
+			if t.TriggerType == "cron" {
+				cronIDs[t.ID] = true
+			}
+		}
+		for _, id := range ids {
+			if cronIDs[id] {
+				s.sched.UnregisterTask(id)
+			}
+		}
 	}
-	return nil
+	return s.repo.BatchDelete(ids)
 }
 
 func (s *TaskService) Toggle(userID, id int64, enabled bool) error {
@@ -147,6 +160,11 @@ func (s *TaskService) Toggle(userID, id int64, enabled bool) error {
 
 func (s *TaskService) Logs(taskID int64) ([]*model.TaskLog, error) {
 	return s.logRepo.ListByTask(taskID)
+}
+
+// QueryLogs 按过滤条件分页查询发送日志（后端筛选下推 DB）。
+func (s *TaskService) QueryLogs(f repository.LogFilter) (int, []*model.TaskLog, error) {
+	return s.logRepo.Query(f)
 }
 
 func (s *TaskService) validate(t *model.Task) error {

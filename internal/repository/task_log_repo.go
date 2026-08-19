@@ -93,3 +93,82 @@ func (r *TaskLogRepo) CleanupOlderThan(days int) (int64, error) {
 		}
 	}
 }
+
+// LogFilter 日志查询过滤条件（后端分页/筛选下推 DB）。
+type LogFilter struct {
+	TaskID   int64
+	Status   string // success | failed | ""（全部）
+	From, To time.Time
+	Page     int
+	PageSize int
+}
+
+// Query 按过滤条件分页查询发送日志，返回总数与当前页数据。
+func (r *TaskLogRepo) Query(f LogFilter) (total int, logs []*model.TaskLog, err error) {
+	where := "WHERE 1=1"
+	args := []interface{}{}
+	if f.TaskID > 0 {
+		where += " AND task_id=?"
+		args = append(args, f.TaskID)
+	}
+	if f.Status != "" {
+		where += " AND status=?"
+		args = append(args, f.Status)
+	}
+	if !f.From.IsZero() {
+		where += " AND sent_at >= ?"
+		args = append(args, f.From)
+	}
+	if !f.To.IsZero() {
+		where += " AND sent_at < ?"
+		args = append(args, f.To)
+	}
+	if err = r.db.QueryRow("SELECT COUNT(*) FROM task_logs "+where, args...).Scan(&total); err != nil {
+		return 0, nil, err
+	}
+	limit := f.PageSize
+	if limit <= 0 || limit > 200 {
+		limit = 50
+	}
+	offset := (f.Page - 1) * limit
+	if offset < 0 {
+		offset = 0
+	}
+	queryArgs := append(append([]interface{}{}, args...), limit, offset)
+	rows, err := r.db.Query(
+		"SELECT id, task_id, channel_id, subject, content, status, request, response, error_msg, retry_count, sent_at FROM task_logs "+where+" ORDER BY id DESC LIMIT ? OFFSET ?",
+		queryArgs...)
+	if err != nil {
+		return 0, nil, err
+	}
+	defer rows.Close()
+	logs, err = scanLogs(rows)
+	if err != nil {
+		return 0, nil, err
+	}
+	return total, logs, nil
+}
+
+// CountByDay 单条 GROUP BY 统计 [from,to) 内每天的总发送数与成功数（仪表盘趋势用）。
+// 返回 key = "MM-DD"（与前端趋势 x 轴格式一致）。
+func (r *TaskLogRepo) CountByDay(from, to time.Time) (map[string]struct{ Total, Success int }, error) {
+	rows, err := r.db.Query(
+		`SELECT DATE_FORMAT(sent_at, '%m-%d') AS d, COUNT(*), COALESCE(SUM(status='success'),0)
+		 FROM task_logs WHERE sent_at >= ? AND sent_at < ?
+		 GROUP BY d ORDER BY d`,
+		from, to)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[string]struct{ Total, Success int }{}
+	for rows.Next() {
+		var d string
+		var total, success int
+		if err := rows.Scan(&d, &total, &success); err != nil {
+			return nil, err
+		}
+		out[d] = struct{ Total, Success int }{Total: total, Success: success}
+	}
+	return out, rows.Err()
+}

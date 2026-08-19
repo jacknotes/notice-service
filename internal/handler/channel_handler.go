@@ -14,10 +14,11 @@ import (
 
 type ChannelHandler struct {
 	svc *service.ChannelService
+	db  *sql.DB
 }
 
 func NewChannelHandler(db *sql.DB, cipher *crypto.Cipher) *ChannelHandler {
-	return &ChannelHandler{svc: service.NewChannelService(db, cipher)}
+	return &ChannelHandler{svc: service.NewChannelService(db, cipher), db: db}
 }
 
 func (h *ChannelHandler) List(c *gin.Context) {
@@ -39,6 +40,7 @@ func (h *ChannelHandler) Create(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	auditf(c, h.db, "channel.create", "创建渠道 %q (type=%s)", in.Name, in.Type)
 	c.JSON(http.StatusOK, in)
 }
 
@@ -53,6 +55,7 @@ func (h *ChannelHandler) Update(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	auditf(c, h.db, "channel.update", "更新渠道 id=%d", id)
 	c.JSON(http.StatusOK, in)
 }
 
@@ -62,6 +65,7 @@ func (h *ChannelHandler) Delete(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	auditf(c, h.db, "channel.delete", "删除渠道 id=%d", id)
 	c.JSON(http.StatusOK, gin.H{"ok": true})
 }
 
@@ -78,6 +82,7 @@ func (h *ChannelHandler) BatchDelete(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	auditf(c, h.db, "channel.batch_delete", "批量删除渠道 ids=%v", req.IDs)
 	c.JSON(http.StatusOK, gin.H{"ok": true})
 }
 

@@ -6,6 +6,8 @@ import (
 	"net"
 	"net/http"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/gin-gonic/gin"
 
@@ -14,17 +16,65 @@ import (
 	"notice-service/internal/service"
 )
 
+// keyRateLimiter 按 key 的固定窗口限流（内存态，单实例计数）。
+type keyRateLimiter struct {
+	mu       sync.Mutex
+	hits     map[string]int
+	windowAt map[string]time.Time
+	limit    int
+	window   time.Duration
+}
+
+func newKeyRateLimiter(limit int, window time.Duration) *keyRateLimiter {
+	return &keyRateLimiter{
+		hits:     map[string]int{},
+		windowAt: map[string]time.Time{},
+		limit:    limit,
+		window:   window,
+	}
+}
+
+func (l *keyRateLimiter) allow(key string) bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	now := time.Now()
+	if start, ok := l.windowAt[key]; !ok || now.Sub(start) >= l.window {
+		l.windowAt[key] = now
+		l.hits[key] = 1
+		return true
+	}
+	l.hits[key]++
+	return l.hits[key] <= l.limit
+}
+
 type WebhookHandler struct {
-	repo  *repository.TaskRepo
-	queue *service.QueueService
+	repo    *repository.TaskRepo
+	queue   *service.QueueService
+	limiter *keyRateLimiter
 }
 
 func NewWebhookHandler(db *sql.DB, queue *service.QueueService) *WebhookHandler {
-	return &WebhookHandler{repo: repository.NewTaskRepo(db), queue: queue}
+	return &WebhookHandler{
+		repo:    repository.NewTaskRepo(db),
+		queue:   queue,
+		limiter: newKeyRateLimiter(60, time.Minute), // 每 api_key 每分钟 60 次
+	}
 }
 
 func (h *WebhookHandler) Trigger(c *gin.Context) {
-	apiKey := c.Param("api_key")
+	// API Key 优先从 header 读取（防路径泄漏进日志）；兼容旧调用支持 URL path。
+	apiKey := c.GetHeader("X-API-Key")
+	if apiKey == "" {
+		apiKey = c.Param("api_key")
+	}
+	if apiKey == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "缺少 API Key"})
+		return
+	}
+	if !h.limiter.allow(apiKey) {
+		c.JSON(http.StatusTooManyRequests, gin.H{"error": "请求过于频繁，请稍后再试"})
+		return
+	}
 	task, err := h.repo.GetByAPIKey(apiKey)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "api_key 无效"})

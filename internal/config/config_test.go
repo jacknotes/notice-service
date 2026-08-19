@@ -98,3 +98,14 @@ func TestLoadQueueFromEnv(t *testing.T) {
 		t.Errorf("QueueRetryBackoff = %v", cfg.QueueRetryBackoff)
 	}
 }
+
+func TestWeakSecretWarnings(t *testing.T) {
+	weak := &Config{JWTSecret: "change-me", EncryptKey: "0123456789abcdef0123456789abcdef"}
+	if n := len(weak.WeakSecretWarnings()); n != 2 {
+		t.Errorf("weak secrets should produce 2 warnings, got %d", n)
+	}
+	strong := &Config{JWTSecret: "random-secret-1234567890", EncryptKey: "abcdef0123456789abcdef0123456789"}
+	if n := len(strong.WeakSecretWarnings()); n != 0 {
+		t.Errorf("strong secrets should produce 0 warnings, got %d: %v", n, strong.WeakSecretWarnings())
+	}
+}

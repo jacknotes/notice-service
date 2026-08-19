@@ -12,10 +12,11 @@ import (
 
 type UserHandler struct {
 	svc *service.UserService
+	db  *sql.DB
 }
 
 func NewUserHandler(db *sql.DB) *UserHandler {
-	return &UserHandler{svc: service.NewUserService(db)}
+	return &UserHandler{svc: service.NewUserService(db), db: db}
 }
 
 // List 列出所有用户（仅 admin）。
@@ -52,6 +53,7 @@ func (h *UserHandler) Create(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	auditf(c, h.db, "user.create", "创建用户 %s (role=%s)", u.Username, u.Role)
 	c.JSON(http.StatusOK, u)
 }
 
@@ -74,6 +76,7 @@ func (h *UserHandler) Update(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	auditf(c, h.db, "user.update", "更新用户 id=%d (role=%v)", id, req.Role)
 	c.JSON(http.StatusOK, gin.H{"ok": true})
 }
 
@@ -88,6 +91,7 @@ func (h *UserHandler) Delete(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	auditf(c, h.db, "user.delete", "删除用户 id=%d", id)
 	c.JSON(http.StatusOK, gin.H{"ok": true})
 }
 
@@ -108,5 +112,22 @@ func (h *UserHandler) BatchDelete(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	auditf(c, h.db, "user.batch_delete", "批量删除用户 ids=%v", req.IDs)
 	c.JSON(http.StatusOK, gin.H{"ok": true})
+}
+
+// ResetToken 生成一次性重置令牌（仅 admin），返回给管理员线下转交用户。
+func (h *UserHandler) ResetToken(c *gin.Context) {
+	if c.GetString("role") != "admin" {
+		c.JSON(http.StatusForbidden, gin.H{"error": "无权操作"})
+		return
+	}
+	id, _ := strconv.ParseInt(c.Param("id"), 10, 64)
+	token, expires, err := h.svc.GenerateResetToken(id)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	auditf(c, h.db, "user.reset_token", "为用户 id=%d 生成重置令牌（%s 过期）", id, expires.Format("2006-01-02 15:04:05"))
+	c.JSON(http.StatusOK, gin.H{"token": token, "expires_at": expires.Format("2006-01-02 15:04:05")})
 }

@@ -45,14 +45,17 @@ func (s *DashboardService) Stats() (*Stats, error) {
 func (s *DashboardService) Trend(days int) ([]TrendPoint, error) {
 	now := time.Now()
 	start := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location()).AddDate(0, 0, -(days - 1))
+	end := start.AddDate(0, 0, days)
+	// 单条 GROUP BY 查询一次拿全，替代原来的 N 次 COUNT
+	byDay, err := s.logRepo.CountByDay(start, end)
+	if err != nil {
+		return nil, err
+	}
 	out := make([]TrendPoint, 0, days)
 	for i := 0; i < days; i++ {
-		d := start.AddDate(0, 0, i)
-		total, ok, _, err := s.logRepo.CountByRange(d, d.Add(24*time.Hour))
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, TrendPoint{Date: d.Format("01-02"), Total: total, Success: ok})
+		key := start.AddDate(0, 0, i).Format("01-02")
+		v := byDay[key]
+		out = append(out, TrendPoint{Date: key, Total: v.Total, Success: v.Success})
 	}
 	return out, nil
 }

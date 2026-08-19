@@ -3,6 +3,8 @@ package repository
 import (
 	"database/sql"
 	"errors"
+	"strings"
+	"time"
 
 	"notice-service/internal/model"
 )
@@ -96,4 +98,41 @@ func (r *UserRepo) CountAdmins() (int, error) {
 	var n int
 	err := r.db.QueryRow("SELECT COUNT(*) FROM users WHERE role = 'admin' AND deleted_at IS NULL").Scan(&n)
 	return n, err
+}
+
+// SetResetToken 写入一次性重置令牌与其过期时间（忘记密码/管理员重置用）。
+func (r *UserRepo) SetResetToken(userID int64, token string, expires time.Time) error {
+	_, err := r.db.Exec(
+		"UPDATE users SET reset_token=?, reset_token_expires=? WHERE id=? AND deleted_at IS NULL",
+		token, expires, userID)
+	return err
+}
+
+// ResetPasswordByToken 用未过期的一次性令牌重置密码（令牌消费后即失效）。
+// 返回是否成功匹配并更新；失败表示令牌无效、已用或过期。
+func (r *UserRepo) ResetPasswordByToken(username, token, newHash string) (bool, error) {
+	res, err := r.db.Exec(
+		"UPDATE users SET password_hash=?, reset_token=NULL, reset_token_expires=NULL "+
+			"WHERE username=? AND reset_token=? AND reset_token_expires > NOW() AND deleted_at IS NULL",
+		newHash, username, token)
+	if err != nil {
+		return false, err
+	}
+	n, _ := res.RowsAffected()
+	return n == 1, nil
+}
+
+// BatchDelete 批量软删除用户（规则校验在 service 层完成）。
+func (r *UserRepo) BatchDelete(ids []int64) error {
+	if len(ids) == 0 {
+		return nil
+	}
+	placeholders := strings.TrimSuffix(strings.Repeat("?,", len(ids)), ",")
+	args := make([]interface{}, len(ids))
+	for i, id := range ids {
+		args[i] = id
+	}
+	_, err := r.db.Exec(
+		"UPDATE users SET deleted_at = NOW() WHERE id IN ("+placeholders+") AND deleted_at IS NULL", args...)
+	return err
 }

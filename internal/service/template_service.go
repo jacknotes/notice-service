@@ -62,14 +62,9 @@ func (s *TemplateService) Delete(userID, id int64) error {
 	return s.repo.Delete(id)
 }
 
-// BatchDelete 批量软删除模板，复用 repo.Delete。
+// BatchDelete 批量软删除模板（单条 UPDATE）。
 func (s *TemplateService) BatchDelete(ids []int64) error {
-	for _, id := range ids {
-		if err := s.repo.Delete(id); err != nil {
-			return err
-		}
-	}
-	return nil
+	return s.repo.BatchDelete(ids)
 }
 
 // Get 不再校验属主：所有用户可读任意模板。

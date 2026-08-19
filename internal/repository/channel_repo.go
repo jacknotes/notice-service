@@ -3,6 +3,7 @@ package repository
 import (
 	"database/sql"
 	"errors"
+	"strings"
 
 	"notice-service/internal/model"
 )
@@ -70,4 +71,19 @@ func (r *ChannelRepo) List() ([]*model.Channel, error) {
 		out = append(out, c)
 	}
 	return out, rows.Err()
+}
+
+// BatchDelete 批量软删除渠道（单条 UPDATE）。
+func (r *ChannelRepo) BatchDelete(ids []int64) error {
+	if len(ids) == 0 {
+		return nil
+	}
+	placeholders := strings.TrimSuffix(strings.Repeat("?,", len(ids)), ",")
+	args := make([]interface{}, len(ids))
+	for i, id := range ids {
+		args[i] = id
+	}
+	_, err := r.db.Exec(
+		"UPDATE channels SET deleted_at = NOW() WHERE id IN ("+placeholders+") AND deleted_at IS NULL", args...)
+	return err
 }

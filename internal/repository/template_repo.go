@@ -3,6 +3,7 @@ package repository
 import (
 	"database/sql"
 	"errors"
+	"strings"
 
 	"notice-service/internal/model"
 )
@@ -70,4 +71,19 @@ func (r *TemplateRepo) List() ([]*model.Template, error) {
 		out = append(out, t)
 	}
 	return out, rows.Err()
+}
+
+// BatchDelete 批量软删除模板（单条 UPDATE）。
+func (r *TemplateRepo) BatchDelete(ids []int64) error {
+	if len(ids) == 0 {
+		return nil
+	}
+	placeholders := strings.TrimSuffix(strings.Repeat("?,", len(ids)), ",")
+	args := make([]interface{}, len(ids))
+	for i, id := range ids {
+		args[i] = id
+	}
+	_, err := r.db.Exec(
+		"UPDATE templates SET deleted_at = NOW() WHERE id IN ("+placeholders+") AND deleted_at IS NULL", args...)
+	return err
 }

@@ -3,6 +3,7 @@ package repository
 import (
 	"database/sql"
 	"errors"
+	"strings"
 	"time"
 
 	"notice-service/internal/model"
@@ -47,6 +48,21 @@ func varsJSON(s string) string {
 
 func (r *TaskRepo) Delete(id int64) error {
 	_, err := r.db.Exec("UPDATE tasks SET deleted_at = NOW() WHERE id=? AND deleted_at IS NULL", id)
+	return err
+}
+
+// BatchDelete 批量软删除任务（单条 UPDATE；cron 注销由 service 层负责）。
+func (r *TaskRepo) BatchDelete(ids []int64) error {
+	if len(ids) == 0 {
+		return nil
+	}
+	placeholders := strings.TrimSuffix(strings.Repeat("?,", len(ids)), ",")
+	args := make([]interface{}, len(ids))
+	for i, id := range ids {
+		args[i] = id
+	}
+	_, err := r.db.Exec(
+		"UPDATE tasks SET deleted_at = NOW() WHERE id IN ("+placeholders+") AND deleted_at IS NULL", args...)
 	return err
 }
 

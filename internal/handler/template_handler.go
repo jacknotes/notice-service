@@ -13,10 +13,11 @@ import (
 
 type TemplateHandler struct {
 	svc *service.TemplateService
+	db  *sql.DB
 }
 
 func NewTemplateHandler(db *sql.DB) *TemplateHandler {
-	return &TemplateHandler{svc: service.NewTemplateService(db)}
+	return &TemplateHandler{svc: service.NewTemplateService(db), db: db}
 }
 
 func (h *TemplateHandler) List(c *gin.Context) {
@@ -38,6 +39,7 @@ func (h *TemplateHandler) Create(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	auditf(c, h.db, "template.create", "创建模板 %q", in.Name)
 	c.JSON(http.StatusOK, in)
 }
 
@@ -52,6 +54,7 @@ func (h *TemplateHandler) Update(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	auditf(c, h.db, "template.update", "更新模板 id=%d", id)
 	c.JSON(http.StatusOK, in)
 }
 
@@ -61,6 +64,7 @@ func (h *TemplateHandler) Delete(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	auditf(c, h.db, "template.delete", "删除模板 id=%d", id)
 	c.JSON(http.StatusOK, gin.H{"ok": true})
 }
 
@@ -77,6 +81,7 @@ func (h *TemplateHandler) BatchDelete(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	auditf(c, h.db, "template.batch_delete", "批量删除模板 ids=%v", req.IDs)
 	c.JSON(http.StatusOK, gin.H{"ok": true})
 }
 

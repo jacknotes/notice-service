@@ -1,9 +1,12 @@
 package service
 
 import (
+	"crypto/rand"
 	"database/sql"
+	"encoding/hex"
 	"errors"
 	"strings"
+	"time"
 
 	"github.com/go-sql-driver/mysql"
 	"golang.org/x/crypto/bcrypt"
@@ -12,12 +15,35 @@ import (
 	"notice-service/internal/repository"
 )
 
+// resetTokenTTL 一次性重置令牌有效期。
+const resetTokenTTL = 15 * time.Minute
+
 type UserService struct {
 	users *repository.UserRepo
 }
 
 func NewUserService(db *sql.DB) *UserService {
 	return &UserService{users: repository.NewUserRepo(db)}
+}
+
+// GenerateResetToken 生成一次性重置令牌（15 分钟有效），返回给管理员线下转交用户。
+func (s *UserService) GenerateResetToken(userID int64) (string, time.Time, error) {
+	if _, err := s.users.GetByID(userID); err != nil {
+		return "", time.Time{}, err
+	}
+	token := randomToken(24)
+	expires := time.Now().Add(resetTokenTTL)
+	if err := s.users.SetResetToken(userID, token, expires); err != nil {
+		return "", time.Time{}, err
+	}
+	return token, expires, nil
+}
+
+// randomToken 生成 n 字节的十六进制随机令牌（长度 = n*2 字符）。
+func randomToken(n int) string {
+	b := make([]byte, n)
+	_, _ = rand.Read(b)
+	return hex.EncodeToString(b)
 }
 
 func (s *UserService) List() ([]*model.User, error) {
@@ -87,12 +113,7 @@ func (s *UserService) BatchDelete(operatorID int64, operatorRole string, ids []i
 			return errors.New("不能删除管理员账号")
 		}
 	}
-	for _, id := range ids {
-		if err := s.users.Delete(id); err != nil {
-			return err
-		}
-	}
-	return nil
+	return s.users.BatchDelete(ids) // 校验通过后单条 SQL 批量软删除
 }
 
 // Update 修改用户角色或重置密码。operatorRole 为操作者角色；仅 admin 可操作。
