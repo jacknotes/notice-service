@@ -186,7 +186,7 @@ func TestSendJobRecoverStale(t *testing.T) {
 	if _, err := db.Exec("UPDATE send_jobs SET claimed_at = NOW() - INTERVAL 10 MINUTE WHERE id=?", j.ID); err != nil {
 		t.Fatal(err)
 	}
-	n, err := r.RecoverStale(120 * time.Second)
+	n, err := r.RecoverStale(120*time.Second, 3)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -196,6 +196,41 @@ func TestSendJobRecoverStale(t *testing.T) {
 	got, _ := r.GetByID(j.ID)
 	if got.Status != "pending" || got.ClaimedBy != "" {
 		t.Errorf("recovered job should be pending & unclaimed, got %+v", got)
+	}
+}
+
+func TestSendJobRecoverStaleTerminatesAtMaxAttempts(t *testing.T) {
+	db := openTestDB(t)
+	r := NewSendJobRepo(db)
+	uid := seedUser(t, db)
+	chID := seedChannel(t, db, uid)
+	tplID := seedTemplate(t, db, uid)
+	tk := &model.Task{UserID: uid, Name: "t", ChannelID: chID, TemplateID: tplID, TriggerType: "api", ReceiversJSON: "[]", Enabled: true}
+	tr := NewTaskRepo(db)
+	if err := tr.Create(tk); err != nil {
+		t.Fatal(err)
+	}
+	j := &model.SendJob{TaskID: tk.ID, VarsJSON: "null", Status: "pending"}
+	if err := r.Create(j); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := r.Claim("crash-inst", 1); err != nil {
+		t.Fatal(err)
+	}
+	// 模拟崩溃循环：已到最大尝试次数且认领超时 → 应终止为 failed 而非放回 pending
+	if _, err := db.Exec("UPDATE send_jobs SET attempts=3, claimed_at = NOW() - INTERVAL 10 MINUTE WHERE id=?", j.ID); err != nil {
+		t.Fatal(err)
+	}
+	n, err := r.RecoverStale(120*time.Second, 3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n != 1 {
+		t.Errorf("terminated %d, want 1", n)
+	}
+	got, _ := r.GetByID(j.ID)
+	if got.Status != "failed" {
+		t.Errorf("crash-looped job should terminate as failed, got %q", got.Status)
 	}
 }
 

@@ -137,17 +137,26 @@ func (r *SendJobRepo) MarkFailed(id int64, errMsg string, maxAttempts int, backo
 	return err
 }
 
-// RecoverStale 把认领超时（认领实例疑似崩溃）的 job 放回 pending，供其它实例接管。
-func (r *SendJobRepo) RecoverStale(ttl time.Duration) (int64, error) {
+// RecoverStale 接管认领超时（认领实例疑似崩溃）的 job：未达最大尝试次数者放回
+// pending 供其它实例重试；已达上限者直接终止为 failed（避免崩溃循环无限重试）。
+func (r *SendJobRepo) RecoverStale(ttl time.Duration, maxAttempts int) (int64, error) {
 	res, err := r.db.Exec(
 		`UPDATE send_jobs SET status='pending', claimed_by=NULL, claimed_at=NULL
-		 WHERE status='claimed' AND claimed_at < NOW() - INTERVAL ? SECOND`,
-		int(ttl.Seconds()))
+		 WHERE status='claimed' AND claimed_at < NOW() - INTERVAL ? SECOND AND attempts < ?`,
+		int(ttl.Seconds()), maxAttempts)
 	if err != nil {
 		return 0, err
 	}
 	n, _ := res.RowsAffected()
-	return n, nil
+	res2, err := r.db.Exec(
+		`UPDATE send_jobs SET status='failed', last_error='claimed timeout, max attempts reached', claimed_by=NULL, claimed_at=NULL
+		 WHERE status='claimed' AND claimed_at < NOW() - INTERVAL ? SECOND AND attempts >= ?`,
+		int(ttl.Seconds()), maxAttempts)
+	if err != nil {
+		return n, err
+	}
+	n2, _ := res2.RowsAffected()
+	return n + n2, nil
 }
 
 // CleanupDoneOlderThan 删除超过保留天数的已完成/失败 job（幂等，多实例重复执行无害）。

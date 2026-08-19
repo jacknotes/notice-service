@@ -67,6 +67,10 @@ func queueCfg() QueueConfig {
 func newTestQueue(t *testing.T, cfg QueueConfig) (*QueueService, int64, *sinkChan) {
 	t.Helper()
 	db := testDB(t)
+	// 队列测试封闭性：从空的 send_jobs 开始，避免遗留 job 被本测试的 worker 误消费。
+	if _, err := db.Exec("DELETE FROM send_jobs"); err != nil {
+		t.Fatal(err)
+	}
 	ns := NewNotificationService(db, nil)
 	sink := &sinkChan{}
 	ns.Instancer = func(c *model.Channel) (channel.Channel, error) { return sink, nil }

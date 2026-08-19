@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"sync"
 	"time"
@@ -121,6 +122,13 @@ func (q *QueueService) workerLoop() {
 }
 
 func (q *QueueService) process(j *model.SendJob) {
+	defer func() {
+		if r := recover(); r != nil {
+			// 单次 panic 不应杀死 worker 协程：记录并按一次失败处理（计入重试上限）。
+			log.Printf("queue: panic processing job %d: %v", j.ID, r)
+			_ = q.jobRepo.MarkFailed(j.ID, fmt.Sprintf("panic: %v", r), q.cfg.MaxAttempts, q.cfg.RetryBackoff)
+		}
+	}()
 	task, err := q.taskRepo.GetByID(j.TaskID)
 	if err != nil {
 		_ = q.jobRepo.MarkDone(j.ID) // 任务已删除，无内容可发
@@ -155,7 +163,7 @@ func (q *QueueService) recoverLoop() {
 		case <-q.stopCh:
 			return
 		case <-ticker.C:
-			if _, err := q.jobRepo.RecoverStale(q.cfg.ClaimTTL); err != nil {
+			if _, err := q.jobRepo.RecoverStale(q.cfg.ClaimTTL, q.cfg.MaxAttempts); err != nil {
 				log.Printf("queue: recover stale: %v", err)
 			}
 		}

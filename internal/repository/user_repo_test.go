@@ -22,6 +22,10 @@ func openTestDB(t *testing.T) *sql.DB {
 	if err := database.Migrate(db); err != nil {
 		t.Fatalf("migrate test db: %v", err)
 	}
+	// 队列测试封闭性：每个测试从空的 send_jobs 开始，避免跨包/跨次运行的遗留 job 干扰。
+	if _, err := db.Exec("DELETE FROM send_jobs"); err != nil {
+		t.Fatalf("clean send_jobs: %v", err)
+	}
 	t.Cleanup(func() { db.Close() })
 	return db
 }

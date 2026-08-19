@@ -124,15 +124,17 @@ func TestWebhookTriggerAndIPWhitelist(t *testing.T) {
 		t.Fatal("api key empty")
 	}
 
-	// 触发：无白名单，异步入队成功 → 202（非 404/403 即 api_key 被正确识别）
+	// 触发：无白名单，异步入队成功 → 202 且返回 job_id
 	req, _ := http.NewRequest("POST", "/api/webhook/"+apiKey, bytes.NewBufferString(`{"variables":{"name":"李四"}}`))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Real-IP", "10.0.0.5")
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
-	// 只要 api_key 被正确识别（非 404/403）即可
-	if w.Code == 404 || w.Code == 403 {
-		t.Fatalf("webhook rejected unexpectedly: %d body=%s", w.Code, w.Body.String())
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("webhook should return 202, got %d body=%s", w.Code, w.Body.String())
+	}
+	if _, ok := mustJSON(t, w)["job_id"]; !ok {
+		t.Fatalf("webhook response should include job_id, got %s", w.Body.String())
 	}
 
 	// IP 白名单：更新任务允许 192.168.1.0/24
@@ -150,14 +152,14 @@ func TestWebhookTriggerAndIPWhitelist(t *testing.T) {
 	if w2.Code != 403 {
 		t.Fatalf("whitelist should reject 10.0.0.5, got %d", w2.Code)
 	}
-	// 白名单内 IP → 非 403
+	// 白名单内 IP → 202（允许并入队）
 	req3, _ := http.NewRequest("POST", "/api/webhook/"+apiKey, bytes.NewBufferString(`{"variables":{}}`))
 	req3.Header.Set("Content-Type", "application/json")
 	req3.Header.Set("X-Real-IP", "192.168.1.5")
 	w3 := httptest.NewRecorder()
 	r.ServeHTTP(w3, req3)
-	if w3.Code == 403 {
-		t.Fatalf("whitelist should allow 192.168.1.5, got 403")
+	if w3.Code != http.StatusAccepted {
+		t.Fatalf("whitelist should allow 192.168.1.5 and enqueue (202), got %d body=%s", w3.Code, w3.Body.String())
 	}
 }
 

@@ -57,7 +57,9 @@ func main() {
 
 	// 调度器：cron 到点只做快速入队（毫秒级），带 dedupe key 防极端竞态重复
 	sched := scheduler.New(func(taskID int64, dedupeKey string) {
-		_, _ = queue.Enqueue(taskID, nil, dedupeKey)
+		if _, err := queue.Enqueue(taskID, nil, dedupeKey); err != nil {
+			log.Printf("scheduler: enqueue task %d failed: %v", taskID, err)
+		}
 	}, repository.NewTaskRepo(db), cfg.InstanceID)
 	sched.Start()
 	tasks, err := repository.NewTaskRepo(db).ListEnabledCron()
