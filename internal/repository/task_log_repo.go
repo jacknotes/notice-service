@@ -73,3 +73,23 @@ func (r *TaskLogRepo) CountByRange(from, to time.Time) (total, success, failed i
 		from, to).Scan(&total, &success, &failed)
 	return
 }
+
+// CleanupOlderThan 删除超过保留天数的发送日志（幂等，多实例重复执行无害）。
+func (r *TaskLogRepo) CleanupOlderThan(days int) (int64, error) {
+	total := int64(0)
+	for {
+		res, err := r.db.Exec(
+			"DELETE FROM task_logs WHERE sent_at < NOW() - INTERVAL ? DAY LIMIT 1000", days)
+		if err != nil {
+			return total, err
+		}
+		n, err := res.RowsAffected()
+		if err != nil {
+			return total, err
+		}
+		total += n
+		if n < 1000 {
+			return total, nil
+		}
+	}
+}
