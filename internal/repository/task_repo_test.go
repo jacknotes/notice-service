@@ -29,7 +29,7 @@ func TestTaskRepoVariablesRoundtrip(t *testing.T) {
 	if got.VariablesJSON != `{"name":"任务值","env":"prod"}` {
 		t.Errorf("VariablesJSON = %q", got.VariablesJSON)
 	}
-	list, err := tr.ListByUser(uid)
+	list, err := tr.List()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -40,7 +40,7 @@ func TestTaskRepoVariablesRoundtrip(t *testing.T) {
 		}
 	}
 	if !found {
-		t.Error("ListByUser should round-trip VariablesJSON")
+		t.Error("List should round-trip VariablesJSON")
 	}
 }
 

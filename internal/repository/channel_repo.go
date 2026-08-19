@@ -51,27 +51,6 @@ func (r *ChannelRepo) GetByID(id int64) (*model.Channel, error) {
 	return c, nil
 }
 
-func (r *ChannelRepo) ListByUser(userID int64) ([]*model.Channel, error) {
-	rows, err := r.db.Query(
-		"SELECT id, user_id, type, name, config_json, enabled, created_at, updated_at FROM channels WHERE user_id=? AND deleted_at IS NULL ORDER BY id",
-		userID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	out := []*model.Channel{}
-	for rows.Next() {
-		c := &model.Channel{}
-		var cfg sql.NullString
-		if err := rows.Scan(&c.ID, &c.UserID, &c.Type, &c.Name, &cfg, &c.Enabled, &c.CreatedAt, &c.UpdatedAt); err != nil {
-			return nil, err
-		}
-		c.ConfigJSON = cfg.String
-		out = append(out, c)
-	}
-	return out, rows.Err()
-}
-
 // List 返回全部未删除渠道（所有用户共享的数据集）。
 func (r *ChannelRepo) List() ([]*model.Channel, error) {
 	rows, err := r.db.Query(

@@ -50,8 +50,8 @@ func TestSoftDelete(t *testing.T) {
 	if _, err := cr.GetByID(c.ID); err != ErrNotFound {
 		t.Fatalf("channel GetByID after soft delete: want ErrNotFound, got %v", err)
 	}
-	if list, _ := cr.ListByUser(uid); len(list) != 0 {
-		t.Fatalf("channel ListByUser should exclude soft-deleted, got %d", len(list))
+	if list, _ := cr.List(); channelCountForUser(list, uid) != 0 {
+		t.Fatalf("channel List should exclude soft-deleted, got %d", channelCountForUser(list, uid))
 	}
 	if n := countRows(t, db, "channels", c.ID); n != 1 {
 		t.Fatalf("channel row should still physically exist, count=%d", n)
@@ -68,8 +68,8 @@ func TestSoftDelete(t *testing.T) {
 	if _, err := tr.GetByID(tpl.ID); err != ErrNotFound {
 		t.Fatalf("template GetByID after soft delete: want ErrNotFound, got %v", err)
 	}
-	if list, _ := tr.ListByUser(uid); len(list) != 0 {
-		t.Fatalf("template ListByUser should exclude soft-deleted, got %d", len(list))
+	if list, _ := tr.List(); templateCountForUser(list, uid) != 0 {
+		t.Fatalf("template List should exclude soft-deleted, got %d", templateCountForUser(list, uid))
 	}
 	if n := countRows(t, db, "templates", tpl.ID); n != 1 {
 		t.Fatalf("template row should still physically exist, count=%d", n)
@@ -95,8 +95,8 @@ func TestSoftDelete(t *testing.T) {
 	if _, err := tkr.GetByAPIKey(tk.APIKey); err != ErrNotFound {
 		t.Fatalf("task GetByAPIKey after soft delete: want ErrNotFound, got %v", err)
 	}
-	if list, _ := tkr.ListByUser(uid); len(list) != 0 {
-		t.Fatalf("task ListByUser should exclude soft-deleted, got %d", len(list))
+	if list, _ := tkr.List(); taskCountForUser(list, uid) != 0 {
+		t.Fatalf("task List should exclude soft-deleted, got %d", taskCountForUser(list, uid))
 	}
 	if n := countRows(t, db, "tasks", tk.ID); n != 1 {
 		t.Fatalf("task row should still physically exist, count=%d", n)
@@ -110,6 +110,36 @@ func containsID(users []*model.User, id int64) bool {
 		}
 	}
 	return false
+}
+
+func channelCountForUser(list []*model.Channel, uid int64) int {
+	n := 0
+	for _, c := range list {
+		if c.UserID == uid {
+			n++
+		}
+	}
+	return n
+}
+
+func templateCountForUser(list []*model.Template, uid int64) int {
+	n := 0
+	for _, t := range list {
+		if t.UserID == uid {
+			n++
+		}
+	}
+	return n
+}
+
+func taskCountForUser(list []*model.Task, uid int64) int {
+	n := 0
+	for _, t := range list {
+		if t.UserID == uid {
+			n++
+		}
+	}
+	return n
 }
 
 func countRows(t *testing.T, db *sql.DB, table string, id int64) int {

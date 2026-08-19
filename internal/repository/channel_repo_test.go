@@ -22,9 +22,19 @@ func TestChannelRepoCRUD(t *testing.T) {
 	if got.Name != "我的邮箱" || got.ConfigJSON != `{"host":"x"}` {
 		t.Errorf("got %+v", got)
 	}
-	list, err := r.ListByUser(uid)
-	if err != nil || len(list) != 1 {
-		t.Fatalf("list = %d items, err=%v", len(list), err)
+	list, err := r.List()
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, x := range list {
+		if x.ID == c.ID {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("List should contain created channel %d", c.ID)
 	}
 	c.Name = "改名"
 	if err := r.Update(c); err != nil {
@@ -58,22 +68,21 @@ func TestChannelRepoIsolation(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	listA, err := r.ListByUser(uidA)
+	// 所有用户共享数据集：List 应包含两人创建的渠道
+	all, err := r.List()
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, c := range listA {
-		if c.ID == chB.ID {
-			t.Error("user A's list should not contain user B's channel")
-		}
-	}
-	listB, err := r.ListByUser(uidB)
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, c := range listB {
+	hasA, hasB := false, false
+	for _, c := range all {
 		if c.ID == chA.ID {
-			t.Error("user B's list should not contain user A's channel")
+			hasA = true
 		}
+		if c.ID == chB.ID {
+			hasB = true
+		}
+	}
+	if !hasA || !hasB {
+		t.Fatalf("List should contain both users' channels (A=%v B=%v)", hasA, hasB)
 	}
 }

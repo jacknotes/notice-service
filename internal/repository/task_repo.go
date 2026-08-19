@@ -58,10 +58,6 @@ func (r *TaskRepo) GetByAPIKey(apiKey string) (*model.Task, error) {
 	return r.scanOne("WHERE api_key = ? AND deleted_at IS NULL", apiKey)
 }
 
-func (r *TaskRepo) ListByUser(userID int64) ([]*model.Task, error) {
-	return r.scanMany("WHERE user_id = ? AND deleted_at IS NULL ORDER BY id", userID)
-}
-
 // List 返回全部未删除任务（所有用户共享的数据集）。
 func (r *TaskRepo) List() ([]*model.Task, error) {
 	return r.scanMany("WHERE deleted_at IS NULL ORDER BY id")

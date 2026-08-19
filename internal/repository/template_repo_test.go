@@ -22,9 +22,19 @@ func TestTemplateRepoCRUD(t *testing.T) {
 	if got.Name != "会议提醒" {
 		t.Errorf("got %+v", got)
 	}
-	list, err := r.ListByUser(uid)
-	if err != nil || len(list) != 1 {
-		t.Fatalf("list err=%v n=%d", err, len(list))
+	list, err := r.List()
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, x := range list {
+		if x.ID == tpl.ID {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("List should contain created template %d", tpl.ID)
 	}
 	tpl.Name = "改名"
 	if err := r.Update(tpl); err != nil {
