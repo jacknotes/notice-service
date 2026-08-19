@@ -122,8 +122,15 @@
         </el-form-item>
 
         <div class="form-row">
-          <el-form-item label="投递渠道" prop="channel_id" class="grow">
-            <el-select v-model="form.channel_id" placeholder="选择渠道" style="width: 100%">
+          <el-form-item label="投递渠道" prop="channel_ids" class="grow">
+            <el-select
+              v-model="form.channel_ids"
+              multiple
+              collapse-tags
+              collapse-tags-tooltip
+              placeholder="选择渠道（可多选，将向全部所选渠道投递）"
+              style="width: 100%"
+            >
               <el-option
                 v-for="ch in channels"
                 :key="ch.id"
@@ -259,6 +266,7 @@ interface TaskRow {
   id: number
   name: string
   channel_id: number
+  channel_ids?: number[]
   template_id: number
   trigger_type: 'cron' | 'api'
   receivers: string[]
@@ -302,7 +310,8 @@ const filteredTasks = computed<TaskRow[]>(() => {
   const kw = keyword.value.trim().toLowerCase()
   if (!kw) return tasks.value
   return tasks.value.filter((t) => {
-    const chName = channels.value.find((c) => c.id === t.channel_id)?.name || ''
+    const ids = t.channel_ids?.length ? t.channel_ids : [t.channel_id]
+    const chName = ids.map((id) => channels.value.find((c) => c.id === id)?.name || '').join(' ')
     const tplName = templates.value.find((p) => p.id === t.template_id)?.name || ''
     return (
       (t.name || '').toLowerCase().includes(kw) ||
@@ -319,7 +328,7 @@ const formRef = ref<FormInstance>()
 const form = reactive<{
   id: number
   name: string
-  channel_id: number | null
+  channel_ids: number[]
   template_id: number | null
   trigger_type: 'cron' | 'api'
   cron_expr: string
@@ -330,7 +339,7 @@ const form = reactive<{
 }>({
   id: 0,
   name: '',
-  channel_id: null,
+  channel_ids: [],
   template_id: null,
   trigger_type: 'cron',
   cron_expr: '',
@@ -342,11 +351,20 @@ const form = reactive<{
 
 const rules: FormRules = {
   name: [{ required: true, message: '请输入任务名称', trigger: 'blur' }],
-  channel_id: [{ required: true, message: '请选择投递渠道', trigger: 'change' }],
+  channel_ids: [
+    {
+      validator: (_rule: any, value: number[], cb: any) => {
+        if (!value || !value.length) cb(new Error('请至少选择一个投递渠道'))
+        else cb()
+      },
+      trigger: 'change',
+    },
+  ],
   template_id: [{ required: true, message: '请选择通知模板', trigger: 'change' }],
   trigger_type: [{ required: true, message: '请选择触发方式', trigger: 'change' }],
   cron_expr: [
     {
+      required: true,
       validator: (_rule: any, value: string, cb: any) => {
         if (form.trigger_type === 'cron' && !value.trim()) cb(new Error('请输入 Cron 表达式'))
         else cb()
@@ -356,6 +374,7 @@ const rules: FormRules = {
   ],
   receivers: [
     {
+      required: true,
       validator: (_rule: any, value: string, cb: any) => {
         if (showReceivers.value && !value.trim()) cb(new Error('请至少填写一个接收地址'))
         else cb()
@@ -378,21 +397,23 @@ const CHANNEL_TYPE_LABELS: Record<string, string> = {
   wechat: 'PushPlus',
 }
 
-const selectedChannel = computed(() =>
-  channels.value.find((c) => c.id === form.channel_id)
+const selectedChannels = computed(() =>
+  channels.value.filter((c) => form.channel_ids.includes(c.id))
 )
+const anyEmailChannel = computed(() =>
+  selectedChannels.value.some((c) => c.type === 'email')
+)
+// 仅当所选渠道均为非邮件渠道时才展示渠道提示；有邮件渠道（或未选）时展示接收地址
 const nonEmailChannel = computed(
-  () => !!selectedChannel.value && selectedChannel.value.type !== 'email'
+  () => selectedChannels.value.length > 0 && selectedChannels.value.every((c) => c.type !== 'email')
 )
-// 未选择渠道时默认展示接收地址；选定非邮件渠道时隐藏，仅展示渠道提示
 const showReceivers = computed(
-  () => !selectedChannel.value || selectedChannel.value.type === 'email'
+  () => selectedChannels.value.length === 0 || anyEmailChannel.value
 )
-const channelTypeLabel = computed(
-  () =>
-    (selectedChannel.value &&
-      (CHANNEL_TYPE_LABELS[selectedChannel.value.type] || selectedChannel.value.type)) ||
-    ''
+const channelTypeLabel = computed(() =>
+  selectedChannels.value
+    .map((c) => CHANNEL_TYPE_LABELS[c.type] || c.type)
+    .join('、')
 )
 
 const selectedTemplate = computed(() =>
@@ -474,7 +495,7 @@ async function toggleTask(row: TaskRow, enabled: boolean) {
 function openCreate() {
   form.id = 0
   form.name = ''
-  form.channel_id = null
+  form.channel_ids = []
   form.template_id = null
   form.trigger_type = 'cron'
   form.cron_expr = ''
@@ -488,7 +509,7 @@ function openCreate() {
 function openEdit(row: TaskRow) {
   form.id = row.id
   form.name = row.name
-  form.channel_id = row.channel_id
+  form.channel_ids = row.channel_ids?.length ? [...row.channel_ids] : [row.channel_id]
   form.template_id = row.template_id
   form.trigger_type = row.trigger_type
   form.cron_expr = row.cron_expr || ''
@@ -525,7 +546,7 @@ async function saveTask() {
   try {
     const payload = {
       name: form.name,
-      channel_id: form.channel_id,
+      channel_ids: form.channel_ids,
       template_id: form.template_id,
       trigger_type: form.trigger_type,
       cron_expr: form.trigger_type === 'cron' ? form.cron_expr.trim() : '',

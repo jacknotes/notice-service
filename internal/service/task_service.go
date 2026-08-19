@@ -67,6 +67,7 @@ func (s *TaskService) Create(userID int64, in *model.Task) error {
 	if in.TriggerType == "api" {
 		in.APIKey = generateAPIKey()
 	}
+	normalizeChannels(in)
 	s.toJSON(in)
 	if err := s.repo.Create(in); err != nil {
 		return err
@@ -91,6 +92,7 @@ func (s *TaskService) Update(userID, id int64, in *model.Task) error {
 	if (ex.TriggerType == "cron" || in.TriggerType == "cron") && s.sched != nil {
 		s.sched.UnregisterTask(id)
 	}
+	normalizeChannels(in)
 	s.toJSON(in)
 	if err := s.repo.Update(in); err != nil {
 		return err
@@ -151,8 +153,15 @@ func (s *TaskService) validate(t *model.Task) error {
 	if t.Name == "" {
 		return errors.New("任务名称不能为空")
 	}
-	if t.ChannelID <= 0 || t.TemplateID <= 0 {
-		return errors.New("必须指定渠道和模板")
+	ids := t.ChannelIDs
+	if len(ids) == 0 && t.ChannelID > 0 {
+		ids = []int64{t.ChannelID} // 兼容旧单渠道任务
+	}
+	if len(ids) == 0 {
+		return errors.New("必须至少选择一个投递渠道")
+	}
+	if t.TemplateID <= 0 {
+		return errors.New("必须指定通知模板")
 	}
 	if t.TriggerType != "cron" && t.TriggerType != "api" {
 		return errors.New("触发方式必须是 cron 或 api")
@@ -161,17 +170,26 @@ func (s *TaskService) validate(t *model.Task) error {
 		return errors.New("cron 任务必须填写 cron 表达式")
 	}
 	// 接收地址只对邮箱渠道有实际意义：webhook/IM 渠道发送到机器人/token 绑定的目标。
-	// 若渠道查询失败（如渠道不存在）则回退为要求接收地址（安全默认）。
-	isEmail := false
-	if ch, err := s.channelRepo.GetByID(t.ChannelID); err == nil {
-		isEmail = ch.Type == "email"
-	} else {
-		isEmail = true
-	}
-	if isEmail && len(t.Receivers) == 0 {
-		return errors.New("邮件渠道至少需要一个接收地址")
+	// 只要选中的渠道里有任一邮箱渠道、或任一渠道无法校验（安全默认），就必须填写接收地址。
+	for _, cid := range ids {
+		ch, err := s.channelRepo.GetByID(cid)
+		if err != nil || ch.Type == "email" {
+			if len(t.Receivers) == 0 {
+				return errors.New("邮件渠道至少需要一个接收地址")
+			}
+			break
+		}
 	}
 	return nil
+}
+
+// normalizeChannels 保证 channel_id（FK/兼容列）与 channel_ids 一致：channel_id = 第一个渠道。
+func normalizeChannels(t *model.Task) {
+	if len(t.ChannelIDs) > 0 {
+		t.ChannelID = t.ChannelIDs[0]
+	} else if t.ChannelID > 0 {
+		t.ChannelIDs = []int64{t.ChannelID}
+	}
 }
 
 func (s *TaskService) toJSON(t *model.Task) {
@@ -181,12 +199,18 @@ func (s *TaskService) toJSON(t *model.Task) {
 	t.AllowedIPsJSON = string(ab)
 	vb, _ := json.Marshal(t.Variables)
 	t.VariablesJSON = string(vb)
+	cb, _ := json.Marshal(t.ChannelIDs)
+	t.ChannelIDsJSON = string(cb)
 }
 
 func (s *TaskService) fill(t *model.Task) {
 	_ = json.Unmarshal([]byte(t.ReceiversJSON), &t.Receivers)
 	_ = json.Unmarshal([]byte(t.AllowedIPsJSON), &t.AllowedIPs)
 	_ = json.Unmarshal([]byte(t.VariablesJSON), &t.Variables)
+	_ = json.Unmarshal([]byte(t.ChannelIDsJSON), &t.ChannelIDs)
+	if len(t.ChannelIDs) == 0 && t.ChannelID > 0 {
+		t.ChannelIDs = []int64{t.ChannelID} // 旧数据回退
+	}
 }
 
 func generateAPIKey() string {

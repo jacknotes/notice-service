@@ -39,7 +39,7 @@
           </template>
         </el-table-column>
 
-        <el-table-column prop="username" label="用户名" min-width="180">
+        <el-table-column prop="username" label="用户名" min-width="180" show-overflow-tooltip>
           <template #default="{ row }">
             <span class="user-name">{{ row.username }}</span>
             <span v-if="row.id === auth.user?.id" class="self-tag mono">（我）</span>
@@ -117,7 +117,7 @@
             v-model="form.password"
             type="password"
             show-password
-            placeholder="至少 6 位"
+            placeholder="至少 12 位，含大小写字母、数字、特殊字符"
           />
         </el-form-item>
 
@@ -168,7 +168,7 @@
             v-model="editForm.password"
             type="password"
             show-password
-            placeholder="留空则不修改"
+            placeholder="留空则不修改；填写需至少 12 位，含大小写字母、数字、特殊字符"
           />
         </el-form-item>
       </el-form>
@@ -226,12 +226,31 @@ const form = reactive<{ username: string; password: string; role: 'admin' | 'use
   role: 'user',
 })
 
+// 密码强度：至少 12 位，且含大写、小写、数字、特殊字符（与后端一致）
+const PASSWORD_RE = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{12,}$/
+const PASSWORD_MSG = '密码至少 12 位，且需包含大小写字母、数字、特殊字符'
+
+function passwordValid(pw: string) {
+  return PASSWORD_RE.test(pw)
+}
+
+// passwordRule 生成密码校验规则；required=false 时留空视为合法（编辑场景）。
+function passwordRule(required: boolean) {
+  return [
+    ...(required ? [{ required: true, message: '请输入密码', trigger: 'blur' }] : []),
+    {
+      validator: (_rule: unknown, value: string, callback: (e?: Error) => void) => {
+        if (value && !passwordValid(value)) callback(new Error(PASSWORD_MSG))
+        else callback()
+      },
+      trigger: 'blur',
+    },
+  ]
+}
+
 const rules: FormRules = {
   username: [{ required: true, message: '请输入用户名', trigger: 'blur' }],
-  password: [
-    { required: true, message: '请输入密码', trigger: 'blur' },
-    { min: 6, message: '密码至少 6 位', trigger: 'blur' },
-  ],
+  password: passwordRule(true),
   role: [{ required: true, message: '请选择角色', trigger: 'change' }],
 }
 
@@ -248,16 +267,8 @@ const editForm = reactive<{ role: 'admin' | 'user'; password: string }>({
 
 const editRules: FormRules = {
   role: [{ required: true, message: '请选择角色', trigger: 'change' }],
-  // 密码可选：留空表示不修改；填写时至少 6 位
-  password: [
-    {
-      validator: (_rule: unknown, value: string, callback: (err?: Error) => void) => {
-        if (value && value.length < 6) callback(new Error('密码至少 6 位'))
-        else callback()
-      },
-      trigger: 'blur',
-    },
-  ],
+  // 密码可选：留空表示不修改；填写时需符合强度规则
+  password: passwordRule(false),
 }
 
 // 角色标签：admin → violet，user → blue（与 Signal Relay 色板一致）
@@ -419,6 +430,9 @@ onMounted(load)
   color: var(--text-primary);
   font-weight: 600;
   font-size: var(--text-sm);
+  line-height: 1.6;
+  display: inline-block;
+  vertical-align: middle;
 }
 .self-tag {
   margin-left: 6px;

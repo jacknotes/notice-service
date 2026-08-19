@@ -44,6 +44,33 @@
         />
       </div>
 
+      <div class="filter-item date-filter">
+        <span class="filter-label">日期</span>
+        <div class="date-quick">
+          <el-button
+            v-for="p in quickPresets"
+            :key="p.key"
+            size="small"
+            :type="quickPreset === p.key ? 'primary' : 'default'"
+            plain
+            @click="applyQuickPreset(p)"
+          >
+            {{ p.label }}
+          </el-button>
+        </div>
+        <el-date-picker
+          v-model="dateRange"
+          type="daterange"
+          range-separator="至"
+          start-placeholder="开始日期"
+          end-placeholder="结束日期"
+          value-format="YYYY-MM-DD"
+          :clearable="true"
+          style="width: 240px"
+          @change="onDateRangeChange"
+        />
+      </div>
+
       <div class="filter-meta mono">
         {{ filteredLogs.length }} 条记录
       </div>
@@ -184,6 +211,55 @@ const taskFilter = ref<number | undefined>(undefined)
 const statusFilter = ref<'success' | 'failed' | ''>('')
 const keyword = ref('')
 
+/* ── 日期范围 ──────────────────────────────────────────────────────────
+   默认展示最近一个月（不展示全部）；快捷按钮 + 自定义日期范围；
+   最大跨度 1 年。dateRange 为 ['YYYY-MM-DD', 'YYYY-MM-DD')，结束日期排他。 */
+const quickPresets = [
+  { key: 'today', label: '今天', days: 0 },
+  { key: 'week', label: '最近一周', days: 7 },
+  { key: 'month', label: '最近一个月', days: 30 },
+]
+const MAX_RANGE_DAYS = 366 // 1 年（含闰年）
+const quickPreset = ref('month')
+const dateRange = ref<[string, string] | null>(null)
+
+function fmtDate(d: Date) {
+  const p = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
+}
+
+function applyQuickPreset(p: { key: string; label: string; days: number }) {
+  quickPreset.value = p.key
+  const now = new Date()
+  const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1) // 结束排他
+  if (p.days === 0) {
+    dateRange.value = [fmtDate(now), fmtDate(todayEnd)] // 今天全天
+  } else {
+    const start = new Date(todayEnd.getTime() - p.days * 86400000)
+    dateRange.value = [fmtDate(start), fmtDate(todayEnd)]
+  }
+}
+
+// 默认最近一个月
+applyQuickPreset(quickPresets[2])
+
+function onDateRangeChange() {
+  if (!dateRange.value) {
+    // 清空 → 回退到最近一个月（不展示全部）
+    applyQuickPreset(quickPresets[2])
+    return
+  }
+  quickPreset.value = ''
+  // 跨度上限 1 年：超出则把结束日期收窄到开始日期 + 1 年
+  const [s, e] = dateRange.value
+  const spanDays = (new Date(e).getTime() - new Date(s).getTime()) / 86400000
+  if (spanDays > MAX_RANGE_DAYS) {
+    const capped = new Date(new Date(s).getTime() + MAX_RANGE_DAYS * 86400000)
+    dateRange.value = [s, fmtDate(capped)]
+    ElMessage.warning('日期范围最大跨度 1 年，已自动收窄')
+  }
+}
+
 const taskName = (id: number) => tasks.value.find((t) => t.id === id)?.name || `任务 #${id}`
 const channelName = (id: number) => channels.value.find((c) => c.id === id)?.name || `渠道 #${id}`
 
@@ -210,12 +286,21 @@ const filteredLogs = computed<LogRow[]>(() =>
         (l.error_msg || '').toLowerCase().includes(kw)
       if (!hit) return false
     }
+    if (dateRange.value) {
+      if (!l.sent_at) return false
+      const d = new Date(l.sent_at)
+      if (isNaN(d.getTime())) return false
+      const day = fmtDate(d)
+      const [s, e] = dateRange.value
+      if (day < s || day >= e) return false
+    }
     return true
   })
 )
 
 const emptyDescription = computed(() => {
-  if (taskFilter.value !== undefined || statusFilter.value || keyword.value.trim()) return '没有符合条件的日志，试试调整筛选条件'
+  if (taskFilter.value !== undefined || statusFilter.value || keyword.value.trim() || dateRange.value)
+    return '没有符合条件的日志，试试调整筛选条件'
   return '暂无发送日志，任务触发投递后这里会实时记录'
 })
 
@@ -289,6 +374,20 @@ onMounted(load)
   color: var(--text-faint);
   font-size: 11px;
   letter-spacing: 0.04em;
+}
+
+/* ── 日期筛选 ───────────────────────────────────────────────────────── */
+.date-filter {
+  flex-wrap: wrap;
+  row-gap: var(--space-2);
+}
+.date-quick {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.date-quick .el-button {
+  margin: 0;
 }
 
 .id-cell {

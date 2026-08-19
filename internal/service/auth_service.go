@@ -112,8 +112,8 @@ func (s *AuthService) Login(username, password string) (string, *model.User, err
 
 // ChangePassword 校验旧密码并更新为新密码。
 func (s *AuthService) ChangePassword(userID int64, oldPass, newPass string) error {
-	if len(newPass) < 6 {
-		return errors.New("新密码至少 6 位")
+	if err := validatePassword(newPass); err != nil {
+		return err
 	}
 	u, err := s.users.GetByID(userID)
 	if err != nil {

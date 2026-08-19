@@ -3,6 +3,7 @@ package service
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"notice-service/internal/channel"
@@ -34,21 +35,24 @@ func NewNotificationService(db *sql.DB, cipher *crypto.Cipher) *NotificationServ
 	}
 }
 
-// SendTask 渲染并发送任务（对每个接收者发送，单次尝试；重试由发送队列负责）。
+// SendTask 渲染并发送任务（对每个绑定渠道发送，单次尝试；重试由发送队列负责）。
+// 邮件渠道 → 逐个接收地址发送；IM 渠道（企微/钉钉/飞书/PushPlus）→ 发送一次到机器人/token 绑定目标。
 func (s *NotificationService) SendTask(taskID int64, vars map[string]string) error {
 	task, err := s.taskRepo.GetByID(taskID)
 	if err != nil {
 		return err
 	}
-	ch, err := s.channelRepo.GetByID(task.ChannelID)
-	if err != nil {
-		return err
+	var channelIDs []int64
+	if task.ChannelIDsJSON != "" {
+		_ = json.Unmarshal([]byte(task.ChannelIDsJSON), &channelIDs)
+	}
+	if len(channelIDs) == 0 && task.ChannelID > 0 {
+		channelIDs = []int64{task.ChannelID} // 兼容旧单渠道任务
+	}
+	if len(channelIDs) == 0 {
+		return errors.New("任务未绑定任何投递渠道")
 	}
 	tpl, err := s.templateRepo.GetByID(task.TemplateID)
-	if err != nil {
-		return err
-	}
-	inst, err := s.Instancer(ch)
 	if err != nil {
 		return err
 	}
@@ -74,20 +78,35 @@ func (s *NotificationService) SendTask(taskID int64, vars map[string]string) err
 	msg := &channel.Message{Subject: subject, Content: content}
 
 	var lastErr error
-	if len(receivers) > 0 {
-		for _, addr := range receivers {
-			if err := s.sendOnce(inst, msg, addr, task, ch); err != nil {
-				lastErr = err
-			}
+	for _, cid := range channelIDs {
+		ch, err := s.channelRepo.GetByID(cid)
+		if err != nil {
+			lastErr = err
+			continue
 		}
-		return lastErr
+		inst, err := s.Instancer(ch)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		if ch.Type == "email" {
+			if len(receivers) == 0 {
+				lastErr = fmt.Errorf("邮件渠道「%s」至少需要一个接收地址", ch.Name)
+				continue
+			}
+			for _, addr := range receivers {
+				if err := s.sendOnce(inst, msg, addr, task, ch); err != nil {
+					lastErr = err
+				}
+			}
+			continue
+		}
+		// IM 渠道：发送一次到机器人/token 绑定的目标（空地址）
+		if err := s.sendOnce(inst, msg, "", task, ch); err != nil {
+			lastErr = err
+		}
 	}
-	// 无接收地址：非邮箱渠道发送一次到机器人/token 绑定的目标（空地址）；
-	// 邮箱渠道缺少接收地址则报错。
-	if ch.Type != "email" {
-		return s.sendOnce(inst, msg, "", task, ch)
-	}
-	return fmt.Errorf("邮件渠道至少需要一个接收地址")
+	return lastErr
 }
 
 // sendOnce 单次发送并写一条日志（成功或失败各一条；重试由队列调度）。

@@ -15,7 +15,7 @@ func TestUserServiceCreate(t *testing.T) {
 	db := testDB(t)
 	svc := NewUserService(db)
 
-	u, err := svc.Create(uniqueName("usvc"), "secret1", "user")
+	u, err := svc.Create(uniqueName("usvc"), "TestPass123!", "user")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -25,19 +25,19 @@ func TestUserServiceCreate(t *testing.T) {
 	if u.Role != "user" {
 		t.Errorf("role = %q, want user", u.Role)
 	}
-	if u.PasswordHash == "" || u.PasswordHash == "secret1" {
+	if u.PasswordHash == "" || u.PasswordHash == "TestPass123!" {
 		t.Errorf("password should be bcrypt-hashed")
 	}
 	t.Cleanup(func() { db.Exec("DELETE FROM users WHERE id=?", u.ID) })
 
 	// 重复用户名 → 用户名已存在
-	_, err = svc.Create(u.Username, "secret1", "user")
+	_, err = svc.Create(u.Username, "TestPass123!", "user")
 	if err == nil || !strings.Contains(err.Error(), "用户名已存在") {
 		t.Fatalf("duplicate username should fail with 用户名已存在, got %v", err)
 	}
 
 	// 空用户名 / 空密码 / 密码过短 → 校验失败
-	if _, err := svc.Create("", "secret1", "user"); err == nil {
+	if _, err := svc.Create("", "TestPass123!", "user"); err == nil {
 		t.Fatal("empty username should fail")
 	}
 	if _, err := svc.Create(uniqueName("usvc"), "", "user"); err == nil {
@@ -48,7 +48,7 @@ func TestUserServiceCreate(t *testing.T) {
 	}
 
 	// 非法角色 → 校验失败
-	if _, err := svc.Create(uniqueName("usvc"), "secret1", "superadmin"); err == nil {
+	if _, err := svc.Create(uniqueName("usvc"), "TestPass123!", "superadmin"); err == nil {
 		t.Fatal("invalid role should fail")
 	}
 }
@@ -58,15 +58,15 @@ func TestUserServiceDelete(t *testing.T) {
 	svc := NewUserService(db)
 
 	// 准备：一个 admin 操作者、一个 admin 目标、一个普通用户
-	adminOp, err := svc.Create(uniqueName("adminop"), "secret1", "admin")
+	adminOp, err := svc.Create(uniqueName("adminop"), "TestPass123!", "admin")
 	if err != nil {
 		t.Fatal(err)
 	}
-	adminTarget, err := svc.Create(uniqueName("admintgt"), "secret1", "admin")
+	adminTarget, err := svc.Create(uniqueName("admintgt"), "TestPass123!", "admin")
 	if err != nil {
 		t.Fatal(err)
 	}
-	normal, err := svc.Create(uniqueName("normal"), "secret1", "user")
+	normal, err := svc.Create(uniqueName("normal"), "TestPass123!", "user")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -102,11 +102,11 @@ func TestUserServiceList(t *testing.T) {
 	db := testDB(t)
 	svc := NewUserService(db)
 
-	u1, err := svc.Create(uniqueName("list1"), "secret1", "user")
+	u1, err := svc.Create(uniqueName("list1"), "TestPass123!", "user")
 	if err != nil {
 		t.Fatal(err)
 	}
-	u2, err := svc.Create(uniqueName("list2"), "secret1", "admin")
+	u2, err := svc.Create(uniqueName("list2"), "TestPass123!", "admin")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -130,15 +130,15 @@ func TestUserServiceUpdate(t *testing.T) {
 	svc := NewUserService(db)
 	auth := NewAuthService(db, "secret", "admin", "admin123")
 
-	adminOp, err := svc.Create(uniqueName("updop"), "secret1", "admin")
+	adminOp, err := svc.Create(uniqueName("updop"), "TestPass123!", "admin")
 	if err != nil {
 		t.Fatal(err)
 	}
-	adminTgt, err := svc.Create(uniqueName("updtgt"), "secret1", "admin")
+	adminTgt, err := svc.Create(uniqueName("updtgt"), "TestPass123!", "admin")
 	if err != nil {
 		t.Fatal(err)
 	}
-	normal, err := svc.Create(uniqueName("updnorm"), "secret1", "user")
+	normal, err := svc.Create(uniqueName("updnorm"), "TestPass123!", "user")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -193,18 +193,18 @@ func TestUserServiceUpdate(t *testing.T) {
 	}
 
 	// 重置密码成功 → 新密码可登录、旧密码失效
-	if err := svc.Update(adminOp.ID, "admin", normal.ID, nil, strPtr("newpass456")); err != nil {
+	if err := svc.Update(adminOp.ID, "admin", normal.ID, nil, strPtr("Newpass456!x")); err != nil {
 		t.Fatalf("reset password: %v", err)
 	}
-	if _, _, err := auth.Login(normal.Username, "secret1"); err == nil {
+	if _, _, err := auth.Login(normal.Username, "TestPass123!"); err == nil {
 		t.Error("old password should no longer work")
 	}
-	if _, _, err := auth.Login(normal.Username, "newpass456"); err != nil {
+	if _, _, err := auth.Login(normal.Username, "Newpass456!x"); err != nil {
 		t.Error("new password should work")
 	}
 
 	// 密码过短 → 拒绝
-	if err := svc.Update(adminOp.ID, "admin", normal.ID, nil, strPtr("123")); err == nil || !strings.Contains(err.Error(), "密码至少 6 位") {
+	if err := svc.Update(adminOp.ID, "admin", normal.ID, nil, strPtr("123")); err == nil || !strings.Contains(err.Error(), "密码至少 12 位") {
 		t.Fatalf("short password should fail, got %v", err)
 	}
 }
@@ -213,19 +213,19 @@ func TestUserServiceBatchDelete(t *testing.T) {
 	db := testDB(t)
 	svc := NewUserService(db)
 
-	adminOp, err := svc.Create(uniqueName("bdop"), "secret1", "admin")
+	adminOp, err := svc.Create(uniqueName("bdop"), "TestPass123!", "admin")
 	if err != nil {
 		t.Fatal(err)
 	}
-	adminTgt, err := svc.Create(uniqueName("bdtgt"), "secret1", "admin")
+	adminTgt, err := svc.Create(uniqueName("bdtgt"), "TestPass123!", "admin")
 	if err != nil {
 		t.Fatal(err)
 	}
-	n1, err := svc.Create(uniqueName("bdn1"), "secret1", "user")
+	n1, err := svc.Create(uniqueName("bdn1"), "TestPass123!", "user")
 	if err != nil {
 		t.Fatal(err)
 	}
-	n2, err := svc.Create(uniqueName("bdn2"), "secret1", "user")
+	n2, err := svc.Create(uniqueName("bdn2"), "TestPass123!", "user")
 	if err != nil {
 		t.Fatal(err)
 	}

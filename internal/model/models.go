@@ -3,9 +3,9 @@ package model
 import "time"
 
 type User struct {
-	ID           int64     `json:"id"`
-	Username     string    `json:"username"`
-	PasswordHash string    `json:"-"`
+	ID           int64      `json:"id"`
+	Username     string     `json:"username"`
+	PasswordHash string     `json:"-"`
 	Role         string     `json:"role"`
 	CreatedAt    time.Time  `json:"created_at"`
 	UpdatedAt    time.Time  `json:"updated_at"`
@@ -50,6 +50,8 @@ type Task struct {
 	UserID         int64             `json:"user_id"`
 	Name           string            `json:"name"`
 	ChannelID      int64             `json:"channel_id"`
+	ChannelIDs     []int64           `json:"channel_ids,omitempty"`
+	ChannelIDsJSON string            `json:"-"`
 	TemplateID     int64             `json:"template_id"`
 	TriggerType    string            `json:"trigger_type"`
 	Receivers      []string          `json:"receivers"`

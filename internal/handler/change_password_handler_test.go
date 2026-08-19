@@ -13,8 +13,14 @@ func TestChangePasswordHandler(t *testing.T) {
 	r := testRouter(t)
 	tok := login(t, r)
 
+	// 新密码太弱（不符合强度规则）→ 400
+	wWeak := authReq(t, r, tok, "POST", "/api/auth/change-password", `{"old_password":"admin123","new_password":"short"}`)
+	if wWeak.Code != 400 {
+		t.Fatalf("weak new password should be rejected, got %d body=%s", wWeak.Code, wWeak.Body.String())
+	}
+
 	// 修改密码 → 200
-	w := authReq(t, r, tok, "POST", "/api/auth/change-password", `{"old_password":"admin123","new_password":"admin456"}`)
+	w := authReq(t, r, tok, "POST", "/api/auth/change-password", `{"old_password":"admin123","new_password":"NewAdmin456!"}`)
 	if w.Code != 200 {
 		t.Fatalf("change password = %d body=%s", w.Code, w.Body.String())
 	}
@@ -30,7 +36,7 @@ func TestChangePasswordHandler(t *testing.T) {
 
 	// 新密码登录 → 200
 	w3 := httptest.NewRecorder()
-	req3, _ := http.NewRequest("POST", "/api/auth/login", bytes.NewBufferString(`{"username":"admin","password":"admin456"}`))
+	req3, _ := http.NewRequest("POST", "/api/auth/login", bytes.NewBufferString(`{"username":"admin","password":"NewAdmin456!"}`))
 	req3.Header.Set("Content-Type", "application/json")
 	r.ServeHTTP(w3, req3)
 	if w3.Code != 200 {
@@ -43,18 +49,9 @@ func TestChangePasswordHandler(t *testing.T) {
 		t.Fatalf("no token from new-password login: %v", err)
 	}
 
-	// 改回 admin123，保持其他测试继续可用
-	w4 := authReq(t, r, resp.Token, "POST", "/api/auth/change-password", `{"old_password":"admin456","new_password":"admin123"}`)
+	// 用新 token 再改一次（合法密码）→ 200，验证登录态有效
+	w4 := authReq(t, r, resp.Token, "POST", "/api/auth/change-password", `{"old_password":"NewAdmin456!","new_password":"NewAdmin789!"}`)
 	if w4.Code != 200 {
-		t.Fatalf("restore password = %d body=%s", w4.Code, w4.Body.String())
-	}
-
-	// 改回后 admin123 可再次登录
-	w5 := httptest.NewRecorder()
-	req5, _ := http.NewRequest("POST", "/api/auth/login", bytes.NewBufferString(`{"username":"admin","password":"admin123"}`))
-	req5.Header.Set("Content-Type", "application/json")
-	r.ServeHTTP(w5, req5)
-	if w5.Code != 200 {
-		t.Fatalf("restored password login = %d, want 200", w5.Code)
+		t.Fatalf("second change password = %d body=%s", w4.Code, w4.Body.String())
 	}
 }

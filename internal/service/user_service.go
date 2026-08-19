@@ -24,14 +24,14 @@ func (s *UserService) List() ([]*model.User, error) {
 	return s.users.List()
 }
 
-// Create 创建用户：校验用户名/密码（密码至少 6 位）/角色，bcrypt 加密后入库。
+// Create 创建用户：校验用户名/密码强度/角色，bcrypt 加密后入库。
 func (s *UserService) Create(username, password, role string) (*model.User, error) {
 	username = strings.TrimSpace(username)
 	if username == "" {
 		return nil, errors.New("用户名不能为空")
 	}
-	if len(password) < 6 {
-		return nil, errors.New("密码至少 6 位")
+	if err := validatePassword(password); err != nil {
+		return nil, err
 	}
 	if role != "admin" && role != "user" {
 		return nil, errors.New("角色必须是 admin 或 user")
@@ -132,8 +132,8 @@ func (s *UserService) Update(operatorID int64, operatorRole string, targetID int
 	}
 	nextHash := target.PasswordHash
 	if newPass != nil && *newPass != "" {
-		if len(*newPass) < 6 {
-			return errors.New("密码至少 6 位")
+		if err := validatePassword(*newPass); err != nil {
+			return err
 		}
 		hash, err := bcrypt.GenerateFromPassword([]byte(*newPass), bcrypt.DefaultCost)
 		if err != nil {

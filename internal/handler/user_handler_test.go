@@ -34,7 +34,7 @@ func TestUserManagementAPI(t *testing.T) {
 	adminTok := login(t, r)
 
 	// admin 创建用户
-	w := authReq(t, r, adminTok, "POST", "/api/users", `{"username":"alice","password":"secret1","role":"user"}`)
+	w := authReq(t, r, adminTok, "POST", "/api/users", `{"username":"alice","password":"TestPass123!","role":"user"}`)
 	if w.Code != 200 {
 		t.Fatalf("admin create user = %d body=%s", w.Code, w.Body.String())
 	}
@@ -43,7 +43,7 @@ func TestUserManagementAPI(t *testing.T) {
 	t.Cleanup(func() { testDB(t).Exec("DELETE FROM users WHERE id=?", aliceID) })
 
 	// admin 创建另一个 admin
-	wa := authReq(t, r, adminTok, "POST", "/api/users", `{"username":"admin2","password":"secret1","role":"admin"}`)
+	wa := authReq(t, r, adminTok, "POST", "/api/users", `{"username":"admin2","password":"TestPass123!","role":"admin"}`)
 	if wa.Code != 200 {
 		t.Fatalf("admin create admin2 = %d body=%s", wa.Code, wa.Body.String())
 	}
@@ -65,11 +65,11 @@ func TestUserManagementAPI(t *testing.T) {
 	}
 
 	// 非 admin 用户访问用户管理 → 403
-	nonTok := loginAs(t, r, "alice", "secret1")
+	nonTok := loginAs(t, r, "alice", "TestPass123!")
 	if w3 := authReq(t, r, nonTok, "GET", "/api/users", ""); w3.Code != 403 {
 		t.Fatalf("non-admin list = %d, want 403 body=%s", w3.Code, w3.Body.String())
 	}
-	if w3b := authReq(t, r, nonTok, "POST", "/api/users", `{"username":"bob","password":"secret1","role":"user"}`); w3b.Code != 403 {
+	if w3b := authReq(t, r, nonTok, "POST", "/api/users", `{"username":"bob","password":"TestPass123!","role":"user"}`); w3b.Code != 403 {
 		t.Fatalf("non-admin create = %d, want 403", w3b.Code)
 	}
 	if w3c := authReq(t, r, nonTok, "DELETE", "/api/users/"+num(aliceID), ""); w3c.Code != 403 {
@@ -94,7 +94,7 @@ func TestUserUpdateAPI(t *testing.T) {
 	adminTok := login(t, r)
 
 	// admin 创建普通用户 alice
-	w := authReq(t, r, adminTok, "POST", "/api/users", `{"username":"alice_upd","password":"secret1","role":"user"}`)
+	w := authReq(t, r, adminTok, "POST", "/api/users", `{"username":"alice_upd","password":"TestPass123!","role":"user"}`)
 	if w.Code != 200 {
 		t.Fatalf("admin create user = %d body=%s", w.Code, w.Body.String())
 	}
@@ -103,7 +103,7 @@ func TestUserUpdateAPI(t *testing.T) {
 	t.Cleanup(func() { testDB(t).Exec("DELETE FROM users WHERE id=?", aliceID) })
 
 	// admin 创建另一个 admin
-	wa := authReq(t, r, adminTok, "POST", "/api/users", `{"username":"admin_upd","password":"secret1","role":"admin"}`)
+	wa := authReq(t, r, adminTok, "POST", "/api/users", `{"username":"admin_upd","password":"TestPass123!","role":"admin"}`)
 	if wa.Code != 200 {
 		t.Fatalf("admin create admin2 = %d body=%s", wa.Code, wa.Body.String())
 	}
@@ -112,7 +112,7 @@ func TestUserUpdateAPI(t *testing.T) {
 	t.Cleanup(func() { testDB(t).Exec("DELETE FROM users WHERE id=?", admin2ID) })
 
 	// 非 admin 访问 → 403（此时 alice 仍是普通用户）
-	nonTok := loginAs(t, r, "alice_upd", "secret1")
+	nonTok := loginAs(t, r, "alice_upd", "TestPass123!")
 	if w3 := authReq(t, r, nonTok, "PUT", "/api/users/"+num(aliceID), `{"role":"user"}`); w3.Code != 403 {
 		t.Fatalf("non-admin update = %d, want 403", w3.Code)
 	}
@@ -151,12 +151,12 @@ func TestUserUpdateAPI(t *testing.T) {
 	}
 
 	// 重置密码 → 200，新密码可登录、旧密码失效
-	wp := authReq(t, r, adminTok, "PUT", "/api/users/"+num(aliceID), `{"password":"newpass456"}`)
+	wp := authReq(t, r, adminTok, "PUT", "/api/users/"+num(aliceID), `{"password":"Newpass456!x"}`)
 	if wp.Code != 200 {
 		t.Fatalf("reset password = %d, want 200 body=%s", wp.Code, wp.Body.String())
 	}
-	_ = loginAs(t, r, "alice_upd", "newpass456") // 新密码可登录
-	oldBody, _ := json.Marshal(map[string]string{"username": "alice_upd", "password": "secret1"})
+	_ = loginAs(t, r, "alice_upd", "Newpass456!x") // 新密码可登录
+	oldBody, _ := json.Marshal(map[string]string{"username": "alice_upd", "password": "TestPass123!"})
 	wOld := httptest.NewRecorder()
 	req, _ := http.NewRequest("POST", "/api/auth/login", bytes.NewBuffer(oldBody))
 	req.Header.Set("Content-Type", "application/json")

@@ -30,13 +30,13 @@ func TestReadOnlyForRegularUsers(t *testing.T) {
 	tk := mustJSON(t, wtk)
 
 	// admin 创建普通用户
-	w := authReq(t, r, adminTok, "POST", "/api/users", `{"username":"ro_user","password":"secret1","role":"user"}`)
+	w := authReq(t, r, adminTok, "POST", "/api/users", `{"username":"ro_user","password":"TestPass123!","role":"user"}`)
 	if w.Code != 200 {
 		t.Fatalf("create user = %d body=%s", w.Code, w.Body.String())
 	}
 	uid := int64(mustJSON(t, w)["id"].(float64))
 	t.Cleanup(func() { testDB(t).Exec("DELETE FROM users WHERE id=?", uid) })
-	nonTok := loginAs(t, r, "ro_user", "secret1")
+	nonTok := loginAs(t, r, "ro_user", "TestPass123!")
 
 	// 读：普通用户可见全部共享数据
 	contains := func(path string, wantID int64) bool {
@@ -86,7 +86,7 @@ func TestReadOnlyForRegularUsers(t *testing.T) {
 		{"DELETE", "/api/tasks/" + taskID, ""},
 		{"POST", "/api/tasks/" + taskID + "/toggle", `{"enabled":false}`},
 		{"GET", "/api/users", ""},
-		{"POST", "/api/users", `{"username":"x","password":"secret1","role":"user"}`},
+		{"POST", "/api/users", `{"username":"x","password":"TestPass123!","role":"user"}`},
 		{"PUT", "/api/users/" + taskID, `{"role":"user"}`},
 		{"DELETE", "/api/users/" + taskID, ""},
 	}

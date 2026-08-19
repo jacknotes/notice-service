@@ -30,7 +30,7 @@ func TestChangePassword(t *testing.T) {
 	}
 
 	// 旧密码错误 → 拒绝
-	if err := svc.ChangePassword(u.ID, "wrongpass", "newpass123"); err == nil {
+	if err := svc.ChangePassword(u.ID, "wrongpass", "Newpass123!a"); err == nil {
 		t.Error("wrong old password should fail")
 	}
 	// 新密码太短 → 拒绝
@@ -38,13 +38,13 @@ func TestChangePassword(t *testing.T) {
 		t.Error("short new password should fail")
 	}
 	// 正确 → 成功，且旧密码失效、新密码可登录
-	if err := svc.ChangePassword(u.ID, "oldpass123", "newpass123"); err != nil {
+	if err := svc.ChangePassword(u.ID, "oldpass123", "Newpass123!a"); err != nil {
 		t.Fatal(err)
 	}
 	if _, _, err := svc.Login(u.Username, "oldpass123"); err == nil {
 		t.Error("old password should no longer work")
 	}
-	if _, _, err := svc.Login(u.Username, "newpass123"); err != nil {
+	if _, _, err := svc.Login(u.Username, "Newpass123!a"); err != nil {
 		t.Error("new password should work")
 	}
 }

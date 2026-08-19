@@ -10,14 +10,14 @@ import (
 func TestBatchDeleteRequiresAdmin(t *testing.T) {
 	r := testRouter(t)
 	adminTok := login(t, r)
-	w := authReq(t, r, adminTok, "POST", "/api/users", `{"username":"bd_norm","password":"secret1","role":"user"}`)
+	w := authReq(t, r, adminTok, "POST", "/api/users", `{"username":"bd_norm","password":"TestPass123!","role":"user"}`)
 	if w.Code != 200 {
 		t.Fatalf("create user = %d body=%s", w.Code, w.Body.String())
 	}
 	uid := int64(mustJSON(t, w)["id"].(float64))
 	t.Cleanup(func() { testDB(t).Exec("DELETE FROM users WHERE id=?", uid) })
 
-	nonTok := loginAs(t, r, "bd_norm", "secret1")
+	nonTok := loginAs(t, r, "bd_norm", "TestPass123!")
 	for _, path := range []string{
 		"/api/channels/batch-delete",
 		"/api/templates/batch-delete",
@@ -140,7 +140,7 @@ func TestBatchDeleteUsers(t *testing.T) {
 	// admin 创建三个普通用户
 	var ids []int64
 	for _, name := range []string{"bd_alice", "bd_bob", "bd_carol"} {
-		w := authReq(t, r, adminTok, "POST", "/api/users", `{"username":"`+name+`","password":"secret1","role":"user"}`)
+		w := authReq(t, r, adminTok, "POST", "/api/users", `{"username":"`+name+`","password":"TestPass123!","role":"user"}`)
 		if w.Code != 200 {
 			t.Fatalf("create user %s = %d body=%s", name, w.Code, w.Body.String())
 		}
@@ -154,7 +154,7 @@ func TestBatchDeleteUsers(t *testing.T) {
 	})
 
 	// admin 创建另一个管理员
-	wa := authReq(t, r, adminTok, "POST", "/api/users", `{"username":"bd_admin2","password":"secret1","role":"admin"}`)
+	wa := authReq(t, r, adminTok, "POST", "/api/users", `{"username":"bd_admin2","password":"TestPass123!","role":"admin"}`)
 	if wa.Code != 200 {
 		t.Fatalf("create admin2 = %d body=%s", wa.Code, wa.Body.String())
 	}
@@ -162,7 +162,7 @@ func TestBatchDeleteUsers(t *testing.T) {
 	t.Cleanup(func() { testDB(t).Exec("DELETE FROM users WHERE id=?", admin2ID) })
 
 	// 非 admin 访问批量删除用户 → 403
-	nonTok := loginAs(t, r, "bd_alice", "secret1")
+	nonTok := loginAs(t, r, "bd_alice", "TestPass123!")
 	if w3 := authReq(t, r, nonTok, "POST", "/api/users/batch-delete", `{"ids":[1]}`); w3.Code != 403 {
 		t.Fatalf("non-admin batch delete users = %d, want 403 body=%s", w3.Code, w3.Body.String())
 	}

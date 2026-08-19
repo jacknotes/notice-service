@@ -2,7 +2,10 @@ package service
 
 import (
 	"errors"
+	"fmt"
+	"sync"
 	"testing"
+	"time"
 
 	"notice-service/internal/channel"
 	"notice-service/internal/crypto"
@@ -156,5 +159,55 @@ func TestNotificationServiceDefaultInstancerWithCipher(t *testing.T) {
 	// default Instancer path: decrypt config + return the registered fake channel
 	if err := ns.SendTask(tkID, map[string]string{}); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// fanOutChan 记录收到消息的渠道 id，用于断言多渠道扇出。
+type fanOutChan struct {
+	id  int64
+	log func(int64)
+}
+
+func (f *fanOutChan) Type() string                           { return "wechat" }
+func (f *fanOutChan) ValidateConfig(map[string]string) error { return nil }
+func (f *fanOutChan) TestConnection(map[string]string) error { return nil }
+func (f *fanOutChan) Send(m *channel.Message, r *channel.Receiver) error {
+	f.log(f.id)
+	return nil
+}
+
+func TestNotificationServiceMultiChannelFanOut(t *testing.T) {
+	db := testDB(t)
+	ns := NewNotificationService(db, nil)
+	uid := seedServiceUser(t, db)
+	chA := seedServiceChannelType(t, db, uid, "wechat")
+	chB := seedServiceChannelType(t, db, uid, "wecom")
+	tplID := seedServiceTemplate(t, db, uid)
+
+	var mu sync.Mutex
+	sent := []int64{}
+	ns.Instancer = func(c *model.Channel) (channel.Channel, error) {
+		return &fanOutChan{id: c.ID, log: func(id int64) {
+			mu.Lock()
+			sent = append(sent, id)
+			mu.Unlock()
+		}}, nil
+	}
+
+	// 直接插入一个绑定两个渠道的任务（channel_ids JSON）
+	res, err := db.Exec(
+		"INSERT INTO tasks (user_id, name, channel_id, channel_ids, template_id, trigger_type, receivers, variables, api_key, enabled) VALUES (?, 'multi', ?, ?, ?, 'api', '[]', 'null', ?, 1)",
+		uid, chA, fmt.Sprintf("[%d,%d]", chA, chB), tplID, fmt.Sprintf("key-%d", time.Now().UnixNano()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	tkID, _ := res.LastInsertId()
+	t.Cleanup(func() { db.Exec("DELETE FROM tasks WHERE id=?", tkID) })
+
+	if err := ns.SendTask(tkID, map[string]string{}); err != nil {
+		t.Fatal(err)
+	}
+	if len(sent) != 2 {
+		t.Fatalf("expected both channels to receive the message, got %v", sent)
 	}
 }

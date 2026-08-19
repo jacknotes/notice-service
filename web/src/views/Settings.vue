@@ -64,7 +64,7 @@
           <el-input
             v-model="pwdForm.newPassword"
             type="password"
-            placeholder="至少 6 位"
+            placeholder="至少 12 位，含大小写字母、数字、特殊字符"
             :prefix-icon="Key"
             show-password
             autocomplete="new-password"
@@ -113,11 +113,21 @@ const pwdFormRef = ref<FormInstance>()
 const pwdLoading = ref(false)
 const pwdForm = reactive({ oldPassword: '', newPassword: '', confirmPassword: '' })
 
+// 密码强度：至少 12 位，且含大写、小写、数字、特殊字符（与后端一致）
+const PASSWORD_RE = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{12,}$/
+
 const pwdRules: FormRules = {
   oldPassword: [{ required: true, message: '请输入原密码', trigger: 'blur' }],
   newPassword: [
     { required: true, message: '请输入新密码', trigger: 'blur' },
-    { min: 6, message: '新密码至少 6 位', trigger: 'blur' },
+    {
+      validator: (_rule, value, callback) => {
+        if (value && !PASSWORD_RE.test(value))
+          callback(new Error('密码至少 12 位，且需包含大小写字母、数字、特殊字符'))
+        else callback()
+      },
+      trigger: 'blur',
+    },
   ],
   confirmPassword: [
     { required: true, message: '请再次输入新密码', trigger: 'blur' },

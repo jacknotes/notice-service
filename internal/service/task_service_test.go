@@ -164,3 +164,45 @@ func TestTaskValidateReceiversOnlyRequiredForEmail(t *testing.T) {
 		t.Fatal("unknown channel should fall back to requiring receivers")
 	}
 }
+
+func TestTaskServiceMultiChannelRoundtrip(t *testing.T) {
+	db := testDB(t)
+	svc := NewTaskService(db, &fakeScheduler{})
+	uid := seedServiceUser(t, db)
+	chA := seedServiceChannel(t, db, uid)
+	chB := seedServiceChannel(t, db, uid)
+	tplID := seedServiceTemplate(t, db, uid)
+
+	tk := &model.Task{
+		Name: "multi", ChannelIDs: []int64{chA, chB}, TemplateID: tplID,
+		TriggerType: "api", Receivers: []string{"a@x.com"}, Enabled: true,
+	}
+	if err := svc.Create(uid, tk); err != nil {
+		t.Fatal(err)
+	}
+	// channel_id 应归一为第一个渠道（FK/兼容列）
+	if tk.ChannelID != chA {
+		t.Errorf("channel_id = %d, want first channel %d", tk.ChannelID, chA)
+	}
+	got, err := svc.Get(uid, tk.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.ChannelIDs) != 2 || got.ChannelIDs[0] != chA || got.ChannelIDs[1] != chB {
+		t.Errorf("channel_ids roundtrip = %v, want [%d %d]", got.ChannelIDs, chA, chB)
+	}
+
+	// 无任何渠道 → 拒绝
+	if err := svc.Create(uid, &model.Task{
+		Name: "x", TemplateID: tplID, TriggerType: "api", Receivers: []string{"a@x.com"},
+	}); err == nil {
+		t.Error("task without any channel should fail validation")
+	}
+	// 多渠道含 email 但无接收地址 → 拒绝
+	emailID := seedServiceChannelType(t, db, uid, "email")
+	if err := svc.Create(uid, &model.Task{
+		Name: "y", ChannelIDs: []int64{emailID, chB}, TemplateID: tplID, TriggerType: "api",
+	}); err == nil {
+		t.Error("multi-channel with email but no receivers should fail")
+	}
+}
