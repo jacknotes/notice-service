@@ -124,7 +124,7 @@ func TestWebhookTriggerAndIPWhitelist(t *testing.T) {
 		t.Fatal("api key empty")
 	}
 
-	// 触发：无白名单，fake-ok 渠道发送成功 → 200，校验 api_key 被正确识别
+	// 触发：无白名单，异步入队成功 → 202（非 404/403 即 api_key 被正确识别）
 	req, _ := http.NewRequest("POST", "/api/webhook/"+apiKey, bytes.NewBufferString(`{"variables":{"name":"李四"}}`))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Real-IP", "10.0.0.5")

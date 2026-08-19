@@ -12,14 +12,14 @@ import (
 	"notice-service/internal/service"
 )
 
-func NewRouter(db *sql.DB, authSvc *service.AuthService, cipher *crypto.Cipher, sched *scheduler.Scheduler) *gin.Engine {
+func NewRouter(db *sql.DB, authSvc *service.AuthService, cipher *crypto.Cipher, sched *scheduler.Scheduler, queue *service.QueueService) *gin.Engine {
 	r := gin.Default()
 
 	authH := handler.NewAuthHandler(authSvc)
 	channelH := handler.NewChannelHandler(db, cipher)
 	templateH := handler.NewTemplateHandler(db)
 	taskH := handler.NewTaskHandler(db, sched)
-	webhookH := handler.NewWebhookHandler(db, cipher)
+	webhookH := handler.NewWebhookHandler(db, queue)
 	dashH := handler.NewDashboardHandler(db)
 	userH := handler.NewUserHandler(db)
 
