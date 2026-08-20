@@ -34,6 +34,14 @@ import (
 func main() {
 	cfg := config.Load()
 
+	// Gin 模式：GIN_MODE 环境变量优先（debug/release/test），默认 release。
+	// 必须在创建 engine（router.NewRouter）之前设置，否则启动横幅/请求日志按错误模式输出。
+	mode := os.Getenv("GIN_MODE")
+	if mode == "" {
+		mode = gin.ReleaseMode
+	}
+	gin.SetMode(mode)
+
 	// reset-password 子命令：唯一 admin 忘记密码时离线重置，不启动 HTTP 服务。
 	if len(os.Args) > 1 && os.Args[1] == "reset-password" {
 		os.Exit(runResetPasswordCmd(cfg))
@@ -109,7 +117,6 @@ func main() {
 		}
 		c.JSON(404, gin.H{"error": "not found"})
 	})
-	gin.SetMode(gin.ReleaseMode)
 
 	log.Printf("notice-service listening on :%s (instance %s)", cfg.Port, cfg.InstanceID)
 	if err := engine.Run(":" + cfg.Port); err != nil {
