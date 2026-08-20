@@ -27,12 +27,6 @@
           <span class="mono desc-value">#{{ auth.user?.id ?? '—' }}</span>
         </el-descriptions-item>
       </el-descriptions>
-
-      <div class="actions-line">
-        <el-button type="danger" plain :icon="SwitchButton" @click="onLogout">
-          退出登录
-        </el-button>
-      </div>
     </div>
 
     <div class="card settings-card password-card">
@@ -96,9 +90,9 @@
 <script setup lang="ts">
 import { computed, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
-import { EditPen, Key, Lock, SwitchButton } from '@element-plus/icons-vue'
+import { EditPen, Key, Lock } from '@element-plus/icons-vue'
 import { authApi } from '@/api'
 import { useAuthStore } from '@/stores/auth'
 
@@ -157,20 +151,6 @@ async function onChangePassword() {
   } finally {
     pwdLoading.value = false
   }
-}
-
-async function onLogout() {
-  try {
-    await ElMessageBox.confirm('确认退出当前会话？', '退出登录', {
-      confirmButtonText: '退出',
-      cancelButtonText: '取消',
-      type: 'warning',
-    })
-  } catch {
-    return
-  }
-  auth.logout()
-  router.push('/login')
 }
 </script>
 
