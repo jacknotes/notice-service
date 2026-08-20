@@ -79,6 +79,25 @@ docker compose up -d
 | `LOG_RETENTION_DAYS` | 90 | 发送日志保留天数 |
 | `QUEUE_JOB_RETENTION_DAYS` | 30 | 已完成 job 保留天数 |
 
+## 密码重置
+
+忘记密码时按场景选择：
+
+1. **多管理员 / 普通用户**：任一管理员登录后，在「用户管理」对该用户点「重置密码」，生成一次性令牌（15 分钟有效、用完即焚），线下转交；该用户到登录页点「忘记密码」，输入用户名 + 令牌 + 新密码即可自助重置。
+
+2. **唯一 admin 忘记密码（离线重置）**：在服务器上运行（不启动服务，不影响运行中的实例）：
+
+   ```bash
+   # 需能连上数据库；密码至少 12 位，含大小写字母、数字、特殊字符
+   ./notice-service reset-password --username admin --new-password 'NewPass1234!'
+   ```
+
+   - 不带 `--new-password` 时进入交互式输入，密码不回显、不落 shell 历史，更安全。
+   - `--username` 默认取 `ADMIN_USER`（默认 `admin`）；也支持重置任意普通用户。
+   - 使用 `Docker` 部署时：`docker compose exec <service> ./notice-service reset-password --username admin`（交互输入）。
+
+3. **日常改密**：登录后在「个人设置 → 修改密码」（需原密码）。
+
 ## API 概览
 
 ```
