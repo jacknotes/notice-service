@@ -89,6 +89,7 @@ type TaskLog struct {
 type SendJob struct {
 	ID          int64      `json:"id"`
 	TaskID      int64      `json:"task_id"`
+	LogID       int64      `json:"-"`
 	VarsJSON    string     `json:"-"`
 	Status      string     `json:"status"`
 	ClaimedBy   string     `json:"-"`

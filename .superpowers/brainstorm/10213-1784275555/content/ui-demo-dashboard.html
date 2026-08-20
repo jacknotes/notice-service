@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Notice Service - UI Demo</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', sans-serif; background: #0f172a; color: #e2e8f0; display: flex; min-height: 100vh; }
+
+  /* Sidebar */
+  .sidebar { width: 240px; background: #1e293b; border-right: 1px solid #334155; display: flex; flex-direction: column; flex-shrink: 0; }
+  .logo { padding: 20px 24px; border-bottom: 1px solid #334155; display: flex; align-items: center; gap: 10px; }
+  .logo-icon { width: 32px; height: 32px; background: linear-gradient(135deg, #6366f1, #8b5cf6); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 16px; }
+  .logo-text { font-size: 16px; font-weight: 700; color: #f1f5f9; }
+  .nav { padding: 12px; flex: 1; }
+  .nav-section { font-size: 11px; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; padding: 16px 12px 8px; font-weight: 600; }
+  .nav-item { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 8px; cursor: pointer; color: #94a3b8; font-size: 14px; transition: all 0.15s; margin-bottom: 2px; }
+  .nav-item:hover { background: #334155; color: #e2e8f0; }
+  .nav-item.active { background: linear-gradient(135deg, rgba(99,102,241,0.15), rgba(139,92,246,0.1)); color: #a78bfa; border: 1px solid rgba(99,102,241,0.2); }
+  .nav-item .icon { width: 20px; text-align: center; font-size: 16px; }
+  .sidebar-footer { padding: 16px; border-top: 1px solid #334155; }
+  .user-info { display: flex; align-items: center; gap: 10px; padding: 8px; border-radius: 8px; }
+  .avatar { width: 32px; height: 32px; background: linear-gradient(135deg, #3b82f6, #06b6d4); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600; }
+  .user-name { font-size: 13px; color: #e2e8f0; }
+  .user-role { font-size: 11px; color: #64748b; }
+
+  /* Main */
+  .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+  .topbar { height: 56px; background: #1e293b; border-bottom: 1px solid #334155; display: flex; align-items: center; justify-content: space-between; padding: 0 24px; }
+  .topbar-title { font-size: 18px; font-weight: 600; color: #f1f5f9; }
+  .topbar-actions { display: flex; gap: 12px; align-items: center; }
+  .btn { padding: 7px 16px; border-radius: 8px; font-size: 13px; cursor: pointer; border: none; font-weight: 500; transition: all 0.15s; }
+  .btn-primary { background: linear-gradient(135deg, #6366f1, #8b5cf6); color: white; }
+  .btn-primary:hover { box-shadow: 0 0 20px rgba(99,102,241,0.3); }
+  .btn-ghost { background: transparent; color: #94a3b8; border: 1px solid #334155; }
+
+  .content { flex: 1; padding: 24px; overflow-y: auto; }
+
+  /* Stats Cards */
+  .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
+  .stat-card { background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 20px; }
+  .stat-card:hover { border-color: #4c1d95; transform: translateY(-1px); transition: all 0.2s; }
+  .stat-label { font-size: 13px; color: #64748b; margin-bottom: 8px; }
+  .stat-value { font-size: 28px; font-weight: 700; }
+  .stat-change { font-size: 12px; margin-top: 4px; }
+  .stat-change.up { color: #4ade80; }
+  .stat-change.down { color: #f87171; }
+  .stat-icon { float: right; width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 18px; }
+
+  /* Recent Table */
+  .panel { background: #1e293b; border: 1px solid #334155; border-radius: 12px; margin-bottom: 24px; }
+  .panel-header { padding: 16px 20px; border-bottom: 1px solid #334155; display: flex; justify-content: space-between; align-items: center; }
+  .panel-title { font-size: 15px; font-weight: 600; color: #f1f5f9; }
+  .panel-body { padding: 0; }
+  table { width: 100%; border-collapse: collapse; }
+  th { text-align: left; padding: 12px 20px; font-size: 12px; color: #64748b; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid #334155; }
+  td { padding: 12px 20px; font-size: 13px; color: #cbd5e1; border-bottom: 1px solid #1e293b; }
+  tr:hover td { background: rgba(99,102,241,0.04); }
+  .badge { padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; }
+  .badge-success { background: rgba(74,222,128,0.12); color: #4ade80; }
+  .badge-error { background: rgba(248,113,113,0.12); color: #f87171; }
+  .badge-pending { background: rgba(251,191,36,0.12); color: #fbbf24; }
+  .badge-channel { padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 500; }
+  .channel-email { background: rgba(56,189,248,0.12); color: #38bdf8; }
+  .channel-wecom { background: rgba(74,222,128,0.12); color: #4ade80; }
+  .channel-dingtalk { background: rgba(56,189,248,0.12); color: #38bdf8; }
+  .channel-feishu { background: rgba(167,139,250,0.12); color: #a78bfa; }
+
+  /* Chart placeholder */
+  .chart-area { background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 20px; }
+  .chart-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+  .chart-title { font-size: 15px; font-weight: 600; color: #f1f5f9; }
+  .chart-tabs { display: flex; gap: 4px; }
+  .chart-tab { padding: 5px 12px; border-radius: 6px; font-size: 12px; cursor: pointer; color: #64748b; }
+  .chart-tab.active { background: rgba(99,102,241,0.15); color: #a78bfa; }
+  .chart-bars { display: flex; align-items: flex-end; gap: 8px; height: 160px; padding-top: 20px; }
+  .chart-bar-group { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+  .chart-bar { width: 100%; border-radius: 4px 4px 0 0; transition: height 0.3s; }
+  .chart-bar-label { font-size: 11px; color: #64748b; margin-top: 6px; }
+
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+</style>
+</head>
+<body>
+
+<!-- Sidebar -->
+<div class="sidebar">
+  <div class="logo">
+    <div class="logo-icon">🔔</div>
+    <div class="logo-text">Notice Service</div>
+  </div>
+  <div class="nav">
+    <div class="nav-section">概览</div>
+    <div class="nav-item active"><span class="icon">📊</span> 仪表盘</div>
+    <div class="nav-section">管理</div>
+    <div class="nav-item"><span class="icon">📡</span> 渠道管理</div>
+    <div class="nav-item"><span class="icon">📝</span> 通知模板</div>
+    <div class="nav-item"><span class="icon">⏰</span> 通知任务</div>
+    <div class="nav-section">日志</div>
+    <div class="nav-item"><span class="icon">📋</span> 发送日志</div>
+    <div class="nav-section">系统</div>
+    <div class="nav-item"><span class="icon">⚙️</span> 系统设置</div>
+  </div>
+  <div class="sidebar-footer">
+    <div class="user-info">
+      <div class="avatar">J</div>
+      <div>
+        <div class="user-name">Jack</div>
+        <div class="user-role">管理员</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Main -->
+<div class="main">
+  <div class="topbar">
+    <div class="topbar-title">仪表盘</div>
+    <div class="topbar-actions">
+      <button class="btn btn-ghost">深色主题</button>
+      <button class="btn btn-primary">+ 新建任务</button>
+    </div>
+  </div>
+  <div class="content">
+
+    <!-- Stats -->
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-icon" style="background:rgba(99,102,241,0.12);color:#818cf8;">📨</div>
+        <div class="stat-label">今日发送</div>
+        <div class="stat-value" style="color:#f1f5f9;">1,286</div>
+        <div class="stat-change up">↑ 12.5% 较昨日</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon" style="background:rgba(74,222,128,0.12);color:#4ade80;">✅</div>
+        <div class="stat-label">发送成功率</div>
+        <div class="stat-value" style="color:#4ade80;">99.2%</div>
+        <div class="stat-change up">↑ 0.3% 较昨日</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon" style="background:rgba(56,189,248,0.12);color:#38bdf8;">📡</div>
+        <div class="stat-label">活跃渠道</div>
+        <div class="stat-value" style="color:#38bdf8;">5</div>
+        <div class="stat-change" style="color:#64748b;">全部在线</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon" style="background:rgba(251,191,36,0.12);color:#fbbf24;">⏰</div>
+        <div class="stat-label">活跃任务</div>
+        <div class="stat-value" style="color:#fbbf24;">12</div>
+        <div class="stat-change" style="color:#64748b;">2 个待启用</div>
+      </div>
+    </div>
+
+    <div class="grid-2">
+      <!-- Chart -->
+      <div class="chart-area">
+        <div class="chart-header">
+          <div class="chart-title">发送趋势</div>
+          <div class="chart-tabs">
+            <div class="chart-tab active">7天</div>
+            <div class="chart-tab">30天</div>
+          </div>
+        </div>
+        <div class="chart-bars">
+          <div class="chart-bar-group">
+            <div class="chart-bar" style="height:65%;background:linear-gradient(180deg,#6366f1,#4338ca);width:70%;margin:0 auto;"></div>
+            <div class="chart-bar-label">7/11</div>
+          </div>
+          <div class="chart-bar-group">
+            <div class="chart-bar" style="height:80%;background:linear-gradient(180deg,#6366f1,#4338ca);width:70%;margin:0 auto;"></div>
+            <div class="chart-bar-label">7/12</div>
+          </div>
+          <div class="chart-bar-group">
+            <div class="chart-bar" style="height:55%;background:linear-gradient(180deg,#6366f1,#4338ca);width:70%;margin:0 auto;"></div>
+            <div class="chart-bar-label">7/13</div>
+          </div>
+          <div class="chart-bar-group">
+            <div class="chart-bar" style="height:90%;background:linear-gradient(180deg,#6366f1,#4338ca);width:70%;margin:0 auto;"></div>
+            <div class="chart-bar-label">7/14</div>
+          </div>
+          <div class="chart-bar-group">
+            <div class="chart-bar" style="height:70%;background:linear-gradient(180deg,#6366f1,#4338ca);width:70%;margin:0 auto;"></div>
+            <div class="chart-bar-label">7/15</div>
+          </div>
+          <div class="chart-bar-group">
+            <div class="chart-bar" style="height:85%;background:linear-gradient(180deg,#6366f1,#4338ca);width:70%;margin:0 auto;"></div>
+            <div class="chart-bar-label">7/16</div>
+          </div>
+          <div class="chart-bar-group">
+            <div class="chart-bar" style="height:100%;background:linear-gradient(180deg,#8b5cf6,#6366f1);width:70%;margin:0 auto;"></div>
+            <div class="chart-bar-label">7/17</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Channel Status -->
+      <div class="panel">
+        <div class="panel-header">
+          <div class="panel-title">渠道状态</div>
+        </div>
+        <div class="panel-body">
+          <table>
+            <thead><tr><th>渠道</th><th>状态</th><th>今日发送</th><th>成功率</th></tr></thead>
+            <tbody>
+              <tr><td>📧 公司邮箱</td><td><span class="badge badge-success">在线</span></td><td>456</td><td>99.8%</td></tr>
+              <tr><td>💬 企业微信</td><td><span class="badge badge-success">在线</span></td><td>328</td><td>99.1%</td></tr>
+              <tr><td>📌 钉钉</td><td><span class="badge badge-success">在线</span></td><td>267</td><td>98.9%</td></tr>
+              <tr><td>🪶 飞书</td><td><span class="badge badge-success">在线</span></td><td>189</td><td>99.5%</td></tr>
+              <tr><td>📱 个人微信</td><td><span class="badge badge-success">在线</span></td><td>46</td><td>97.8%</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Recent Logs -->
+    <div class="panel">
+      <div class="panel-header">
+        <div class="panel-title">最近发送记录</div>
+        <button class="btn btn-ghost">查看全部</button>
+      </div>
+      <div class="panel-body">
+        <table>
+          <thead><tr><th>任务名称</th><th>渠道</th><th>接收人</th><th>状态</th><th>时间</th></tr></thead>
+          <tbody>
+            <tr><td>每日站会提醒</td><td><span class="badge-channel channel-wecom">企业微信</span></td><td>研发组全员</td><td><span class="badge badge-success">成功</span></td><td>2 分钟前</td></tr>
+            <tr><td>周报提交提醒</td><td><span class="badge-channel channel-email">邮箱</span></td><td>全部门</td><td><span class="badge badge-success">成功</span></td><td>15 分钟前</td></tr>
+            <tr><td>值班交接通知</td><td><span class="badge-channel channel-dingtalk">钉钉</span></td><td>运维组</td><td><span class="badge badge-success">成功</span></td><td>1 小时前</td></tr>
+            <tr><td>审批待办提醒</td><td><span class="badge-channel channel-feishu">飞书</span></td><td>张三</td><td><span class="badge badge-error">失败</span></td><td>2 小时前</td></tr>
+            <tr><td>服务器监控告警</td><td><span class="badge-channel channel-wecom">企业微信</span></td><td>运维组</td><td><span class="badge badge-success">成功</span></td><td>3 小时前</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+</body>
+</html>

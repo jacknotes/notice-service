@@ -194,6 +194,28 @@ func (h *TaskHandler) SendNow(c *gin.Context) {
 	c.JSON(http.StatusAccepted, gin.H{"ok": true, "job_id": jobID})
 }
 
+// RetryLog 重试一条失败日志（定向重发该条；仅 admin）。
+// @Summary 重试失败日志（定向重发该条）
+// @Tags 任务
+// @Security BearerAuth
+// @Param id path int true "日志 ID"
+// @Success 202 {object} map[string]interface{}
+// @Router /api/logs/{id}/retry [post]
+func (h *TaskHandler) RetryLog(c *gin.Context) {
+	id, _ := strconv.ParseInt(c.Param("id"), 10, 64)
+	if id <= 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "参数错误"})
+		return
+	}
+	jobID, err := h.queue.EnqueueLogRetry(id)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	auditf(c, h.db, "log.retry", "重试日志 id=%d job=%d", id, jobID)
+	c.JSON(http.StatusAccepted, gin.H{"ok": true, "job_id": jobID})
+}
+
 // LogsAll 分页/筛选查询全部发送日志（筛选条件后端下推 DB）。
 // LogsAll 发送日志（分页/筛选）
 // @Summary 分页查询全部发送日志

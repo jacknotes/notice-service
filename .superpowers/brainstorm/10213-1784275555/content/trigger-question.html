@@ -1,0 +1,26 @@
+<h2>通知的触发方式是怎样的？</h2>
+<p class="subtitle">这决定了系统的定时机制设计</p>
+
+<div class="options">
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>定时提醒为主</h3>
+      <p>设置一个时间点（如每天9点、每周一），系统自动发送通知。类似闹钟/日程提醒</p>
+    </div>
+  </div>
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Cron表达式灵活调度</h3>
+      <p>支持复杂的时间规则，如"每隔30分钟"、"工作日的10点和16点"等</p>
+    </div>
+  </div>
+  <div class="option" data-choice="c" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>API触发 + 定时提醒</h3>
+      <p>既支持定时提醒，也支持通过API/Webhook由外部系统触发发送通知</p>
+    </div>
+  </div>
+</div>

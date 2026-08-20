@@ -1,0 +1,26 @@
+<h2>关于通知渠道的接入方式</h2>
+<p class="subtitle">个人微信没有官方API，需要特别说明</p>
+
+<div class="options">
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>只用官方API渠道</h3>
+      <p>邮箱、企业微信、钉钉、飞书等有官方API的渠道。个人微信暂不支持（无官方开放API）</p>
+    </div>
+  </div>
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>官方API + 第三方推送</h3>
+      <p>官方API渠道 + 通过Server酱/PushPlus等第三方服务推送到个人微信</p>
+    </div>
+  </div>
+  <div class="option" data-choice="c" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>插件化，可扩展</h3>
+      <p>设计统一的通知渠道接口，第一版内置邮箱/企业微信/钉钉/飞书，后续可自行扩展新渠道</p>
+    </div>
+  </div>
+</div>

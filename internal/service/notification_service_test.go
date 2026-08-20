@@ -10,6 +10,7 @@ import (
 	"notice-service/internal/channel"
 	"notice-service/internal/crypto"
 	"notice-service/internal/model"
+	"notice-service/internal/repository"
 )
 
 type fakeChan struct{ failTimes int }
@@ -209,5 +210,83 @@ func TestNotificationServiceMultiChannelFanOut(t *testing.T) {
 	}
 	if len(sent) != 2 {
 		t.Fatalf("expected both channels to receive the message, got %v", sent)
+	}
+}
+
+func TestNotificationResendLog(t *testing.T) {
+	db := testDB(t)
+	ns := NewNotificationService(db, nil)
+	uid := seedServiceUser(t, db)
+	chID := seedServiceChannel(t, db, uid)
+	tplID := seedServiceTemplate(t, db, uid)
+
+	// 建真实任务（日志 task_id 有外键）
+	task := &model.Task{UserID: uid, Name: "t", ChannelID: chID, ChannelIDs: []int64{chID}, TemplateID: tplID, TriggerType: "cron", CronExpr: "0 9 * * *", Receivers: []string{"a@x.com"}, Enabled: true}
+	if err := NewTaskService(db, &fakeScheduler{}).Create(uid, task); err != nil {
+		t.Fatal(err)
+	}
+
+	// 直插一条失败日志
+	logRepo := repository.NewTaskLogRepo(db)
+	fail := &model.TaskLog{TaskID: task.ID, ChannelID: chID, Subject: "s", Content: "c", Status: "failed", Request: `{"address":"a@x.com"}`, ErrorMsg: "boom"}
+	if err := logRepo.Create(fail); err != nil {
+		t.Fatal(err)
+	}
+
+	// 用 fake 渠道实例（发送恒成功）
+	ns.Instancer = func(c *model.Channel) (channel.Channel, error) { return &fakeChan{}, nil }
+	if err := ns.ResendLog(fail.ID); err != nil {
+		t.Fatalf("resend failed: %v", err)
+	}
+
+	// 应新增一条成功日志（原失败记录保留）
+	latest, err := logRepo.GetByID(fail.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if latest.Status != "failed" {
+		t.Errorf("original failed log should be preserved, got %q", latest.Status)
+	}
+	rows, _ := logRepo.Recent(10)
+	foundSuccess := false
+	for _, l := range rows {
+		if l.Status == "success" && l.TaskID == task.ID && l.ChannelID == chID {
+			foundSuccess = true
+		}
+	}
+	if !foundSuccess {
+		t.Error("resend should create a new success log row")
+	}
+}
+
+func TestNotificationResendLogRejectsSuccessAndMissingChannel(t *testing.T) {
+	db := testDB(t)
+	ns := NewNotificationService(db, nil)
+	uid := seedServiceUser(t, db)
+	chID := seedServiceChannel(t, db, uid)
+	tplID := seedServiceTemplate(t, db, uid)
+
+	task := &model.Task{UserID: uid, Name: "t", ChannelID: chID, ChannelIDs: []int64{chID}, TemplateID: tplID, TriggerType: "cron", CronExpr: "0 9 * * *", Receivers: []string{"a@x.com"}, Enabled: true}
+	if err := NewTaskService(db, &fakeScheduler{}).Create(uid, task); err != nil {
+		t.Fatal(err)
+	}
+	logRepo := repository.NewTaskLogRepo(db)
+
+	// 成功日志不可重试
+	ok := &model.TaskLog{TaskID: task.ID, ChannelID: chID, Subject: "s", Content: "c", Status: "success"}
+	if err := logRepo.Create(ok); err != nil {
+		t.Fatal(err)
+	}
+	if err := ns.ResendLog(ok.ID); err == nil {
+		t.Fatal("resend of a success log should be rejected")
+	}
+
+	// 渠道不存在的失败日志 → 报错
+	bad := &model.TaskLog{TaskID: task.ID, ChannelID: 999999, Subject: "s", Content: "c", Status: "failed", Request: `{"address":"a@x.com"}`}
+	if err := logRepo.Create(bad); err != nil {
+		t.Fatal(err)
+	}
+	if err := ns.ResendLog(bad.ID); err == nil {
+		t.Fatal("resend with missing channel should error")
 	}
 }

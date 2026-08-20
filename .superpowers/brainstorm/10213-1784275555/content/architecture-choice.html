@@ -1,0 +1,25 @@
+<h2>架构方案选择</h2>
+<p class="subtitle">基于你的需求，推荐以下两种方案</p>
+
+<div class="options">
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>单体应用（推荐）</h3>
+      <p><strong>Go 后端 + Vue 前端，单个 Docker 容器</strong></p>
+      <p>后端使用 Gin 框架，前端使用 Vue3 + Element Plus。前后端打包在同一个容器中，Go 编译后单二进制文件，Nginx 托管前端静态文件。数据库 MySQL 5.7，定时任务用 robfig/cron 库内置实现。</p>
+      <p style="color:#4ade80">✅ 优势：部署极简（docker-compose 两个容器：app + mysql），资源占用低（~50MB内存），开发迭代快</p>
+      <p style="color:#f87171">⚠️ 劣势：前后端耦合在同一仓库，大规模扩展需要拆分</p>
+    </div>
+  </div>
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>前后端分离</h3>
+      <p><strong>Go API 服务 + Vue SPA，独立部署</strong></p>
+      <p>Go 后端提供 RESTful API，Vue 前端作为独立 SPA 应用，通过 Nginx 反向代理。两个独立容器，各自独立构建和部署。定时任务同样内置在 Go 服务中。</p>
+      <p style="color:#4ade80">✅ 优势：前后端独立部署和扩展，架构清晰，团队协作更灵活</p>
+      <p style="color:#f87171">⚠️ 劣势：多一个容器，部署配置稍复杂，资源占用略高（~80MB内存）</p>
+    </div>
+  </div>
+</div>

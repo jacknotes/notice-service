@@ -100,6 +100,29 @@ func (q *QueueService) Enqueue(taskID int64, vars map[string]string, dedupeKey s
 	return job.ID, nil
 }
 
+// EnqueueLogRetry 把一条失败日志的定向重发入队（校验日志为失败、任务存在启用）。
+func (q *QueueService) EnqueueLogRetry(logID int64) (int64, error) {
+	l, err := q.logRepo.GetByID(logID)
+	if err != nil {
+		return 0, err
+	}
+	if l.Status != "failed" {
+		return 0, errors.New("仅失败记录可重试")
+	}
+	task, err := q.taskRepo.GetByID(l.TaskID)
+	if err != nil {
+		return 0, err
+	}
+	if !task.Enabled {
+		return 0, errTaskDisabled
+	}
+	job := &model.SendJob{TaskID: l.TaskID, LogID: logID, VarsJSON: "null", Status: "pending"}
+	if err := q.jobRepo.Create(job); err != nil {
+		return 0, err
+	}
+	return job.ID, nil
+}
+
 func (q *QueueService) workerLoop() {
 	defer q.wg.Done()
 	ticker := time.NewTicker(q.cfg.PollInterval)
@@ -129,6 +152,14 @@ func (q *QueueService) process(j *model.SendJob) {
 			_ = q.jobRepo.MarkFailed(j.ID, fmt.Sprintf("panic: %v", r), q.cfg.MaxAttempts, q.cfg.RetryBackoff)
 		}
 	}()
+	// 日志定向重发：单次尝试，完成即终止（不叠加队列退避）。
+	if j.LogID > 0 {
+		if err := q.ns.ResendLog(j.LogID); err != nil {
+			log.Printf("queue: log retry %d failed: %v", j.LogID, err)
+		}
+		_ = q.jobRepo.MarkDone(j.ID)
+		return
+	}
 	task, err := q.taskRepo.GetByID(j.TaskID)
 	if err != nil {
 		_ = q.jobRepo.MarkDone(j.ID) // 任务已删除，无内容可发

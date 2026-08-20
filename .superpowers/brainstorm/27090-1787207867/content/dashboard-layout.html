@@ -1,0 +1,121 @@
+<h2>仪表盘「丰富化」— 选哪种布局？</h2>
+<p class="subtitle">需求：可按日期筛选查看状态与趋势，默认最近一周。请对比下面 3 种信息布局（均为线框示意，非最终视觉）</p>
+
+<div class="options" data-choice-set="dashboard-layout">
+
+  <div class="option" data-choice="A" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>均衡版（推荐）</h3>
+      <p>日期筛选 + 4 张统计卡 + 状态环形图 + 趋势折线 + 顶部任务 TOP5</p>
+      <div class="mockup">
+        <div class="mockup-header">Dashboard · 均衡版</div>
+        <div class="mockup-body">
+          <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;background:rgba(148,163,184,.08);border-radius:6px;padding:6px 8px">
+            <span style="font-size:11px;color:var(--text-muted)">📅 日期范围</span>
+            <span style="font-size:11px;background:rgba(99,102,241,.18);color:var(--indigo-400);border-radius:4px;padding:2px 8px">最近 7 天 ▾</span>
+            <span style="font-size:10px;color:var(--text-faint)">[起] — [止]</span>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:10px">
+            <div style="background:rgba(148,163,184,.10);border-radius:6px;padding:8px;text-align:center"><div style="font-size:10px;color:var(--text-muted)">发送量</div><div style="font-size:16px;font-weight:700">1,284</div></div>
+            <div style="background:rgba(52,211,153,.10);border-radius:6px;padding:8px;text-align:center"><div style="font-size:10px;color:var(--text-muted)">成功</div><div style="font-size:16px;font-weight:700;color:#34d399">1,203</div></div>
+            <div style="background:rgba(248,113,113,.10);border-radius:6px;padding:8px;text-align:center"><div style="font-size:10px;color:var(--text-muted)">失败</div><div style="font-size:16px;font-weight:700;color:#f87171">81</div></div>
+            <div style="background:rgba(139,92,246,.10);border-radius:6px;padding:8px;text-align:center"><div style="font-size:10px;color:var(--text-muted)">成功率</div><div style="font-size:16px;font-weight:700;color:#a78bfa">93.7%</div></div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1.4fr;gap:8px">
+            <div style="background:rgba(148,163,184,.08);border-radius:6px;padding:8px">
+              <div style="font-size:10px;color:var(--text-muted);margin-bottom:6px">状态分布</div>
+              <div style="height:64px;display:flex;align-items:center;justify-content:center;color:var(--text-faint);font-size:10px">◯ 环形图 成功 93.7% / 失败 6.3%</div>
+            </div>
+            <div style="background:rgba(148,163,184,.08);border-radius:6px;padding:8px">
+              <div style="font-size:10px;color:var(--text-muted);margin-bottom:6px">每日发送趋势（总 / 成功）</div>
+              <div style="height:64px;background:linear-gradient(180deg,rgba(99,102,241,.25),transparent 60%);border-radius:4px"></div>
+            </div>
+          </div>
+          <div style="margin-top:8px;background:rgba(148,163,184,.08);border-radius:6px;padding:6px 8px;font-size:10px;color:var(--text-muted)">
+            🏆 发送量 TOP 任务：<span style="color:var(--text-secondary)">日报提醒 482 · 告警 391 · 周报 215 …</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="B" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>简洁版</h3>
+      <p>日期筛选 + 4 张统计卡 + 单一「成功/失败」堆叠柱状图（合并状态与趋势）</p>
+      <div class="mockup">
+        <div class="mockup-header">Dashboard · 简洁版</div>
+        <div class="mockup-body">
+          <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;background:rgba(148,163,184,.08);border-radius:6px;padding:6px 8px">
+            <span style="font-size:11px;color:var(--text-muted)">📅 日期范围</span>
+            <span style="font-size:11px;background:rgba(99,102,241,.18);color:var(--indigo-400);border-radius:4px;padding:2px 8px">最近 7 天 ▾</span>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:10px">
+            <div style="background:rgba(148,163,184,.10);border-radius:6px;padding:8px;text-align:center"><div style="font-size:10px;color:var(--text-muted)">发送量</div><div style="font-size:16px;font-weight:700">1,284</div></div>
+            <div style="background:rgba(52,211,153,.10);border-radius:6px;padding:8px;text-align:center"><div style="font-size:10px;color:var(--text-muted)">成功</div><div style="font-size:16px;font-weight:700;color:#34d399">1,203</div></div>
+            <div style="background:rgba(248,113,113,.10);border-radius:6px;padding:8px;text-align:center"><div style="font-size:10px;color:var(--text-muted)">失败</div><div style="font-size:16px;font-weight:700;color:#f87171">81</div></div>
+            <div style="background:rgba(139,92,246,.10);border-radius:6px;padding:8px;text-align:center"><div style="font-size:10px;color:var(--text-muted)">成功率</div><div style="font-size:16px;font-weight:700;color:#a78bfa">93.7%</div></div>
+          </div>
+          <div style="background:rgba(148,163,184,.08);border-radius:6px;padding:8px">
+            <div style="font-size:10px;color:var(--text-muted);margin-bottom:6px">每日发送（🟢 成功 / 🔴 失败 堆叠柱）</div>
+            <div style="height:96px;display:flex;align-items:flex-end;gap:4px">
+              <div style="flex:1;height:60%;background:linear-gradient(180deg,#34d399 80%,#f87171 80%)"></div>
+              <div style="flex:1;height:80%;background:linear-gradient(180deg,#34d399 90%,#f87171 90%)"></div>
+              <div style="flex:1;height:45%;background:linear-gradient(180deg,#34d399 88%,#f87171 88%)"></div>
+              <div style="flex:1;height:70%;background:linear-gradient(180deg,#34d399 93%,#f87171 93%)"></div>
+              <div style="flex:1;height:55%;background:linear-gradient(180deg,#34d399 85%,#f87171 85%)"></div>
+              <div style="flex:1;height:90%;background:linear-gradient(180deg,#34d399 95%,#f87171 95%)"></div>
+              <div style="flex:1;height:65%;background:linear-gradient(180deg,#34d399 87%,#f87171 87%)"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="C" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>数据丰富版</h3>
+      <p>日期筛选 + 6 张统计卡（含任务数/渠道数）+ 状态环形图 + 趋势 + 任务 TOP + 渠道分布</p>
+      <div class="mockup">
+        <div class="mockup-header">Dashboard · 数据丰富版</div>
+        <div class="mockup-body">
+          <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;background:rgba(148,163,184,.08);border-radius:6px;padding:6px 8px">
+            <span style="font-size:11px;color:var(--text-muted)">📅 日期范围</span>
+            <span style="font-size:11px;background:rgba(99,102,241,.18);color:var(--indigo-400);border-radius:4px;padding:2px 8px">最近 7 天 ▾</span>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:6px;margin-bottom:10px">
+            <div style="background:rgba(148,163,184,.10);border-radius:6px;padding:6px;text-align:center"><div style="font-size:9px;color:var(--text-muted)">发送量</div><div style="font-size:13px;font-weight:700">1,284</div></div>
+            <div style="background:rgba(52,211,153,.10);border-radius:6px;padding:6px;text-align:center"><div style="font-size:9px;color:var(--text-muted)">成功</div><div style="font-size:13px;font-weight:700;color:#34d399">1,203</div></div>
+            <div style="background:rgba(248,113,113,.10);border-radius:6px;padding:6px;text-align:center"><div style="font-size:9px;color:var(--text-muted)">失败</div><div style="font-size:13px;font-weight:700;color:#f87171">81</div></div>
+            <div style="background:rgba(139,92,246,.10);border-radius:6px;padding:6px;text-align:center"><div style="font-size:9px;color:var(--text-muted)">成功率</div><div style="font-size:13px;font-weight:700;color:#a78bfa">93.7%</div></div>
+            <div style="background:rgba(148,163,184,.10);border-radius:6px;padding:6px;text-align:center"><div style="font-size:9px;color:var(--text-muted)">任务数</div><div style="font-size:13px;font-weight:700">12</div></div>
+            <div style="background:rgba(148,163,184,.10);border-radius:6px;padding:6px;text-align:center"><div style="font-size:9px;color:var(--text-muted)">渠道数</div><div style="font-size:13px;font-weight:700">4</div></div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1.4fr;gap:8px;margin-bottom:8px">
+            <div style="background:rgba(148,163,184,.08);border-radius:6px;padding:8px">
+              <div style="font-size:10px;color:var(--text-muted);margin-bottom:6px">状态分布</div>
+              <div style="height:64px;display:flex;align-items:center;justify-content:center;color:var(--text-faint);font-size:10px">◯ 环形图</div>
+            </div>
+            <div style="background:rgba(148,163,184,.08);border-radius:6px;padding:8px">
+              <div style="font-size:10px;color:var(--text-muted);margin-bottom:6px">每日趋势（总/成功/失败）</div>
+              <div style="height:64px;background:linear-gradient(180deg,rgba(99,102,241,.25),transparent 60%);border-radius:4px"></div>
+            </div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+            <div style="background:rgba(148,163,184,.08);border-radius:6px;padding:6px 8px;font-size:10px;color:var(--text-muted)">
+              🏆 TOP 任务：<span style="color:var(--text-secondary)">日报 482 · 告警 391</span>
+            </div>
+            <div style="background:rgba(148,163,184,.08);border-radius:6px;padding:6px 8px;font-size:10px;color:var(--text-muted)">
+              📬 渠道分布：<span style="color:var(--text-secondary)">邮件 58% · 企微 24%</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>

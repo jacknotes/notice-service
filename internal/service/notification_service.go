@@ -125,3 +125,47 @@ func (s *NotificationService) sendOnce(inst channel.Channel, msg *channel.Messag
 	})
 	return nil
 }
+
+// ResendLog 定向重发一条失败日志：用日志已渲染的 Subject/Content 向原渠道/接收人重发，
+// 并写入一条新的发送日志（保留原失败历史）。单次尝试，由调用方决定是否异步。
+func (s *NotificationService) ResendLog(logID int64) error {
+	logRow, err := s.logRepo.GetByID(logID)
+	if err != nil {
+		return err
+	}
+	if logRow.Status != "failed" {
+		return errors.New("仅失败记录可重试")
+	}
+	ch, err := s.channelRepo.GetByID(logRow.ChannelID)
+	if err != nil {
+		return err
+	}
+	if !ch.Enabled {
+		return fmt.Errorf("渠道「%s」已停用", ch.Name)
+	}
+	inst, err := s.Instancer(ch)
+	if err != nil {
+		return err
+	}
+	addr := ""
+	if logRow.Request != "" {
+		var req struct {
+			Address string `json:"address"`
+		}
+		_ = json.Unmarshal([]byte(logRow.Request), &req)
+		addr = req.Address
+	}
+	msg := &channel.Message{Subject: logRow.Subject, Content: logRow.Content}
+	if err := inst.Send(msg, &channel.Receiver{Address: addr}); err != nil {
+		_ = s.logRepo.Create(&model.TaskLog{
+			TaskID: logRow.TaskID, ChannelID: ch.ID, Subject: logRow.Subject, Content: logRow.Content,
+			Status: "failed", Request: logRow.Request, ErrorMsg: err.Error(),
+		})
+		return err
+	}
+	_ = s.logRepo.Create(&model.TaskLog{
+		TaskID: logRow.TaskID, ChannelID: ch.ID, Subject: logRow.Subject, Content: logRow.Content,
+		Status: "success", Request: logRow.Request, Response: "ok",
+	})
+	return nil
+}

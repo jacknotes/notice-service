@@ -167,6 +167,22 @@
             <span class="mono time-cell">{{ fmtTime(row.sent_at) }}</span>
           </template>
         </el-table-column>
+
+        <el-table-column label="操作" width="90" align="center" fixed="right">
+          <template #default="{ row }">
+            <el-button
+              v-if="row.status === 'failed'"
+              link
+              type="danger"
+              size="small"
+              :loading="retryingId === row.id"
+              @click="retryLog(row)"
+            >
+              重试
+            </el-button>
+            <span v-else class="ok-cell">—</span>
+          </template>
+        </el-table-column>
       </el-table>
 
       <el-empty
@@ -194,7 +210,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { Search } from '@element-plus/icons-vue'
 import { channelApi, logApi, taskApi } from '@/api'
 
@@ -314,6 +330,31 @@ function errMsg(e: any, fallback: string) {
 const total = ref(0)
 const page = ref(1)
 const pageSize = ref(20)
+
+/* ── 重试失败日志（定向重发该条） ───────────────────────────────────── */
+const retryingId = ref<number | null>(null)
+
+async function retryLog(row: LogRow) {
+  try {
+    await ElMessageBox.confirm(
+      `重试发送该条失败记录？\n任务：${taskName(row.task_id)} → 渠道：${channelName(row.channel_id)}。将重新尝试该条投递。`,
+      '重试发送',
+      { confirmButtonText: '重试', cancelButtonText: '取消', type: 'warning' }
+    )
+  } catch {
+    return
+  }
+  retryingId.value = row.id
+  try {
+    await logApi.retry(row.id)
+    ElMessage.success('已加入重试队列')
+    await loadLogs()
+  } catch (e: any) {
+    ElMessage.error(errMsg(e, '重试失败'))
+  } finally {
+    retryingId.value = null
+  }
+}
 
 async function loadLogs() {
   loading.value = true

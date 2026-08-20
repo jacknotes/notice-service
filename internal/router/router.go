@@ -77,6 +77,7 @@ func NewRouter(db *sql.DB, authSvc *service.AuthService, cipher *crypto.Cipher, 
 			admin.POST("/tasks/:id/toggle", taskH.Toggle)
 			admin.POST("/tasks/:id/send", taskH.SendNow) // 立即发送（入队）
 			admin.POST("/tasks/batch-delete", taskH.BatchDelete)
+			admin.POST("/logs/:id/retry", taskH.RetryLog) // 重试失败日志（定向重发）
 
 			admin.GET("/users", userH.List)
 			admin.POST("/users", userH.Create)

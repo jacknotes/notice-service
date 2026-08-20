@@ -26,6 +26,24 @@ func (r *TaskLogRepo) Create(l *model.TaskLog) error {
 	return nil
 }
 
+func (r *TaskLogRepo) GetByID(id int64) (*model.TaskLog, error) {
+	rows, err := r.db.Query(
+		"SELECT id, task_id, channel_id, subject, content, status, request, response, error_msg, retry_count, sent_at FROM task_logs WHERE id=?",
+		id)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	logs, err := scanLogs(rows)
+	if err != nil {
+		return nil, err
+	}
+	if len(logs) == 0 {
+		return nil, ErrNotFound
+	}
+	return logs[0], nil
+}
+
 func (r *TaskLogRepo) ListByTask(taskID int64) ([]*model.TaskLog, error) {
 	rows, err := r.db.Query(
 		"SELECT id, task_id, channel_id, subject, content, status, request, response, error_msg, retry_count, sent_at FROM task_logs WHERE task_id=? ORDER BY id DESC LIMIT 200",

@@ -1,0 +1,60 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "通知发送服务 · 运行时架构",
+    "output": "notice-service-architecture.html",
+    "quality_profile": "showcase",
+    "viewBox": [1400, 640],
+    "views": [
+      { "id": "main-path", "label": "主路径 · Webhook 触发", "focus": ["caller", "api", "notification", "channel", "providers"], "note": "从外部调用方经 API 触发 SendTask，直达外部通知服务送达接收人的完整路径。" },
+      { "id": "cron-path", "label": "定时任务", "focus": ["scheduler", "notification", "mysql"], "note": "Cron 调度与 MySQL 租约锁，保证多实例下任务不重复执行。" },
+      { "id": "security", "label": "安全与信任边界", "focus": ["caller", "nginx", "api", "auth"], "note": "JWT 认证、管理员 RBAC，以及公网 Webhook 入口的 api_key + IP 白名单。" }
+    ]
+  },
+  "components": [
+    { "id": "nginx", "type": "cloud", "label": "Nginx 反向代理", "sublabel": "负载均衡 · 可信入口", "pos": [40, 25], "size": [150, 64] },
+    { "id": "caller", "type": "external", "label": "外部调用方", "sublabel": "Webhook 触发", "tag": "api_key", "pos": [40, 295], "size": [140, 68] },
+    { "id": "web", "type": "frontend", "label": "Web 管理前端", "sublabel": "Vue3 · Element Plus", "tag": "Signal Relay", "pos": [300, 45], "size": [150, 64] },
+    { "id": "scheduler", "type": "backend", "label": "Cron 调度器", "sublabel": "robfig/cron · 租约锁", "pos": [600, 45], "size": [160, 64] },
+    { "id": "api", "type": "backend", "label": "HTTP API 层", "sublabel": "Gin · JWT 中间件", "tag": "REST /api/*", "pos": [300, 295], "size": [150, 72] },
+    { "id": "notification", "type": "backend", "label": "通知服务", "sublabel": "SendTask 发送管线", "pos": [600, 295], "size": [160, 72] },
+    { "id": "channel", "type": "backend", "label": "渠道适配器", "sublabel": "邮件/企微/钉钉/飞书/PushPlus", "pos": [890, 295], "size": [185, 72] },
+    { "id": "providers", "type": "external", "label": "外部通知服务", "sublabel": "SMTP · 企业微信 · 钉钉 · 飞书 · PushPlus", "pos": [1170, 295], "size": [180, 72] },
+    { "id": "auth", "type": "security", "label": "认证服务", "sublabel": "JWT 签发/校验 · bcrypt", "pos": [300, 525], "size": [160, 64] },
+    { "id": "mysql", "type": "database", "label": "MySQL", "sublabel": "持久化 · 多实例共享", "pos": [600, 525], "size": [160, 64] }
+  ],
+  "boundaries": [
+    { "kind": "security-group", "label": "不可信 · 公网（Untrusted）", "wraps": ["caller"], "pad": 14 },
+    { "kind": "region", "label": "受信任区 · 应用与数据库（Docker 内网）", "wraps": ["web", "api", "auth", "scheduler", "notification", "channel", "mysql"], "pad": 18 }
+  ],
+  "connections": [
+    { "id": "caller-to-api", "from": "caller", "to": "api", "label": "Webhook 触发", "variant": "emphasis", "labelAt": [240, 350] },
+    { "id": "api-to-notification", "from": "api", "to": "notification", "label": "触发 SendTask", "variant": "emphasis" },
+    { "id": "notification-to-channel", "from": "notification", "to": "channel", "label": "发送消息", "variant": "emphasis" },
+    { "id": "channel-to-providers", "from": "channel", "to": "providers", "label": "HTTPS / SMTP", "variant": "emphasis" },
+    { "id": "nginx-to-api", "from": "nginx", "to": "api", "label": "反向代理" },
+    { "id": "web-to-api", "from": "web", "to": "api", "label": "REST /api", "labelAt": [375, 145] },
+    { "id": "api-to-auth", "from": "api", "to": "auth", "label": "验证 JWT", "variant": "security", "fromSide": "bottom", "toSide": "top" },
+    { "id": "scheduler-to-notification", "from": "scheduler", "to": "notification", "label": "Cron 触发 SendTask", "variant": "dashed", "labelAt": [680, 150] },
+    { "id": "notification-to-mysql", "from": "notification", "to": "mysql", "label": "读配置 · 写日志", "labelAt": [680, 435] },
+    { "id": "api-to-mysql", "from": "api", "to": "mysql", "label": "CRUD" }
+  ],
+  "cards": [
+    { "dot": "cyan", "title": "发送管线（SendTask）", "items": [
+      "加载任务/渠道/模板 → 合并变量（请求 > 任务级 > 模板默认）",
+      "Markdown 渲染为 HTML/文本/原生 Markdown；失败重试 3 次（5s/30s/60s）",
+      "逐接收者发送并写入 task_logs（成功/失败）"
+    ] },
+    { "dot": "rose", "title": "安全与信任边界", "items": [
+      "/api/* 需 Bearer JWT（golang-jwt + bcrypt）；写操作与用户管理仅限 admin",
+      "渠道敏感配置 AES-256-GCM 加密存储（密钥需跨实例一致）",
+      "Webhook 入口仅 api_key + 可选 IP 白名单，须经可信 Nginx（X-Real-IP）"
+    ] },
+    { "dot": "violet", "title": "高可用 · 数据 · 扩展", "items": [
+      "Nginx 反向代理 + 健康检查；多实例共享 MySQL；Cron 租约锁防重复、宕机自动接管",
+      "MySQL 单库（users/channels/templates/tasks/task_logs）；软删除 + 级联；首启建默认管理员",
+      "Channel 统一接口可低成本新增渠道；异步发送队列（send_jobs）已设计待落地"
+    ] }
+  ]
+}

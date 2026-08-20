@@ -9,6 +9,7 @@ import (
 
 	"notice-service/internal/channel"
 	"notice-service/internal/model"
+	"notice-service/internal/repository"
 )
 
 var errBoom = errors.New("boom")
@@ -283,5 +284,40 @@ func TestWorkerSkipsDisabledTask(t *testing.T) {
 	}
 	if sink.count() != 0 {
 		t.Errorf("disabled task should not send, sends=%d", sink.count())
+	}
+}
+
+func TestQueueEnqueueLogRetry(t *testing.T) {
+	db := testDB(t)
+	q, taskID, _ := newTestQueue(t, queueCfg())
+
+	// 直插一条失败日志（channel_id 无外键，用 1 即可）
+	logRepo := repository.NewTaskLogRepo(db)
+	fail := &model.TaskLog{TaskID: taskID, ChannelID: 1, Subject: "s", Content: "c", Status: "failed", Request: `{"address":"a@x.com"}`}
+	if err := logRepo.Create(fail); err != nil {
+		t.Fatal(err)
+	}
+	jobID, err := q.EnqueueLogRetry(fail.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	j, err := q.jobRepo.GetByID(jobID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if j.LogID != fail.ID {
+		t.Errorf("LogID = %d want %d", j.LogID, fail.ID)
+	}
+}
+
+func TestQueueEnqueueLogRetryRejectsSuccess(t *testing.T) {
+	db := testDB(t)
+	q, taskID, _ := newTestQueue(t, queueCfg())
+	ok := &model.TaskLog{TaskID: taskID, ChannelID: 1, Subject: "s", Content: "c", Status: "success"}
+	if err := repository.NewTaskLogRepo(db).Create(ok); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := q.EnqueueLogRetry(ok.ID); err == nil {
+		t.Fatal("retry of a success log should be rejected")
 	}
 }

@@ -1,0 +1,75 @@
+<h2>系统架构总览</h2>
+<p class="subtitle">Notice Service 整体架构设计</p>
+
+<div class="mockup">
+  <div class="mockup-header">系统架构图</div>
+  <div class="mockup-body" style="padding:24px;font-size:14px;">
+    <div style="display:flex;flex-direction:column;gap:20px;">
+      
+      <!-- 用户层 -->
+      <div style="text-align:center;">
+        <div style="font-weight:600;margin-bottom:8px;color:#a78bfa;">👤 用户层</div>
+        <div style="display:flex;justify-content:center;gap:16px;">
+          <div style="background:#1e1b4b;border:1px solid #4c1d95;border-radius:8px;padding:10px 20px;">PC 浏览器</div>
+          <div style="background:#1e1b4b;border:1px solid #4c1d95;border-radius:8px;padding:10px 20px;">移动端浏览器</div>
+          <div style="background:#1e1b4b;border:1px solid #4c1d95;border-radius:8px;padding:10px 20px;">外部 API 调用</div>
+        </div>
+      </div>
+
+      <div style="text-align:center;color:#6366f1;">▼ HTTP/HTTPS ▼</div>
+
+      <!-- Docker 容器 -->
+      <div style="border:2px dashed #6366f1;border-radius:12px;padding:16px;">
+        <div style="font-weight:600;margin-bottom:12px;color:#818cf8;">🐳 Docker 容器 (notice-service)</div>
+        
+        <!-- Nginx -->
+        <div style="background:#1e293b;border:1px solid #334155;border-radius:8px;padding:12px;margin-bottom:12px;">
+          <div style="font-weight:600;color:#38bdf8;">Nginx (端口 80)</div>
+          <div style="display:flex;gap:12px;margin-top:8px;">
+            <div style="background:#0f172a;border-radius:6px;padding:8px 14px;flex:1;text-align:center;">
+              <div style="color:#38bdf8;font-size:12px;">静态资源</div>
+              <div style="font-size:11px;color:#94a3b8;">Vue3 SPA 前端</div>
+            </div>
+            <div style="background:#0f172a;border-radius:6px;padding:8px 14px;flex:1;text-align:center;">
+              <div style="color:#38bdf8;font-size:12px;">API 代理</div>
+              <div style="font-size:11px;color:#94a3b8;">转发 → Go 后端</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Go 后端 -->
+        <div style="background:#1e293b;border:1px solid #334155;border-radius:8px;padding:12px;">
+          <div style="font-weight:600;color:#4ade80;">Go 后端 (Gin, 端口 8080)</div>
+          <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;">
+            <div style="background:#0f172a;border-radius:6px;padding:6px 12px;font-size:12px;">认证模块</div>
+            <div style="background:#0f172a;border-radius:6px;padding:6px 12px;font-size:12px;">通知管理</div>
+            <div style="background:#0f172a;border-radius:6px;padding:6px 12px;font-size:12px;">调度引擎</div>
+            <div style="background:#0f172a;border-radius:6px;padding:6px 12px;font-size:12px;">发送引擎</div>
+            <div style="background:#0f172a;border-radius:6px;padding:6px 12px;font-size:12px;">API 网关</div>
+          </div>
+        </div>
+      </div>
+
+      <div style="text-align:center;color:#6366f1;">▼ TCP ▼</div>
+
+      <!-- MySQL -->
+      <div style="display:flex;gap:16px;justify-content:center;">
+        <div style="background:#1e293b;border:1px solid #f59e0b;border-radius:8px;padding:12px 24px;text-align:center;">
+          <div style="font-weight:600;color:#f59e0b;">MySQL 5.7</div>
+          <div style="font-size:12px;color:#94a3b8;margin-top:4px;">独立容器</div>
+        </div>
+      </div>
+
+      <!-- 外部渠道 -->
+      <div style="text-align:center;color:#6366f1;">▼ 通知发送 ▼</div>
+      <div style="display:flex;justify-content:center;gap:12px;flex-wrap:wrap;">
+        <div style="background:#1e1b4b;border:1px solid #4c1d95;border-radius:8px;padding:8px 16px;font-size:13px;">📧 邮箱 SMTP</div>
+        <div style="background:#1e1b4b;border:1px solid #4c1d95;border-radius:8px;padding:8px 16px;font-size:13px;">💬 企业微信</div>
+        <div style="background:#1e1b4b;border:1px solid #4c1d95;border-radius:8px;padding:8px 16px;font-size:13px;">📌 钉钉</div>
+        <div style="background:#1e1b4b;border:1px solid #4c1d95;border-radius:8px;padding:8px 16px;font-size:13px;">🪶 飞书</div>
+        <div style="background:#1e1b4b;border:1px solid #4c1d95;border-radius:8px;padding:8px 16px;font-size:13px;">📱 微信(PushPlus)</div>
+      </div>
+
+    </div>
+  </div>
+</div>

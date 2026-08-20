@@ -147,3 +147,63 @@ func TestDashboardStats(t *testing.T) {
 		t.Fatalf("today_total = %v, want >= 1", s["today_total"])
 	}
 }
+
+func TestLogRetryEndpoint(t *testing.T) {
+	r := testRouter(t)
+	tok := login(t, r)
+
+	wc := authReq(t, r, tok, "POST", "/api/channels", `{"type":"email","name":"邮箱","config":{"host":"smtp.x.com","port":"587","username":"u","password":"p","from":"a@x.com"},"enabled":true}`)
+	if wc.Code != 200 {
+		t.Fatalf("create channel = %d body=%s", wc.Code, wc.Body.String())
+	}
+	ch := mustJSON(t, wc)
+
+	wt := authReq(t, r, tok, "POST", "/api/templates", `{"name":"t","subject":"会议","content_md":"hi","variables":[]}`)
+	if wt.Code != 200 {
+		t.Fatalf("create template = %d body=%s", wt.Code, wt.Body.String())
+	}
+	tpl := mustJSON(t, wt)
+
+	payload := `{"name":"任务","channel_id":` + num(int64(ch["id"].(float64))) + `,"template_id":` + num(int64(tpl["id"].(float64))) + `,"trigger_type":"api","receivers":["a@x.com"],"enabled":true}`
+	wtk := authReq(t, r, tok, "POST", "/api/tasks", payload)
+	if wtk.Code != 200 {
+		t.Fatalf("create task = %d body=%s", wtk.Code, wtk.Body.String())
+	}
+	tk := mustJSON(t, wtk)
+	taskID := int64(tk["id"].(float64))
+	channelID := int64(ch["id"].(float64))
+
+	db := testDB(t)
+	insertLog := func(status string) int64 {
+		res, err := db.Exec("INSERT INTO task_logs (task_id, channel_id, status, retry_count, sent_at) VALUES (?, ?, ?, 0, NOW())", taskID, channelID, status)
+		if err != nil {
+			t.Fatalf("insert task_log: %v", err)
+		}
+		id, _ := res.LastInsertId()
+		t.Cleanup(func() { db.Exec("DELETE FROM task_logs WHERE id=?", id) })
+		return id
+	}
+
+	// 失败日志 → 202
+	failID := insertLog("failed")
+	w := authReq(t, r, tok, "POST", "/api/logs/"+num(failID)+"/retry", "")
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("retry failed log = %d body=%s", w.Code, w.Body.String())
+	}
+	if _, ok := mustJSON(t, w)["job_id"]; !ok {
+		t.Fatalf("retry should return job_id, body=%s", w.Body.String())
+	}
+
+	// 成功日志 → 400
+	okID := insertLog("success")
+	w2 := authReq(t, r, tok, "POST", "/api/logs/"+num(okID)+"/retry", "")
+	if w2.Code != http.StatusBadRequest {
+		t.Fatalf("retry success log = %d, want 400 body=%s", w2.Code, w2.Body.String())
+	}
+
+	// 不存在的日志 → 400
+	w3 := authReq(t, r, tok, "POST", "/api/logs/999999/retry", "")
+	if w3.Code != http.StatusBadRequest {
+		t.Fatalf("retry missing log = %d, want 400", w3.Code)
+	}
+}

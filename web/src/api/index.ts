@@ -53,6 +53,7 @@ export const logApi = {
     page?: number
     page_size?: number
   }) => client.get('/logs', { params }).then((r) => r.data),
+  retry: (id: number) => client.post(`/logs/${id}/retry`).then((r) => r.data),
 }
 
 export const userApi = {
