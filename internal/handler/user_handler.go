@@ -20,6 +20,12 @@ func NewUserHandler(db *sql.DB) *UserHandler {
 }
 
 // List 列出所有用户（仅 admin）。
+// List 用户列表
+// @Summary 用户列表（仅管理员）
+// @Tags 用户
+// @Security BearerAuth
+// @Success 200 {array} map[string]interface{}
+// @Router /api/users [get]
 func (h *UserHandler) List(c *gin.Context) {
 	if c.GetString("role") != "admin" {
 		c.JSON(http.StatusForbidden, gin.H{"error": "无权操作"})
@@ -34,6 +40,14 @@ func (h *UserHandler) List(c *gin.Context) {
 }
 
 // Create 创建用户（仅 admin）。
+// Create 新建用户
+// @Summary 新建用户（仅管理员）
+// @Tags 用户
+// @Security BearerAuth
+// @Accept json
+// @Param body body object true "用户信息"
+// @Success 200 {object} map[string]interface{}
+// @Router /api/users [post]
 func (h *UserHandler) Create(c *gin.Context) {
 	if c.GetString("role") != "admin" {
 		c.JSON(http.StatusForbidden, gin.H{"error": "无权操作"})
@@ -58,6 +72,15 @@ func (h *UserHandler) Create(c *gin.Context) {
 }
 
 // Update 修改用户角色 / 重置密码（仅 admin）。
+// Update 更新用户
+// @Summary 更新用户角色/密码（仅管理员）
+// @Tags 用户
+// @Security BearerAuth
+// @Param id path int true "用户 ID"
+// @Accept json
+// @Param body body object true "更新字段"
+// @Success 200 {object} map[string]interface{}
+// @Router /api/users/{id} [put]
 func (h *UserHandler) Update(c *gin.Context) {
 	if c.GetString("role") != "admin" {
 		c.JSON(http.StatusForbidden, gin.H{"error": "无权操作"})
@@ -81,6 +104,13 @@ func (h *UserHandler) Update(c *gin.Context) {
 }
 
 // Delete 删除用户（仅 admin）。
+// Delete 删除用户
+// @Summary 删除用户（仅管理员）
+// @Tags 用户
+// @Security BearerAuth
+// @Param id path int true "用户 ID"
+// @Success 200 {object} map[string]interface{}
+// @Router /api/users/{id} [delete]
 func (h *UserHandler) Delete(c *gin.Context) {
 	if c.GetString("role") != "admin" {
 		c.JSON(http.StatusForbidden, gin.H{"error": "无权操作"})
@@ -96,6 +126,13 @@ func (h *UserHandler) Delete(c *gin.Context) {
 }
 
 // BatchDelete 批量删除用户（仅 admin）。
+// BatchDelete 批量删除用户
+// @Summary 批量删除用户（仅管理员）
+// @Tags 用户
+// @Security BearerAuth
+// @Param body body object true "ids"
+// @Success 200 {object} map[string]interface{}
+// @Router /api/users/batch-delete [post]
 func (h *UserHandler) BatchDelete(c *gin.Context) {
 	if c.GetString("role") != "admin" {
 		c.JSON(http.StatusForbidden, gin.H{"error": "无权操作"})
@@ -117,6 +154,13 @@ func (h *UserHandler) BatchDelete(c *gin.Context) {
 }
 
 // ResetToken 生成一次性重置令牌（仅 admin），返回给管理员线下转交用户。
+// ResetToken 生成重置令牌
+// @Summary 为用户生成一次性重置令牌（仅管理员）
+// @Tags 用户
+// @Security BearerAuth
+// @Param id path int true "用户 ID"
+// @Success 200 {object} map[string]interface{}
+// @Router /api/users/{id}/reset-token [post]
 func (h *UserHandler) ResetToken(c *gin.Context) {
 	if c.GetString("role") != "admin" {
 		c.JSON(http.StatusForbidden, gin.H{"error": "无权操作"})

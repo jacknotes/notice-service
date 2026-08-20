@@ -4,6 +4,8 @@ import (
 	"database/sql"
 
 	"github.com/gin-gonic/gin"
+	swaggerFiles "github.com/swaggo/files"
+	ginSwagger "github.com/swaggo/gin-swagger"
 
 	"notice-service/internal/crypto"
 	"notice-service/internal/handler"
@@ -30,6 +32,7 @@ func NewRouter(db *sql.DB, authSvc *service.AuthService, cipher *crypto.Cipher, 
 	userH := handler.NewUserHandler(db)
 
 	r.GET("/api/health", handler.Health)
+	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
 	api := r.Group("/api")
 	api.POST("/auth/login", authH.Login)

@@ -1,5 +1,14 @@
 package main
 
+// @title Notice Service API
+// @version 1.0.0
+// @description 自托管通知发送服务 API（邮箱/企微/钉钉/飞书/PushPlus 多渠道投递）。
+// @host localhost:8080
+// @BasePath /api
+// @securityDefinitions.apikey BearerAuth
+// @in header
+// @name Authorization
+
 import (
 	"crypto/sha256"
 	"flag"
@@ -18,6 +27,8 @@ import (
 	"notice-service/internal/router"
 	"notice-service/internal/scheduler"
 	"notice-service/internal/service"
+
+	_ "notice-service/docs/swagger" // 注册 Swagger 文档（swag init 生成）
 )
 
 func main() {

@@ -61,6 +61,14 @@ func NewWebhookHandler(db *sql.DB, queue *service.QueueService) *WebhookHandler 
 	}
 }
 
+// Trigger Webhook 触发
+// @Summary 用 API Key 触发任务（无需登录）
+// @Tags Webhook
+// @Param api_key path string true "任务 API Key"
+// @Accept json
+// @Param body body object true "变量"
+// @Success 202 {object} map[string]interface{}
+// @Router /api/webhook/{api_key} [post]
 func (h *WebhookHandler) Trigger(c *gin.Context) {
 	// API Key 优先从 header 读取（防路径泄漏进日志）；兼容旧调用支持 URL path。
 	apiKey := c.GetHeader("X-API-Key")

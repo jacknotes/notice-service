@@ -7,7 +7,7 @@ WEB    := web
 PORT   := 8080
 GO_ENV := GOCACHE=$(CURDIR)/.dev/go-cache GOMODCACHE=$(CURDIR)/.dev/gomodcache GOPATH=/tmp/dsh-gopath
 
-.PHONY: help deps build run dev test vet fmt frontend-install frontend-build frontend-dev \
+.PHONY: help deps build run dev test vet fmt swagger frontend-install frontend-build frontend-dev \
         docker-build docker-up docker-down docker-logs db-clean clean
 
 help: ## 显示所有命令
@@ -35,6 +35,9 @@ vet: ## 静态检查
 
 fmt: ## 格式化 Go 代码
 	gofmt -w $$(find . -name '*.go' -not -path './.dev/*' -not -path './node_modules/*')
+
+swagger: ## 重新生成 Swagger 文档
+	$(GO_ENV) go run github.com/swaggo/swag/cmd/swag@v1.16.6 init -g cmd/server/main.go -o docs/swagger
 
 ## ---------- 前端 ----------
 

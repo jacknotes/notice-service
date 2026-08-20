@@ -1,0 +1,747 @@
+basePath: /api
+host: localhost:8080
+info:
+  contact: {}
+  description: 自托管通知发送服务 API（邮箱/企微/钉钉/飞书/PushPlus 多渠道投递）。
+  title: Notice Service API
+  version: 1.0.0
+paths:
+  /api/auth/change-password:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 原/新密码
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 修改当前用户密码
+      tags:
+      - 认证
+  /api/auth/forgot-password:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 重置信息
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 用管理员生成的一次性令牌重置密码
+      tags:
+      - 认证
+  /api/auth/login:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 登录信息
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 账号密码登录，返回 JWT
+      tags:
+      - 认证
+  /api/auth/logout:
+    post:
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 退出登录
+      tags:
+      - 认证
+  /api/auth/me:
+    get:
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 获取当前登录用户信息
+      tags:
+      - 认证
+  /api/channels:
+    get:
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              additionalProperties: true
+              type: object
+            type: array
+      security:
+      - BearerAuth: []
+      summary: 渠道列表
+      tags:
+      - 渠道
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 渠道配置
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 新建渠道
+      tags:
+      - 渠道
+  /api/channels/{id}:
+    delete:
+      parameters:
+      - description: 渠道 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 删除渠道
+      tags:
+      - 渠道
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: 渠道 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 渠道配置
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 更新渠道
+      tags:
+      - 渠道
+  /api/channels/{id}/test:
+    post:
+      parameters:
+      - description: 渠道 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 测试渠道连通性
+      tags:
+      - 渠道
+  /api/channels/batch-delete:
+    post:
+      parameters:
+      - description: ids
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 批量删除渠道
+      tags:
+      - 渠道
+  /api/dashboard/stats:
+    get:
+      parameters:
+      - description: 开始日期 YYYY-MM-DD
+        in: query
+        name: from
+        type: string
+      - description: 结束日期 YYYY-MM-DD
+        in: query
+        name: to
+        type: string
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 区间内投递统计（缺省近 7 天）
+      tags:
+      - 仪表盘
+  /api/dashboard/trend:
+    get:
+      parameters:
+      - description: 开始日期
+        in: query
+        name: from
+        type: string
+      - description: 结束日期
+        in: query
+        name: to
+        type: string
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              additionalProperties: true
+              type: object
+            type: array
+      security:
+      - BearerAuth: []
+      summary: 区间内每日发送趋势
+      tags:
+      - 仪表盘
+  /api/logs:
+    get:
+      parameters:
+      - description: 任务 ID
+        in: query
+        name: task_id
+        type: integer
+      - description: 状态 success/failed
+        in: query
+        name: status
+        type: string
+      - description: 开始日期 YYYY-MM-DD
+        in: query
+        name: from
+        type: string
+      - description: 结束日期 YYYY-MM-DD
+        in: query
+        name: to
+        type: string
+      - description: 页码
+        in: query
+        name: page
+        type: integer
+      - description: 每页数量
+        in: query
+        name: page_size
+        type: integer
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 分页查询全部发送日志
+      tags:
+      - 任务
+  /api/tasks:
+    get:
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              additionalProperties: true
+              type: object
+            type: array
+      security:
+      - BearerAuth: []
+      summary: 任务列表
+      tags:
+      - 任务
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 任务信息
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 新建任务（仅管理员）
+      tags:
+      - 任务
+  /api/tasks/{id}:
+    delete:
+      parameters:
+      - description: 任务 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 删除任务（仅管理员）
+      tags:
+      - 任务
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: 任务 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 任务信息
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 更新任务（仅管理员）
+      tags:
+      - 任务
+  /api/tasks/{id}/logs:
+    get:
+      parameters:
+      - description: 任务 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              additionalProperties: true
+              type: object
+            type: array
+      security:
+      - BearerAuth: []
+      summary: 查看某任务发送日志
+      tags:
+      - 任务
+  /api/tasks/{id}/send:
+    post:
+      parameters:
+      - description: 任务 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      responses:
+        "202":
+          description: Accepted
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 立即发送任务（入队，不依赖 cron；仅管理员）
+      tags:
+      - 任务
+  /api/tasks/{id}/toggle:
+    post:
+      parameters:
+      - description: 任务 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: enabled
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 启用/停用任务（仅管理员）
+      tags:
+      - 任务
+  /api/tasks/batch-delete:
+    post:
+      parameters:
+      - description: ids
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 批量删除任务（仅管理员）
+      tags:
+      - 任务
+  /api/templates:
+    get:
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              additionalProperties: true
+              type: object
+            type: array
+      security:
+      - BearerAuth: []
+      summary: 模板列表
+      tags:
+      - 模板
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 模板信息
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 新建模板
+      tags:
+      - 模板
+  /api/templates/{id}:
+    delete:
+      parameters:
+      - description: 模板 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 删除模板
+      tags:
+      - 模板
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: 模板 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 模板信息
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 更新模板
+      tags:
+      - 模板
+  /api/templates/{id}/preview:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 模板 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 变量
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 用变量渲染模板预览
+      tags:
+      - 模板
+  /api/templates/batch-delete:
+    post:
+      parameters:
+      - description: ids
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 批量删除模板
+      tags:
+      - 模板
+  /api/users:
+    get:
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              additionalProperties: true
+              type: object
+            type: array
+      security:
+      - BearerAuth: []
+      summary: 用户列表（仅管理员）
+      tags:
+      - 用户
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 用户信息
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 新建用户（仅管理员）
+      tags:
+      - 用户
+  /api/users/{id}:
+    delete:
+      parameters:
+      - description: 用户 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 删除用户（仅管理员）
+      tags:
+      - 用户
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: 用户 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 更新字段
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 更新用户角色/密码（仅管理员）
+      tags:
+      - 用户
+  /api/users/{id}/reset-token:
+    post:
+      parameters:
+      - description: 用户 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 为用户生成一次性重置令牌（仅管理员）
+      tags:
+      - 用户
+  /api/users/batch-delete:
+    post:
+      parameters:
+      - description: ids
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 批量删除用户（仅管理员）
+      tags:
+      - 用户
+  /api/webhook/{api_key}:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 任务 API Key
+        in: path
+        name: api_key
+        required: true
+        type: string
+      - description: 变量
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      responses:
+        "202":
+          description: Accepted
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 用 API Key 触发任务（无需登录）
+      tags:
+      - Webhook
+securityDefinitions:
+  BearerAuth:
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"

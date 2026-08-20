@@ -23,6 +23,12 @@ func NewTaskHandler(db *sql.DB, sched service.Scheduler, queue *service.QueueSer
 	return &TaskHandler{svc: service.NewTaskService(db, sched), queue: queue, db: db}
 }
 
+// List 任务列表
+// @Summary 任务列表
+// @Tags 任务
+// @Security BearerAuth
+// @Success 200 {array} map[string]interface{}
+// @Router /api/tasks [get]
 func (h *TaskHandler) List(c *gin.Context) {
 	list, err := h.svc.List(c.GetInt64("uid"))
 	if err != nil {
@@ -32,6 +38,14 @@ func (h *TaskHandler) List(c *gin.Context) {
 	c.JSON(http.StatusOK, list)
 }
 
+// Create 新建任务
+// @Summary 新建任务（仅管理员）
+// @Tags 任务
+// @Security BearerAuth
+// @Accept json
+// @Param body body object true "任务信息"
+// @Success 200 {object} map[string]interface{}
+// @Router /api/tasks [post]
 func (h *TaskHandler) Create(c *gin.Context) {
 	var in model.Task
 	if err := c.ShouldBindJSON(&in); err != nil {
@@ -46,6 +60,15 @@ func (h *TaskHandler) Create(c *gin.Context) {
 	c.JSON(http.StatusOK, in)
 }
 
+// Update 更新任务
+// @Summary 更新任务（仅管理员）
+// @Tags 任务
+// @Security BearerAuth
+// @Param id path int true "任务 ID"
+// @Accept json
+// @Param body body object true "任务信息"
+// @Success 200 {object} map[string]interface{}
+// @Router /api/tasks/{id} [put]
 func (h *TaskHandler) Update(c *gin.Context) {
 	id, _ := strconv.ParseInt(c.Param("id"), 10, 64)
 	var in model.Task
@@ -61,6 +84,13 @@ func (h *TaskHandler) Update(c *gin.Context) {
 	c.JSON(http.StatusOK, in)
 }
 
+// Delete 删除任务
+// @Summary 删除任务（仅管理员）
+// @Tags 任务
+// @Security BearerAuth
+// @Param id path int true "任务 ID"
+// @Success 200 {object} map[string]interface{}
+// @Router /api/tasks/{id} [delete]
 func (h *TaskHandler) Delete(c *gin.Context) {
 	id, _ := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err := h.svc.Delete(c.GetInt64("uid"), id); err != nil {
@@ -72,6 +102,13 @@ func (h *TaskHandler) Delete(c *gin.Context) {
 }
 
 // BatchDelete 批量删除任务（仅 admin）。
+// BatchDelete 批量删除任务
+// @Summary 批量删除任务（仅管理员）
+// @Tags 任务
+// @Security BearerAuth
+// @Param body body object true "ids"
+// @Success 200 {object} map[string]interface{}
+// @Router /api/tasks/batch-delete [post]
 func (h *TaskHandler) BatchDelete(c *gin.Context) {
 	var req struct {
 		IDs []int64 `json:"ids"`
@@ -88,6 +125,14 @@ func (h *TaskHandler) BatchDelete(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"ok": true})
 }
 
+// Toggle 启停任务
+// @Summary 启用/停用任务（仅管理员）
+// @Tags 任务
+// @Security BearerAuth
+// @Param id path int true "任务 ID"
+// @Param body body object true "enabled"
+// @Success 200 {object} map[string]interface{}
+// @Router /api/tasks/{id}/toggle [post]
 func (h *TaskHandler) Toggle(c *gin.Context) {
 	id, _ := strconv.ParseInt(c.Param("id"), 10, 64)
 	var req struct {
@@ -105,6 +150,13 @@ func (h *TaskHandler) Toggle(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"ok": true})
 }
 
+// Logs 任务日志
+// @Summary 查看某任务发送日志
+// @Tags 任务
+// @Security BearerAuth
+// @Param id path int true "任务 ID"
+// @Success 200 {array} map[string]interface{}
+// @Router /api/tasks/{id}/logs [get]
 func (h *TaskHandler) Logs(c *gin.Context) {
 	id, _ := strconv.ParseInt(c.Param("id"), 10, 64)
 	if _, err := h.svc.Get(c.GetInt64("uid"), id); err != nil {
@@ -120,6 +172,13 @@ func (h *TaskHandler) Logs(c *gin.Context) {
 }
 
 // SendNow 立即发送任务（入队，不依赖 cron 到点；仅 admin）。
+// SendNow 立即发送
+// @Summary 立即发送任务（入队，不依赖 cron；仅管理员）
+// @Tags 任务
+// @Security BearerAuth
+// @Param id path int true "任务 ID"
+// @Success 202 {object} map[string]interface{}
+// @Router /api/tasks/{id}/send [post]
 func (h *TaskHandler) SendNow(c *gin.Context) {
 	id, _ := strconv.ParseInt(c.Param("id"), 10, 64)
 	if _, err := h.svc.Get(c.GetInt64("uid"), id); err != nil {
@@ -136,6 +195,18 @@ func (h *TaskHandler) SendNow(c *gin.Context) {
 }
 
 // LogsAll 分页/筛选查询全部发送日志（筛选条件后端下推 DB）。
+// LogsAll 发送日志（分页/筛选）
+// @Summary 分页查询全部发送日志
+// @Tags 任务
+// @Security BearerAuth
+// @Param task_id query int false "任务 ID"
+// @Param status query string false "状态 success/failed"
+// @Param from query string false "开始日期 YYYY-MM-DD"
+// @Param to query string false "结束日期 YYYY-MM-DD"
+// @Param page query int false "页码"
+// @Param page_size query int false "每页数量"
+// @Success 200 {object} map[string]interface{}
+// @Router /api/logs [get]
 func (h *TaskHandler) LogsAll(c *gin.Context) {
 	f := repository.LogFilter{Page: 1, PageSize: 50}
 	if v := c.Query("task_id"); v != "" {

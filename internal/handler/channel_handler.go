@@ -21,6 +21,12 @@ func NewChannelHandler(db *sql.DB, cipher *crypto.Cipher) *ChannelHandler {
 	return &ChannelHandler{svc: service.NewChannelService(db, cipher), db: db}
 }
 
+// List 渠道列表
+// @Summary 渠道列表
+// @Tags 渠道
+// @Security BearerAuth
+// @Success 200 {array} map[string]interface{}
+// @Router /api/channels [get]
 func (h *ChannelHandler) List(c *gin.Context) {
 	list, err := h.svc.List(c.GetInt64("uid"))
 	if err != nil {
@@ -30,6 +36,14 @@ func (h *ChannelHandler) List(c *gin.Context) {
 	c.JSON(http.StatusOK, list)
 }
 
+// Create 新建渠道
+// @Summary 新建渠道
+// @Tags 渠道
+// @Security BearerAuth
+// @Accept json
+// @Param body body object true "渠道配置"
+// @Success 200 {object} map[string]interface{}
+// @Router /api/channels [post]
 func (h *ChannelHandler) Create(c *gin.Context) {
 	var in model.Channel
 	if err := c.ShouldBindJSON(&in); err != nil {
@@ -44,6 +58,15 @@ func (h *ChannelHandler) Create(c *gin.Context) {
 	c.JSON(http.StatusOK, in)
 }
 
+// Update 更新渠道
+// @Summary 更新渠道
+// @Tags 渠道
+// @Security BearerAuth
+// @Param id path int true "渠道 ID"
+// @Accept json
+// @Param body body object true "渠道配置"
+// @Success 200 {object} map[string]interface{}
+// @Router /api/channels/{id} [put]
 func (h *ChannelHandler) Update(c *gin.Context) {
 	id, _ := strconv.ParseInt(c.Param("id"), 10, 64)
 	var in model.Channel
@@ -59,6 +82,13 @@ func (h *ChannelHandler) Update(c *gin.Context) {
 	c.JSON(http.StatusOK, in)
 }
 
+// Delete 删除渠道
+// @Summary 删除渠道
+// @Tags 渠道
+// @Security BearerAuth
+// @Param id path int true "渠道 ID"
+// @Success 200 {object} map[string]interface{}
+// @Router /api/channels/{id} [delete]
 func (h *ChannelHandler) Delete(c *gin.Context) {
 	id, _ := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err := h.svc.Delete(c.GetInt64("uid"), id); err != nil {
@@ -70,6 +100,13 @@ func (h *ChannelHandler) Delete(c *gin.Context) {
 }
 
 // BatchDelete 批量删除渠道（仅 admin）。
+// BatchDelete 批量删除渠道
+// @Summary 批量删除渠道
+// @Tags 渠道
+// @Security BearerAuth
+// @Param body body object true "ids"
+// @Success 200 {object} map[string]interface{}
+// @Router /api/channels/batch-delete [post]
 func (h *ChannelHandler) BatchDelete(c *gin.Context) {
 	var req struct {
 		IDs []int64 `json:"ids"`
@@ -86,6 +123,13 @@ func (h *ChannelHandler) BatchDelete(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"ok": true})
 }
 
+// Test 测试渠道
+// @Summary 测试渠道连通性
+// @Tags 渠道
+// @Security BearerAuth
+// @Param id path int true "渠道 ID"
+// @Success 200 {object} map[string]interface{}
+// @Router /api/channels/{id}/test [post]
 func (h *ChannelHandler) Test(c *gin.Context) {
 	id, _ := strconv.ParseInt(c.Param("id"), 10, 64)
 	var req struct {

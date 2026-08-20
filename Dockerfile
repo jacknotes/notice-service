@@ -19,6 +19,8 @@ RUN --mount=type=cache,target=/go/pkg/mod \
     go mod download
 COPY . .
 COPY --from=web /app/dist ./web/dist
+RUN go install github.com/swaggo/swag/cmd/swag@v1.16.6
+RUN swag init -g cmd/server/main.go -o docs/swagger
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /notice-service ./cmd/server
 
 # 阶段3：运行
