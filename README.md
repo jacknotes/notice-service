@@ -44,6 +44,56 @@ cd web && npm install && npm run dev
 # 访问 http://127.0.0.1:5173
 ```
 
+> 更简单的方式：直接 `make dev`（见下方「Makefile 使用说明」），一键启动后端 :8080 + 前端 :5173。
+
+## Makefile 使用说明
+
+所有命令见 `make help`。按场景：
+
+### 首次准备
+```bash
+make deps    # 一键安装：npm install（前端）+ go mod download（后端）
+```
+
+### 本地开发（推荐日常用）
+```bash
+make dev     # 编译后端 :8080（release）+ 前端 Vite :5173（热更新；/api、/swagger 自动代理到 :8080）
+```
+访问 **http://localhost:5173**。前提：本机 MySQL（`.dev/mysql-run`）在跑，且 :8080 未被占用（有旧进程先 `kill <pid>`）。
+
+### 只跑后端 / 只跑前端
+```bash
+make run             # 编译并启动后端 :8080（默认 release）
+make dev-backend     # 后端 :8080，GIN_MODE=debug（多请求日志，便于排查）
+make prod-backend    # 后端 :8080，GIN_MODE=release
+make frontend-dev    # 仅前端 Vite :5173（代理到 127.0.0.1:8080）
+make frontend-build  # 构建前端产物到 web/dist
+make frontend-install# 仅安装前端依赖
+```
+
+### 构建与检查
+```bash
+make build    # 先生成 Swagger 文档，再静态编译后端到 .dev/notice-service（CGO_ENABLED=0）
+make swagger  # 只重新生成 Swagger 文档（改过 handler 注解后执行）
+make test     # 全部 Go 测试（需本地 notice_service_test 测试库）
+make vet      # 静态检查
+make fmt      # 格式化 Go 代码
+```
+
+### Docker（前后端合一镜像）
+```bash
+make docker-build   # docker build -t notice-service .（多阶段：前端→后端→运行时，镜像内含前端与 Swagger）
+make docker-up      # docker compose up -d（2 实例 + MySQL 5.7 高可用）
+make docker-down    # 停止
+make docker-logs    # 跟随日志
+```
+
+### 运维 / 清理
+```bash
+make db-clean FORCE=1   # 危险：清空 notice_service 与 notice_service_test 全部数据
+make clean              # 删除 .dev/notice-service、web/dist、web/node_modules、docs/swagger
+```
+
 ## Docker 部署（多实例高可用）
 
 ```bash
