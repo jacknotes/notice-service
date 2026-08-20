@@ -36,6 +36,15 @@
 - 文档：新增 Swagger 页面（swaggo 注解自动生成，`/swagger/index.html`）
 - 日志：失败记录支持「重试」——定向重发该条（同渠道+接收人，用已渲染内容），异步单次尝试，历史保留
 - 仪表盘：数据丰富版——日期筛选（默认近 7 天）+ 6 统计卡 + 状态环形图 + 趋势含失败 + TOP 任务 + 渠道分布
+- 修复：仪表盘日期快捷按钮选中态文字可读（plain-primary 按钮去掉深色渐变）
+- 修复：仪表盘状态分布图中心不再显示 `[object Object]`，改为真实成功率
+- 新增：右上角头像下拉「API 文档」入口（打开 Swagger 页）
+- 修复：Vite dev 代理 `/swagger`，:5173 下也能打开 API 文档
+- 构建：`make build` 依赖 `swagger` 并静态编译；新增 `make dev-backend`/`prod-backend`；Gin 模式支持 `GIN_MODE` 环境变量
+- 文档：README 补充 Makefile 使用说明
+- 修复：Swagger 去掉写死的 host/basePath，Try-it-out 随当前域名自适应（解决跨域与双 `/api`）
+- 调整：个人设置页移除「退出登录」，仅保留右上角退出
+- 新增：左上角「信号在线」改为真实状态——每 10s 轮询 `/api/health`，离线显示红色「信号离线」
 
 ### 计划中
 - 用户管理（多用户注册/禁用/角色管理）
