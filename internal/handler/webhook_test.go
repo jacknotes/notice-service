@@ -167,3 +167,68 @@ func num(n int64) string {
 	b, _ := json.Marshal(n)
 	return string(b)
 }
+
+// TestWebhookSwitchCronToAPIAndBack 验证问题1修复：
+// cron→api 自动生成 Key 且可触发；api→cron 清空 Key，旧 URL 失效。
+func TestWebhookSwitchCronToAPIAndBack(t *testing.T) {
+	channel.Register(&fakeOKChan{})
+	r := testRouter(t)
+	tok := login(t, r)
+
+	wt := authReq(t, r, tok, "POST", "/api/templates", `{"name":"t","subject":"s","content_md":"hi","variables":[]}`)
+	if wt.Code != 200 {
+		t.Fatalf("create template = %d body=%s", wt.Code, wt.Body.String())
+	}
+	tpl := mustJSON(t, wt)
+
+	wc := authReq(t, r, tok, "POST", "/api/channels", `{"type":"fake-ok","name":"假渠道","config":{},"enabled":true}`)
+	if wc.Code != 200 {
+		t.Fatalf("create channel = %d body=%s", wc.Code, wc.Body.String())
+	}
+	ch := mustJSON(t, wc)
+
+	// 1) 创建 cron 任务
+	payload := `{"name":"cron任务","channel_id":` + num(int64(ch["id"].(float64))) + `,"template_id":` + num(int64(tpl["id"].(float64))) + `,"trigger_type":"cron","cron_expr":"0 9 * * *","receivers":["a@x.com"],"enabled":true}`
+	wtk := authReq(t, r, tok, "POST", "/api/tasks", payload)
+	if wtk.Code != 200 {
+		t.Fatalf("create cron task = %d body=%s", wtk.Code, wtk.Body.String())
+	}
+	tk := mustJSON(t, wtk)
+	if tk["api_key"] != nil && tk["api_key"] != "" {
+		t.Fatalf("cron task should have no api_key, got %v", tk["api_key"])
+	}
+
+	// 2) 切到 api → 自动生成 Key
+	payload2 := `{"name":"cron任务","channel_id":` + num(int64(ch["id"].(float64))) + `,"template_id":` + num(int64(tpl["id"].(float64))) + `,"trigger_type":"api","receivers":["a@x.com"],"enabled":true}`
+	wu := authReq(t, r, tok, "PUT", "/api/tasks/"+num(int64(tk["id"].(float64))), payload2)
+	if wu.Code != 200 {
+		t.Fatalf("update to api = %d body=%s", wu.Code, wu.Body.String())
+	}
+	apiKey := mustJSON(t, wu)["api_key"].(string)
+	if apiKey == "" {
+		t.Fatal("api_key should be generated after cron→api switch")
+	}
+
+	// 3) 用新 Key 触发 webhook → 202
+	req, _ := http.NewRequest("POST", "/api/webhook/"+apiKey, bytes.NewBufferString(`{"variables":{}}`))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("webhook with generated key should 202, got %d body=%s", w.Code, w.Body.String())
+	}
+
+	// 4) 切回 cron → Key 清空，旧 URL 失效 → 404
+	payload3 := `{"name":"cron任务","channel_id":` + num(int64(ch["id"].(float64))) + `,"template_id":` + num(int64(tpl["id"].(float64))) + `,"trigger_type":"cron","cron_expr":"0 9 * * *","receivers":["a@x.com"],"enabled":true}`
+	wcron := authReq(t, r, tok, "PUT", "/api/tasks/"+num(int64(tk["id"].(float64))), payload3)
+	if wcron.Code != 200 {
+		t.Fatalf("update back to cron = %d body=%s", wcron.Code, wcron.Body.String())
+	}
+	req2, _ := http.NewRequest("POST", "/api/webhook/"+apiKey, bytes.NewBufferString(`{"variables":{}}`))
+	req2.Header.Set("Content-Type", "application/json")
+	w2 := httptest.NewRecorder()
+	r.ServeHTTP(w2, req2)
+	if w2.Code != http.StatusNotFound {
+		t.Fatalf("old api_key should be invalid after cron switch, got %d body=%s", w2.Code, w2.Body.String())
+	}
+}
