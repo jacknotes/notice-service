@@ -604,19 +604,26 @@ async function saveTask() {
       enabled: form.enabled,
     }
 
+    let savedId = form.id
     if (form.id) {
       await taskApi.update(form.id, payload)
       ElMessage.success('任务已更新')
     } else {
       const created = await taskApi.create(payload)
+      savedId = created?.id ?? 0
       ElMessage.success('任务已创建')
-      // API 任务创建后后端自动生成 api_key，若有则提示
-      if (form.trigger_type === 'api' && created?.api_key) {
-        ElMessage.success('已生成 Webhook API Key，可在任务列表查看')
-      }
     }
     dialogVisible.value = false
     await load()
+    // api 任务：保存后自动弹出 API Key 便于复制（后端负责生成/保留）
+    if (form.trigger_type === 'api' && savedId) {
+      const fresh = tasks.value.find((t) => t.id === savedId)
+      if (fresh?.api_key) {
+        apiKeyValue.value = fresh.api_key
+        apiKeyTaskId.value = fresh.id
+        apiKeyVisible.value = true
+      }
+    }
   } catch (e: any) {
     ElMessage.error(errMsg(e, '保存失败'))
   } finally {
