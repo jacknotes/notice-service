@@ -42,6 +42,11 @@ func (s *NotificationService) SendTask(taskID int64, vars map[string]string) err
 	if err != nil {
 		return err
 	}
+	if !task.Enabled {
+		// 纵深防御：队列/Webhook 在上游已拦截停用任务，这里兜底保证任何直接调用
+		// SendTask 的路径也不会向停用任务投递。
+		return errTaskDisabled
+	}
 	var channelIDs []int64
 	if task.ChannelIDsJSON != "" {
 		_ = json.Unmarshal([]byte(task.ChannelIDsJSON), &channelIDs)

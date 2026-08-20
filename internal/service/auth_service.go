@@ -71,6 +71,13 @@ func (s *AuthService) VerifyToken(token string) (*AuthClaims, error) {
 	return claims, nil
 }
 
+// UserActive 返回用户是否仍有效（未删除/未禁用）。被禁用（软删除）的用户
+// 其已签发 JWT 应立即失效，而不是等到令牌自然过期。
+func (s *AuthService) UserActive(userID int64) bool {
+	_, err := s.users.GetByID(userID)
+	return err == nil
+}
+
 func (s *AuthService) BootstrapAdmin() error {
 	if _, err := s.users.GetByUsername(s.adminUser); err == nil {
 		return nil

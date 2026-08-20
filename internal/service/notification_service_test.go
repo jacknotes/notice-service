@@ -178,6 +178,30 @@ func (f *fanOutChan) Send(m *channel.Message, r *channel.Receiver) error {
 	return nil
 }
 
+func TestNotificationServiceRejectsDisabledTask(t *testing.T) {
+	db := testDB(t)
+	ns := NewNotificationService(db, nil)
+
+	uid := seedServiceUser(t, db)
+	chID := seedServiceChannelType(t, db, uid, "wechat")
+	tplID := seedServiceTemplate(t, db, uid)
+	tkID := seedServiceTaskWithReceivers(t, db, uid, chID, tplID, `["a@x.com"]`)
+	// 停用任务：enabled=0
+	if _, err := db.Exec("UPDATE tasks SET enabled=0 WHERE id=?", tkID); err != nil {
+		t.Fatal(err)
+	}
+
+	cc := &countingChan{}
+	ns.Instancer = func(c *model.Channel) (channel.Channel, error) { return cc, nil }
+
+	if err := ns.SendTask(tkID, map[string]string{}); err == nil {
+		t.Fatal("SendTask on disabled task should error")
+	}
+	if cc.sends != 0 {
+		t.Fatalf("disabled task must not send, got %d sends", cc.sends)
+	}
+}
+
 func TestNotificationServiceSkipsDisabledChannel(t *testing.T) {
 	db := testDB(t)
 	ns := NewNotificationService(db, nil)

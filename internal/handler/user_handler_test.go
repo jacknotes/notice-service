@@ -4,6 +4,7 @@ package handler_test
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -27,6 +28,24 @@ func loginAs(t *testing.T, r *gin.Engine, username, password string) string {
 	}
 	_ = json.Unmarshal(w.Body.Bytes(), &resp)
 	return resp.Token
+}
+
+// loginAsNoFail 尝试登录，不失败则返回 token；登录被拒绝时返回 error。
+func loginAsNoFail(t *testing.T, r *gin.Engine, username, password string) (string, error) {
+	t.Helper()
+	body, _ := json.Marshal(map[string]string{"username": username, "password": password})
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("POST", "/api/auth/login", bytes.NewBuffer(body))
+	req.Header.Set("Content-Type", "application/json")
+	r.ServeHTTP(w, req)
+	if w.Code != 200 {
+		return "", errors.New(w.Body.String())
+	}
+	var resp struct {
+		Token string `json:"token"`
+	}
+	_ = json.Unmarshal(w.Body.Bytes(), &resp)
+	return resp.Token, nil
 }
 
 func TestUserManagementAPI(t *testing.T) {
@@ -163,5 +182,45 @@ func TestUserUpdateAPI(t *testing.T) {
 	r.ServeHTTP(wOld, req)
 	if wOld.Code == 200 {
 		t.Fatal("old password should no longer work after reset")
+	}
+}
+
+// TestDisabledUserTokenInvalidated 验证：用户被管理员禁用（软删除）后，
+// 其已签发的 JWT 立即失效（此前 24h 内仍可访问）。
+func TestDisabledUserTokenInvalidated(t *testing.T) {
+	r := testRouter(t)
+	adminTok := login(t, r)
+
+	// admin 创建普通用户 alice
+	w := authReq(t, r, adminTok, "POST", "/api/users", `{"username":"alice_ds","password":"TestPass123!","role":"user"}`)
+	if w.Code != 200 {
+		t.Fatalf("admin create user = %d body=%s", w.Code, w.Body.String())
+	}
+	aliceID := int64(mustJSON(t, w)["id"].(float64))
+	t.Cleanup(func() { testDB(t).Exec("DELETE FROM users WHERE id=?", aliceID) })
+
+	// alice 登录并拿到令牌
+	aliceTok := loginAs(t, r, "alice_ds", "TestPass123!")
+	if w1 := authReq(t, r, aliceTok, "GET", "/api/channels", ""); w1.Code != 200 {
+		t.Fatalf("alice access before disable = %d, want 200", w1.Code)
+	}
+
+	// admin 删除（禁用）alice
+	wd := authReq(t, r, adminTok, "DELETE", "/api/users/"+num(aliceID), "")
+	if wd.Code != 200 {
+		t.Fatalf("admin delete user = %d body=%s", wd.Code, wd.Body.String())
+	}
+
+	// alice 的旧令牌应立即失效 → 401
+	if w2 := authReq(t, r, aliceTok, "GET", "/api/channels", ""); w2.Code != 401 {
+		t.Fatalf("disabled user token should be rejected, got %d body=%s", w2.Code, w2.Body.String())
+	}
+	if w3 := authReq(t, r, aliceTok, "GET", "/api/tasks", ""); w3.Code != 401 {
+		t.Fatalf("disabled user token on tasks = %d, want 401", w3.Code)
+	}
+
+	// 被禁用用户也无法重新登录
+	if _, err := loginAsNoFail(t, r, "alice_ds", "TestPass123!"); err == nil {
+		t.Fatal("disabled user should not be able to login again")
 	}
 }
