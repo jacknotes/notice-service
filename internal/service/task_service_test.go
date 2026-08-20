@@ -206,3 +206,101 @@ func TestTaskServiceMultiChannelRoundtrip(t *testing.T) {
 		t.Error("multi-channel with email but no receivers should fail")
 	}
 }
+
+func TestTaskServiceUpdateGeneratesAPIKeyWhenSwitchingToAPI(t *testing.T) {
+	db := testDB(t)
+	svc := NewTaskService(db, &fakeScheduler{})
+	uid := seedServiceUser(t, db)
+	chID := seedServiceChannel(t, db, uid)
+	tplID := seedServiceTemplate(t, db, uid)
+
+	tk := &model.Task{UserID: uid, Name: "t", ChannelID: chID, ChannelIDs: []int64{chID}, TemplateID: tplID, TriggerType: "cron", CronExpr: "0 9 * * *", Receivers: []string{"a@x.com"}, Enabled: true}
+	if err := svc.Create(uid, tk); err != nil {
+		t.Fatal(err)
+	}
+	if tk.APIKey != "" {
+		t.Fatalf("cron task should have empty api_key, got %q", tk.APIKey)
+	}
+
+	up := &model.Task{Name: "t", ChannelID: chID, ChannelIDs: []int64{chID}, TemplateID: tplID, TriggerType: "api", Receivers: []string{"a@x.com"}, Enabled: true}
+	if err := svc.Update(uid, tk.ID, up); err != nil {
+		t.Fatal(err)
+	}
+	if len(up.APIKey) < 16 {
+		t.Errorf("api task should have generated api_key, got %q", up.APIKey)
+	}
+	got, err := svc.Get(uid, tk.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.APIKey != up.APIKey {
+		t.Errorf("api_key not persisted: got %q want %q", got.APIKey, up.APIKey)
+	}
+}
+
+func TestTaskServiceUpdatePreservesAPIKey(t *testing.T) {
+	db := testDB(t)
+	svc := NewTaskService(db, &fakeScheduler{})
+	uid := seedServiceUser(t, db)
+	chID := seedServiceChannel(t, db, uid)
+	tplID := seedServiceTemplate(t, db, uid)
+
+	tk := &model.Task{UserID: uid, Name: "t", ChannelID: chID, ChannelIDs: []int64{chID}, TemplateID: tplID, TriggerType: "api", Receivers: []string{"a@x.com"}, Enabled: true}
+	if err := svc.Create(uid, tk); err != nil {
+		t.Fatal(err)
+	}
+	first := tk.APIKey
+	if first == "" {
+		t.Fatal("api task should have key after create")
+	}
+
+	up := &model.Task{Name: "t2", ChannelID: chID, ChannelIDs: []int64{chID}, TemplateID: tplID, TriggerType: "api", Receivers: []string{"a@x.com"}, Enabled: true}
+	if err := svc.Update(uid, tk.ID, up); err != nil {
+		t.Fatal(err)
+	}
+	if up.APIKey != first {
+		t.Errorf("api→api edit should preserve key: got %q want %q", up.APIKey, first)
+	}
+}
+
+func TestTaskServiceUpdateClearsAPIKeyWhenSwitchingToCron(t *testing.T) {
+	db := testDB(t)
+	svc := NewTaskService(db, &fakeScheduler{})
+	uid := seedServiceUser(t, db)
+	chID := seedServiceChannel(t, db, uid)
+	tplID := seedServiceTemplate(t, db, uid)
+
+	tk := &model.Task{UserID: uid, Name: "t", ChannelID: chID, ChannelIDs: []int64{chID}, TemplateID: tplID, TriggerType: "api", Receivers: []string{"a@x.com"}, Enabled: true}
+	if err := svc.Create(uid, tk); err != nil {
+		t.Fatal(err)
+	}
+
+	up := &model.Task{Name: "t", ChannelID: chID, ChannelIDs: []int64{chID}, TemplateID: tplID, TriggerType: "cron", CronExpr: "0 9 * * *", Receivers: []string{"a@x.com"}, Enabled: true}
+	if err := svc.Update(uid, tk.ID, up); err != nil {
+		t.Fatal(err)
+	}
+	if up.APIKey != "" {
+		t.Errorf("api→cron should clear key: got %q", up.APIKey)
+	}
+	got, err := svc.Get(uid, tk.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.APIKey != "" {
+		t.Errorf("cleared key not persisted: got %q", got.APIKey)
+	}
+}
+
+func TestTaskServiceMultipleCronTasksCoexist(t *testing.T) {
+	db := testDB(t)
+	svc := NewTaskService(db, &fakeScheduler{})
+	uid := seedServiceUser(t, db)
+	chID := seedServiceChannel(t, db, uid)
+	tplID := seedServiceTemplate(t, db, uid)
+	for i := 0; i < 2; i++ {
+		tk := &model.Task{UserID: uid, Name: "c", ChannelID: chID, ChannelIDs: []int64{chID}, TemplateID: tplID, TriggerType: "cron", CronExpr: "0 9 * * *", Receivers: []string{"a@x.com"}, Enabled: true}
+		if err := svc.Create(uid, tk); err != nil {
+			t.Fatalf("create cron #%d: %v", i+1, err)
+		}
+	}
+}

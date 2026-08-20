@@ -20,7 +20,7 @@ func (r *TaskRepo) Create(t *model.Task) error {
 		`INSERT INTO tasks (user_id, name, channel_id, channel_ids, template_id, trigger_type, receivers, cron_expr, api_key, allowed_ips, variables, enabled)
 		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		t.UserID, t.Name, t.ChannelID, varsJSON(t.ChannelIDsJSON), t.TemplateID, t.TriggerType, t.ReceiversJSON,
-		t.CronExpr, t.APIKey, t.AllowedIPsJSON, varsJSON(t.VariablesJSON), t.Enabled)
+		t.CronExpr, nullableKey(t.APIKey), t.AllowedIPsJSON, varsJSON(t.VariablesJSON), t.Enabled)
 	if err != nil {
 		return err
 	}
@@ -31,10 +31,10 @@ func (r *TaskRepo) Create(t *model.Task) error {
 
 func (r *TaskRepo) Update(t *model.Task) error {
 	_, err := r.db.Exec(
-		`UPDATE tasks SET name=?, channel_id=?, channel_ids=?, template_id=?, trigger_type=?, receivers=?, cron_expr=?, allowed_ips=?, variables=?, enabled=?
+		`UPDATE tasks SET name=?, channel_id=?, channel_ids=?, template_id=?, trigger_type=?, receivers=?, cron_expr=?, api_key=?, allowed_ips=?, variables=?, enabled=?
 		 WHERE id=? AND user_id=?`,
 		t.Name, t.ChannelID, varsJSON(t.ChannelIDsJSON), t.TemplateID, t.TriggerType, t.ReceiversJSON, t.CronExpr,
-		t.AllowedIPsJSON, varsJSON(t.VariablesJSON), t.Enabled, t.ID, t.UserID)
+		nullableKey(t.APIKey), t.AllowedIPsJSON, varsJSON(t.VariablesJSON), t.Enabled, t.ID, t.UserID)
 	return err
 }
 
@@ -42,6 +42,14 @@ func (r *TaskRepo) Update(t *model.Task) error {
 func varsJSON(s string) string {
 	if s == "" {
 		return "null"
+	}
+	return s
+}
+
+// nullableKey 空 api_key 以 NULL 落库：api_key 列是 UNIQUE，空串会与其它 cron 任务撞唯一键。
+func nullableKey(s string) interface{} {
+	if s == "" {
+		return nil
 	}
 	return s
 }
