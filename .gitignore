@@ -16,3 +16,6 @@ web/node_modules/
 
 # 本地加密密钥（ENCRYPT_KEY 未设置时持久化用）
 .notice-encrypt.key
+
+# Brainstorm/visual-companion working dir
+.superpowers/
