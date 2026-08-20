@@ -7,9 +7,9 @@
         <span class="brand-name grad-text">Notice</span>
       </div>
 
-      <div class="status-pill">
-        <span class="dot-live"></span>
-        <span>信号在线</span>
+      <div class="status-pill" :class="{ 'is-offline': signal === 'offline' }">
+        <span class="dot-live" :class="{ 'is-offline': signal === 'offline' }"></span>
+        <span>{{ signal === 'online' ? '信号在线' : '信号离线' }}</span>
       </div>
 
       <el-menu router :default-active="route.path" class="side-menu">
@@ -96,7 +96,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import type { Component } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessageBox } from 'element-plus'
@@ -106,6 +106,7 @@ import {
 } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 import { theme, toggleTheme } from '@/composables/useTheme'
+import client from '@/api/client'
 
 const route = useRoute()
 const router = useRouter()
@@ -138,6 +139,28 @@ const pageTitle = computed<string>(
 const avatarLetter = computed<string>(
   () => (auth.user?.username || 'N').slice(0, 1).toUpperCase()
 )
+
+/* ── 信号在线状态：轮询 /api/health，真实反映后端在线与否 ───────────── */
+const signal = ref<'online' | 'offline'>('online')
+const SIGNAL_POLL_MS = 10000
+
+async function checkSignal() {
+  try {
+    await client.get('/health', { timeout: 5000 })
+    signal.value = 'online'
+  } catch {
+    signal.value = 'offline'
+  }
+}
+
+let signalTimer: ReturnType<typeof setInterval> | null = null
+onMounted(() => {
+  checkSignal()
+  signalTimer = setInterval(checkSignal, SIGNAL_POLL_MS)
+})
+onBeforeUnmount(() => {
+  if (signalTimer) clearInterval(signalTimer)
+})
 
 function onCommand(cmd: string) {
   if (cmd === 'swagger') window.open('/swagger/index.html', '_blank')
@@ -213,6 +236,12 @@ async function onLogout() {
   font-size: var(--text-xs);
   font-weight: 600;
   letter-spacing: 0.02em;
+}
+/* 离线：红色主题 */
+.status-pill.is-offline {
+  border-color: rgba(248, 113, 113, 0.3);
+  background: rgba(248, 113, 113, 0.1);
+  color: #f87171;
 }
 
 .side-menu {

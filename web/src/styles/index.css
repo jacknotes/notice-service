@@ -208,6 +208,13 @@ body::after {
   100% { box-shadow: 0 0 0 0 rgba(52, 211, 153, 0); }
 }
 
+/* 离线状态：红色、停止脉冲 */
+.dot-live.is-offline {
+  background: #f87171;
+  animation: none;
+  box-shadow: 0 0 0 0 rgba(248, 113, 113, 0);
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
