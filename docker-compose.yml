@@ -1,4 +1,12 @@
-version: '3'
+# Notice Service 多实例高可用部署
+#
+# 生产必读：
+#   1. cp .env.example .env，并务必修改全部密码与密钥（JWT_SECRET / ENCRYPT_KEY
+#      两实例必须一致；MYSQL_ROOT_PASSWORD / DB_PASSWORD / ADMIN_PASS 必改）。
+#   2. 下面的 ${VAR:?err} 语法：关键变量缺失时 docker compose 会直接报错退出，
+#      避免以弱默认密钥裸跑。
+#   3. 若 Nginx 反代不在本机（如独立节点），请设置 TRUSTED_PROXIES 为反代所在
+#      CIDR（默认信任 127.0.0.1 / ::1，对应「宿主机 Nginx → 本机端口」形态）。
 services:
   notice-service-1:
     build: .
@@ -8,15 +16,19 @@ services:
       - DB_HOST=mysql
       - DB_PORT=3306
       - DB_USER=notice
-      - DB_PASSWORD=${DB_PASSWORD:-your_password}
+      - DB_PASSWORD=${DB_PASSWORD:?请在 .env 中设置 DB_PASSWORD}
       - DB_NAME=notice_service
-      - JWT_SECRET=${JWT_SECRET:-change_me}
-      - ENCRYPT_KEY=${ENCRYPT_KEY:-0123456789abcdef0123456789abcdef}
+      - JWT_SECRET=${JWT_SECRET:?请在 .env 中设置 JWT_SECRET（两实例一致）}
+      - ENCRYPT_KEY=${ENCRYPT_KEY:?请在 .env 中设置 ENCRYPT_KEY（两实例一致）}
       - ADMIN_USER=${ADMIN_USER:-admin}
-      - ADMIN_PASS=${ADMIN_PASS:-admin123}
+      - ADMIN_PASS=${ADMIN_PASS:?请在 .env 中设置 ADMIN_PASS}
+      - TRUSTED_PROXIES=${TRUSTED_PROXIES:-127.0.0.1,::1}
+      - GIN_MODE=release
     depends_on:
-      - mysql
+      mysql:
+        condition: service_healthy
     restart: unless-stopped
+    stop_grace_period: 30s
 
   notice-service-2:
     build: .
@@ -26,28 +38,39 @@ services:
       - DB_HOST=mysql
       - DB_PORT=3306
       - DB_USER=notice
-      - DB_PASSWORD=${DB_PASSWORD:-your_password}
+      - DB_PASSWORD=${DB_PASSWORD:?请在 .env 中设置 DB_PASSWORD}
       - DB_NAME=notice_service
-      - JWT_SECRET=${JWT_SECRET:-change_me}
-      - ENCRYPT_KEY=${ENCRYPT_KEY:-0123456789abcdef0123456789abcdef}
+      - JWT_SECRET=${JWT_SECRET:?请在 .env 中设置 JWT_SECRET（两实例一致）}
+      - ENCRYPT_KEY=${ENCRYPT_KEY:?请在 .env 中设置 ENCRYPT_KEY（两实例一致）}
       - ADMIN_USER=${ADMIN_USER:-admin}
-      - ADMIN_PASS=${ADMIN_PASS:-admin123}
+      - ADMIN_PASS=${ADMIN_PASS:?请在 .env 中设置 ADMIN_PASS}
+      - TRUSTED_PROXIES=${TRUSTED_PROXIES:-127.0.0.1,::1}
+      - GIN_MODE=release
     depends_on:
-      - mysql
+      mysql:
+        condition: service_healthy
     restart: unless-stopped
+    stop_grace_period: 30s
 
   mysql:
     image: mysql:5.7
+    # 仅宿主机可访问（供运维工具），不对外网暴露数据库端口。
     ports:
-      - "3306:3306"
+      - "127.0.0.1:3306:3306"
     environment:
-      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD:-root_password}
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD:?请在 .env 中设置 MYSQL_ROOT_PASSWORD}
       - MYSQL_DATABASE=notice_service
       - MYSQL_USER=notice
-      - MYSQL_PASSWORD=${DB_PASSWORD:-your_password}
+      - MYSQL_PASSWORD=${DB_PASSWORD:?请在 .env 中设置 DB_PASSWORD}
     volumes:
       - mysql_data:/var/lib/mysql
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-p${MYSQL_ROOT_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
 
 volumes:
   mysql_data:

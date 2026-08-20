@@ -49,7 +49,10 @@ func testRouter(t *testing.T) *gin.Engine {
 		RetryBackoff: []time.Duration{time.Second}, ClaimTTL: time.Second,
 		LogRetentionDays: 30, JobRetentionDays: 30,
 	}, "test-inst")
-	return router.NewRouter(db, authSvc, ciph, nil, q)
+	// 测试信任全部代理头，保证 webhook IP 白名单用例能通过 X-Real-IP 模拟远端。
+	return router.NewRouter(db, authSvc, ciph, nil, q, router.Options{
+		TrustedProxies: []string{"0.0.0.0/0", "::/0"},
+	})
 }
 
 // resetAdminData 删除 admin 用户及其关联的渠道/模板/任务/日志，使测试幂等。
@@ -69,6 +72,21 @@ func TestHealth(t *testing.T) {
 	r.ServeHTTP(w, req)
 	if w.Code != 200 {
 		t.Fatalf("health = %d", w.Code)
+	}
+}
+
+func TestHealthDegradedWhenDBDown(t *testing.T) {
+	// DB 关闭后健康检查应返回 503（供 LB 摘除故障实例）
+	db := testDB(t)
+	db.Close()
+	authSvc := service.NewAuthService(db, "secret-secret-secret", "admin", "admin123")
+	ciph, _ := crypto.New(make([]byte, 32))
+	r := router.NewRouter(db, authSvc, ciph, nil, nil)
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("GET", "/api/health", nil)
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusServiceUnavailable {
+		t.Fatalf("health with closed db = %d, want 503", w.Code)
 	}
 }
 

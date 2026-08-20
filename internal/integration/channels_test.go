@@ -295,9 +295,10 @@ func buildFixture(t *testing.T, chType string, cfg map[string]string) *fixture {
 
 func TestIntegrationEmailSMTP(t *testing.T) {
 	sink := newSMTPSink(t)
+	// 本地假 SMTP sink 不支持 STARTTLS：仅此测试放开明文认证（生产渠道默认拒绝）。
 	fx := buildFixture(t, "email", map[string]string{
 		"host": "127.0.0.1", "port": strings.SplitN(sink.addr(), ":", 2)[1],
-		"username": "u", "password": "p", "from": "a@x.com",
+		"username": "u", "password": "p", "from": "a@x.com", "allow_insecure": "true",
 	})
 	if err := fx.ns.SendTask(fx.taskID, map[string]string{}); err != nil {
 		t.Fatalf("email send: %v", err)

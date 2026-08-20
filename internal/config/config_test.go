@@ -2,6 +2,7 @@ package config
 
 import (
 	"os"
+	"strings"
 	"testing"
 	"time"
 )
@@ -112,6 +113,7 @@ func TestWeakSecretWarnings(t *testing.T) {
 }
 
 func TestLoadFile(t *testing.T) {
+	clearEnv(t)
 	dir := t.TempDir()
 	yml := dir + "/config.yml"
 	if err := os.WriteFile(yml, []byte(`
@@ -163,6 +165,7 @@ log_retention_days: 45
 }
 
 func TestEnvOverridesFile(t *testing.T) {
+	clearEnv(t)
 	dir := t.TempDir()
 	yml := dir + "/config.yml"
 	if err := os.WriteFile(yml, []byte("database:\n  host: filehost\nserver:\n  port: \"8080\"\n"), 0o600); err != nil {
@@ -180,8 +183,73 @@ func TestEnvOverridesFile(t *testing.T) {
 }
 
 func TestLoadFileMissingFallsBackToDefaults(t *testing.T) {
+	clearEnv(t)
 	cfg := LoadFile(t.TempDir() + "/nope.yml")
 	if cfg.DBHost != "127.0.0.1" || cfg.Port != "8080" || cfg.QueueWorkers != 4 {
 		t.Errorf("missing file should fall back to defaults, got %s:%s workers=%d", cfg.DBHost, cfg.Port, cfg.QueueWorkers)
+	}
+}
+
+// clearEnv 清空会影响配置解析的环境变量，保证测试与宿主 shell 环境隔离。
+func clearEnv(t *testing.T) {
+	t.Helper()
+	for _, k := range []string{
+		"DB_HOST", "DB_PORT", "DB_USER", "DB_PASSWORD", "DB_NAME",
+		"JWT_SECRET", "ENCRYPT_KEY", "PORT", "INSTANCE_ID",
+		"ADMIN_USER", "ADMIN_PASS",
+		"QUEUE_WORKERS", "QUEUE_POLL_MS", "QUEUE_MAX_ATTEMPTS", "QUEUE_RETRY_BACKOFF",
+		"QUEUE_CLAIM_TTL", "LOG_RETENTION_DAYS", "QUEUE_JOB_RETENTION_DAYS", "AUDIT_RETENTION_DAYS",
+		"TRUSTED_PROXIES", "SWAGGER_ENABLED",
+	} {
+		t.Setenv(k, "")
+	}
+}
+
+func TestTrustedProxiesAndSwaggerDefaults(t *testing.T) {
+	clearEnv(t)
+	cfg := LoadFile(t.TempDir() + "/nope.yml")
+	// 默认信任环回（宿主 Nginx 反代形态），且默认暴露 Swagger
+	if len(cfg.TrustedProxies) != 2 || cfg.TrustedProxies[0] != "127.0.0.1" {
+		t.Errorf("TrustedProxies default = %v, want [127.0.0.1 ::1]", cfg.TrustedProxies)
+	}
+	if !cfg.SwaggerEnabled {
+		t.Error("SwaggerEnabled should default true")
+	}
+}
+
+func TestTrustedProxiesFromEnvAndFile(t *testing.T) {
+	clearEnv(t)
+	dir := t.TempDir()
+	yml := dir + "/config.yml"
+	if err := os.WriteFile(yml, []byte("trusted_proxies: \"10.0.0.0/8, 172.16.0.1\"\nswagger_enabled: false\naudit_retention_days: 90\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg := LoadFile(yml)
+	if len(cfg.TrustedProxies) != 2 || cfg.TrustedProxies[0] != "10.0.0.0/8" || cfg.TrustedProxies[1] != "172.16.0.1" {
+		t.Errorf("TrustedProxies from file = %v", cfg.TrustedProxies)
+	}
+	if cfg.SwaggerEnabled {
+		t.Error("swagger_enabled=false should disable swagger")
+	}
+	if cfg.AuditRetentionDays != 90 {
+		t.Errorf("AuditRetentionDays = %d, want 90", cfg.AuditRetentionDays)
+	}
+	// 环境变量优先于文件
+	t.Setenv("TRUSTED_PROXIES", "192.168.0.0/16")
+	t.Setenv("SWAGGER_ENABLED", "1")
+	cfg2 := LoadFile(yml)
+	if len(cfg2.TrustedProxies) != 1 || cfg2.TrustedProxies[0] != "192.168.0.0/16" {
+		t.Errorf("TrustedProxies env override = %v", cfg2.TrustedProxies)
+	}
+	if !cfg2.SwaggerEnabled {
+		t.Error("SWAGGER_ENABLED=1 should override file false")
+	}
+}
+
+func TestDSNHasTimeouts(t *testing.T) {
+	c := &Config{DBHost: "h", DBPort: "3306", DBUser: "u", DBPassword: "p", DBName: "n"}
+	dsn := c.DSN()
+	if !strings.Contains(dsn, "timeout=5s") || !strings.Contains(dsn, "readTimeout=10s") || !strings.Contains(dsn, "writeTimeout=10s") {
+		t.Errorf("DSN should include connection timeouts: %s", dsn)
 	}
 }

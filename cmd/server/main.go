@@ -8,12 +8,17 @@ package main
 // @name Authorization
 
 import (
+	"context"
 	"crypto/sha256"
+	"errors"
 	"flag"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -73,13 +78,14 @@ func main() {
 
 	// 发送队列：入队即落库，worker 池后台消费（重试/崩溃接管/清理都在这层）
 	qcfg := service.QueueConfig{
-		Workers:          cfg.QueueWorkers,
-		PollInterval:     time.Duration(cfg.QueuePollMS) * time.Millisecond,
-		MaxAttempts:      cfg.QueueMaxAttempts,
-		RetryBackoff:     cfg.QueueRetryBackoff,
-		ClaimTTL:         cfg.QueueClaimTTL,
-		LogRetentionDays: cfg.LogRetentionDays,
-		JobRetentionDays: cfg.QueueJobRetentionDays,
+		Workers:            cfg.QueueWorkers,
+		PollInterval:       time.Duration(cfg.QueuePollMS) * time.Millisecond,
+		MaxAttempts:        cfg.QueueMaxAttempts,
+		RetryBackoff:       cfg.QueueRetryBackoff,
+		ClaimTTL:           cfg.QueueClaimTTL,
+		LogRetentionDays:   cfg.LogRetentionDays,
+		JobRetentionDays:   cfg.QueueJobRetentionDays,
+		AuditRetentionDays: cfg.AuditRetentionDays,
 	}
 	queue := service.NewQueueService(db, ns, qcfg, cfg.InstanceID)
 	queue.Start()
@@ -92,6 +98,7 @@ func main() {
 		}
 	}, repository.NewTaskRepo(db), cfg.InstanceID)
 	sched.Start()
+	defer sched.Stop()
 	tasks, err := repository.NewTaskRepo(db).ListEnabledCron()
 	if err != nil {
 		log.Fatalf("load cron tasks: %v", err)
@@ -99,9 +106,11 @@ func main() {
 	for _, t := range tasks {
 		sched.RegisterTask(t.ID, t.CronExpr)
 	}
-	defer sched.Stop()
 
-	engine := router.NewRouter(db, authSvc, ciph, sched, queue)
+	engine := router.NewRouter(db, authSvc, ciph, sched, queue, router.Options{
+		TrustedProxies: cfg.TrustedProxies,
+		SwaggerEnabled: cfg.SwaggerEnabled,
+	})
 	engine.Static("/assets", "./web/dist/assets")
 	engine.StaticFile("/", "./web/dist/index.html")
 	engine.NoRoute(func(c *gin.Context) {
@@ -116,8 +125,32 @@ func main() {
 		c.JSON(404, gin.H{"error": "not found"})
 	})
 
+	// 生产级 HTTP 服务器：读/写/空闲超时防慢连接与连接耗尽。
+	srv := &http.Server{
+		Addr:              ":" + cfg.Port,
+		Handler:           engine,
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       10 * time.Second,
+		WriteTimeout:      20 * time.Second,
+		IdleTimeout:       60 * time.Second,
+	}
+
+	// 优雅退出：SIGINT/SIGTERM → 停止接收新连接 → 等待在途请求完成 →
+	// 排空发送队列（defer queue.Stop 会在返回后执行）→ 停调度器 → 关 DB。
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	go func() {
+		<-ctx.Done()
+		log.Printf("收到退出信号，开始优雅关闭（最多 15s）...")
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cancel()
+		if err := srv.Shutdown(shutdownCtx); err != nil {
+			log.Printf("http shutdown: %v", err)
+		}
+	}()
+
 	log.Printf("notice-service listening on :%s (instance %s)", cfg.Port, cfg.InstanceID)
-	if err := engine.Run(":" + cfg.Port); err != nil {
+	if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		log.Fatal(err)
 	}
 }

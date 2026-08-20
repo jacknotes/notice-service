@@ -2,6 +2,10 @@ package router
 
 import (
 	"database/sql"
+	"log"
+	"net/http"
+	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	swaggerFiles "github.com/swaggo/files"
@@ -14,8 +18,40 @@ import (
 	"notice-service/internal/service"
 )
 
-func NewRouter(db *sql.DB, authSvc *service.AuthService, cipher *crypto.Cipher, sched *scheduler.Scheduler, queue *service.QueueService) *gin.Engine {
-	r := gin.Default()
+// Options 路由可选项（生产环境由 main 传入，测试用默认值）。
+type Options struct {
+	// TrustedProxies 反向代理 CIDR 列表；只有来自这些地址的 X-Forwarded-For /
+	// X-Real-IP 头才被信任（Webhook IP 白名单依赖）。空 = 不信任任何代理头。
+	TrustedProxies []string
+	// SwaggerEnabled 是否暴露 /swagger API 文档。
+	SwaggerEnabled bool
+	// MaxBodyBytes 请求体大小上限（字节）。
+	MaxBodyBytes int64
+}
+
+func NewRouter(db *sql.DB, authSvc *service.AuthService, cipher *crypto.Cipher, sched *scheduler.Scheduler, queue *service.QueueService, opts ...Options) *gin.Engine {
+	o := Options{SwaggerEnabled: true, MaxBodyBytes: 1 << 20}
+	if len(opts) > 0 {
+		if opts[0].SwaggerEnabled {
+			o.SwaggerEnabled = true
+		}
+		if opts[0].MaxBodyBytes > 0 {
+			o.MaxBodyBytes = opts[0].MaxBodyBytes
+		}
+		o.TrustedProxies = opts[0].TrustedProxies
+	}
+
+	// 不用 gin.Default()（它信任全部代理头）；显式 New + Recovery + 自研
+	// 访问日志（对 /api/webhook/<api_key> 路径做脱敏，防 Key 泄漏进日志）。
+	r := gin.New()
+	r.Use(gin.Recovery())
+	r.Use(securityHeaders()) // 全局安全响应头（覆盖 SPA 页面与全部 API）
+	r.Use(accessLogger())
+
+	// 可信代理：控制 X-Forwarded-For / X-Real-IP 的信任范围（默认不信任远端）。
+	if err := r.SetTrustedProxies(o.TrustedProxies); err != nil {
+		log.Printf("router: invalid trusted proxies %v: %v", o.TrustedProxies, err)
+	}
 
 	authH := handler.NewAuthHandler(db, authSvc)
 	channelH := handler.NewChannelHandler(db, cipher)
@@ -31,10 +67,13 @@ func NewRouter(db *sql.DB, authSvc *service.AuthService, cipher *crypto.Cipher, 
 	dashH := handler.NewDashboardHandler(db)
 	userH := handler.NewUserHandler(db)
 
-	r.GET("/api/health", handler.Health)
-	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
+	r.GET("/api/health", handler.Health(db))
+	if o.SwaggerEnabled {
+		r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
+	}
 
 	api := r.Group("/api")
+	api.Use(bodyLimit(o.MaxBodyBytes))
 	api.POST("/auth/login", authH.Login)
 	api.POST("/auth/forgot-password", authH.ForgotPassword) // 公开：一次性令牌自助重置密码
 
@@ -92,4 +131,43 @@ func NewRouter(db *sql.DB, authSvc *service.AuthService, cipher *crypto.Cipher, 
 	api.POST("/webhook/:api_key", webhookH.Trigger)
 
 	return r
+}
+
+// accessLogger 访问日志：对 /api/webhook/<api_key> 路径脱敏（Key 不落日志）。
+func accessLogger() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		start := time.Now()
+		c.Next()
+		path := c.Request.URL.Path
+		if strings.HasPrefix(path, "/api/webhook/") {
+			path = "/api/webhook/<redacted>"
+		}
+		log.Printf("[http] %s %s %d %s %s",
+			c.Request.Method, path, c.Writer.Status(),
+			time.Since(start).Round(time.Millisecond), c.ClientIP())
+	}
+}
+
+// securityHeaders 基础安全响应头。
+func securityHeaders() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		h := c.Writer.Header()
+		h.Set("X-Content-Type-Options", "nosniff")
+		h.Set("X-Frame-Options", "SAMEORIGIN")
+		h.Set("Referrer-Policy", "strict-origin-when-cross-origin")
+		// 仅信任本服务资源 + 内联主题脚本 + Google Fonts；connect-src 'self'
+		// 阻止跨站请求外带数据。
+		h.Set("Content-Security-Policy",
+			"default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "+
+				"font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data:; connect-src 'self'; frame-ancestors 'self'")
+		c.Next()
+	}
+}
+
+// bodyLimit 限制请求体大小，防超大请求拖垮内存。
+func bodyLimit(maxBytes int64) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxBytes)
+		c.Next()
+	}
 }

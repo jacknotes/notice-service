@@ -2,6 +2,10 @@
 # 适用：多实例高可用部署（docker-compose 起 8080/8081 两个实例）
 # 用法：把本文件内容合并进宿主机 Nginx 配置（如 /etc/nginx/conf.d/notice.conf）后
 #       nginx -t && nginx -s reload
+#
+# 注意：Nginx 在本机反代（127.0.0.1）时，服务端默认 TRUSTED_PROXIES=127.0.0.1,::1
+#       已能信任这里设置的 X-Real-IP / X-Forwarded-For（Webhook IP 白名单依赖）；
+#       若 Nginx 在其它节点，请把 .env 里 TRUSTED_PROXIES 改成反代所在网段。
 
 # 负载均衡上游：notice-service 实例组
 upstream notice {

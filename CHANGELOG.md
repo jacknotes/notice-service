@@ -7,6 +7,10 @@
 ## [Unreleased]
 
 ### 已实现
+- **生产加固**：优雅退出（SIGINT/SIGTERM → 停服 → 排空队列 → 关库）、HTTP 读/写/空闲超时防慢连接、/api/health 含 DB 探测（不可达返回 503，供 LB/容器健康检查摘除实例）
+- **安全加固**：Webhook IP 白名单改用可信代理判定（新增 `TRUSTED_PROXIES`，默认信任环回；不再无条件信任 X-Forwarded-For/X-Real-IP）、访问日志对 `/api/webhook/<api_key>` 路径脱敏、邮件头注入防护（CR/LF 清洗 + 收件地址校验）、SMTP 强制 TLS（默认拒绝明文凭据，内网中继可 `allow_insecure=true`）、TLS 最低版本 TLS1.2、请求体大小上限、全局安全响应头（CSP/X-Frame-Options/nosniff/Referrer-Policy）
+- **运维**：审计日志自动清理（`AUDIT_RETENTION_DAYS`，默认 180 天）、DB 连接 DSN 超时 + ConnMaxLifetime、Dockerfile 增加健康检查、docker-compose 关键密钥缺失即报错（不再弱默认裸跑）+ 容器健康检查 + `stop_grace_period` + MySQL 仅绑定 127.0.0.1、可关闭 Swagger（`SWAGGER_ENABLED`）
+- 移除顶层冗余 `migrations/`（迁移以内嵌 `internal/database/migrations` 为准）
 - 异步持久化发送队列：Webhook 触发立即返回 202，发送由后台 worker 池消费
 - 多副本正确性：MySQL 原子认领保证不重复；陈旧认领自动接管（替代任务锁续期）
 - 队列级重试（5s/30s/60s），取代发送内部 sleep 重试

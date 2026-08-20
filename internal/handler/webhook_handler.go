@@ -120,30 +120,13 @@ func (h *WebhookHandler) ipAllowed(task *model.Task, c *gin.Context) bool {
 	if len(ips) == 0 {
 		return true
 	}
-	remote := clientIP(c)
+	remote := c.ClientIP()
 	for _, allow := range ips {
 		if ipMatches(allow, remote) {
 			return true
 		}
 	}
 	return false
-}
-
-// clientIP 解析客户端 IP。注意：X-Real-IP / X-Forwarded-For 头只有在服务部署于
-// 可信反向代理（Nginx）之后才是可信的；若直接暴露公网，调用方可以伪造这些头绕过
-// IP 白名单。生产环境务必通过 Nginx 反向代理暴露本服务。
-func clientIP(c *gin.Context) string {
-	if ip := c.GetHeader("X-Real-IP"); ip != "" {
-		return strings.TrimSpace(strings.Split(ip, ",")[0])
-	}
-	if fwd := c.GetHeader("X-Forwarded-For"); fwd != "" {
-		return strings.TrimSpace(strings.Split(fwd, ",")[0])
-	}
-	host, _, err := net.SplitHostPort(c.Request.RemoteAddr)
-	if err != nil {
-		return c.Request.RemoteAddr
-	}
-	return host
 }
 
 func ipMatches(allow, remote string) bool {

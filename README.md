@@ -97,8 +97,10 @@ make clean              # 删除 .dev/notice-service、web/dist、web/node_modul
 ## Docker 部署（多实例高可用）
 
 ```bash
-# 1. 复制并修改配置
-cp .env.example .env   # 修改密码和密钥（JWT_SECRET、ENCRYPT_KEY 多实例必须一致）
+# 1. 复制并修改配置（必须改：DB_PASSWORD / MYSQL_ROOT_PASSWORD / JWT_SECRET /
+#    ENCRYPT_KEY（多实例必须一致）/ ADMIN_PASS；未设置时 docker compose 会直接报错）
+cp .env.example .env
+vi .env
 
 # 2. 启动（自动构建镜像，起 2 个服务实例 + MySQL 5.7）
 docker compose up -d
@@ -106,10 +108,19 @@ docker compose up -d
 # 3. 宿主机 Nginx 负载均衡 + 健康检查
 #    upstream notice { server 127.0.0.1:8080; server 127.0.0.1:8081; }
 #    location / { proxy_pass http://notice; proxy_set_header X-Real-IP $remote_addr; proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for; }
-#    /api/health 可用于健康检查（主动摘除故障实例）
+#    /api/health 可用于健康检查（主动摘除故障实例，DB 不可达时返回 503）
 ```
 
 > 首次启动自动创建默认管理员：`admin` / `admin123`，请尽快修改。
+
+### 反向代理与 IP 白名单
+
+Webhook 的 IP 白名单依赖 `X-Real-IP` / `X-Forwarded-For` 头，但这些头**只有来自可信反向代理才是可信的**。
+服务通过 `TRUSTED_PROXIES`（默认 `127.0.0.1,::1`）声明可信代理来源：
+
+- 典型部署「宿主 Nginx → 本机端口」：保持默认即可（Nginx 从 127.0.0.1 连入）。
+- Nginx 在其它节点 / 容器网络内：把 `TRUSTED_PROXIES` 设为反代所在网段，如 `10.0.0.0/8`。
+- 不要直接把服务暴露公网却不设反向代理——此时任何人可伪造 `X-Forwarded-For` 绕过 IP 白名单。
 
 ## 环境变量
 
@@ -130,6 +141,9 @@ docker compose up -d
 | `QUEUE_CLAIM_TTL` | 120 | 认领后多久算陈旧（秒），超时由其它实例接管 |
 | `LOG_RETENTION_DAYS` | 90 | 发送日志保留天数 |
 | `QUEUE_JOB_RETENTION_DAYS` | 30 | 已完成 job 保留天数 |
+| `AUDIT_RETENTION_DAYS` | 180 | 审计日志保留天数（超出自动清理） |
+| `TRUSTED_PROXIES` | 127.0.0.1,::1 | 可信反向代理 CIDR（逗号分隔），控制 X-Forwarded-For / X-Real-IP 是否可信 |
+| `SWAGGER_ENABLED` | true | 是否暴露 `/swagger` API 文档 |
 
 ## 密码重置
 
@@ -173,13 +187,13 @@ curl -X POST https://your-host/api/webhook/<api_key> \
 ## 项目结构
 
 ```
-cmd/server/           # 入口
+cmd/server/           # 入口（含优雅退出/HTTP 超时）
 internal/
   config/ model/ crypto/ database/ repository/ service/ channel/ render/
   scheduler/          # Cron + MySQL 租约锁
   handler/ middleware/ router/
 web/                  # Vue3 前端
-migrations/           # 数据库迁移 SQL
+internal/database/migrations/  # 数据库迁移 SQL（go:embed 内嵌，启动自动应用）
 Dockerfile  docker-compose.yml  .env.example
 ```
 

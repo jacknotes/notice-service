@@ -34,6 +34,14 @@ type Config struct {
 	QueueClaimTTL         time.Duration
 	LogRetentionDays      int
 	QueueJobRetentionDays int
+	AuditRetentionDays    int
+
+	// TrustedProxies 反向代理 CIDR 列表（逗号分隔）。只有来自这些代理的
+	// X-Forwarded-For / X-Real-IP 头才被信任（Webhook IP 白名单依赖）。
+	// 默认信任环回地址：宿主 Nginx 反代本服务的默认形态。
+	TrustedProxies []string
+	// SwaggerEnabled 是否暴露 /swagger API 文档。
+	SwaggerEnabled bool
 }
 
 // fileConfig 对应 config.yml（键为 kebab-case；指针字段区分「未设置」与「0」）。
@@ -63,6 +71,9 @@ type fileConfig struct {
 		JobRetentionDays *int   `yaml:"job_retention_days"`
 	} `yaml:"queue"`
 	LogRetentionDays *int `yaml:"log_retention_days"`
+	AuditRetentionDays *int `yaml:"audit_retention_days"`
+	TrustedProxies     string `yaml:"trusted_proxies"`
+	SwaggerEnabled     *bool  `yaml:"swagger_enabled"`
 }
 
 // WeakSecretWarnings 返回需要告警的弱密钥配置说明（空表示全部健康）。
@@ -130,6 +141,9 @@ func loadFromPath(path string) *Config {
 		QueueClaimTTL:         time.Duration(firstInt("QUEUE_CLAIM_TTL", f.Queue.ClaimTTL, 120)) * time.Second,
 		LogRetentionDays:      firstInt("LOG_RETENTION_DAYS", f.LogRetentionDays, 90),
 		QueueJobRetentionDays: firstInt("QUEUE_JOB_RETENTION_DAYS", f.Queue.JobRetentionDays, 30),
+		AuditRetentionDays:    firstInt("AUDIT_RETENTION_DAYS", f.AuditRetentionDays, 180),
+		TrustedProxies:        parseCSV(firstNonEmpty(os.Getenv("TRUSTED_PROXIES"), f.TrustedProxies, "127.0.0.1,::1")),
+		SwaggerEnabled:        firstBool("SWAGGER_ENABLED", f.SwaggerEnabled, true),
 	}
 }
 
@@ -156,6 +170,33 @@ func firstInt(envKey string, fileVal *int, def int) int {
 	return def
 }
 
+// firstBool env（true/1）> 配置文件 > 默认。
+func firstBool(envKey string, fileVal *bool, def bool) bool {
+	if v := os.Getenv(envKey); v != "" {
+		switch strings.ToLower(strings.TrimSpace(v)) {
+		case "1", "true", "yes", "on":
+			return true
+		case "0", "false", "no", "off":
+			return false
+		}
+	}
+	if fileVal != nil {
+		return *fileVal
+	}
+	return def
+}
+
+// parseCSV 把逗号分隔的字符串解析为去空格的非空切片（用于 CIDR 列表）。
+func parseCSV(s string) []string {
+	var out []string
+	for _, p := range strings.Split(s, ",") {
+		if v := strings.TrimSpace(p); v != "" {
+			out = append(out, v)
+		}
+	}
+	return out
+}
+
 // keyFile 未显式配置 ENCRYPT_KEY 时用于持久化密钥，保证重启后能解密已存的渠道配置。
 const keyFile = ".notice-encrypt.key"
 
@@ -179,7 +220,8 @@ func resolveEncryptKeyWith(fileKey string) string {
 
 func (c *Config) DSN() string {
 	return c.DBUser + ":" + c.DBPassword + "@tcp(" + c.DBHost + ":" + c.DBPort + ")/" +
-		c.DBName + "?parseTime=true&charset=utf8mb4&loc=Local"
+		c.DBName + "?parseTime=true&charset=utf8mb4&loc=Local" +
+		"&timeout=5s&readTimeout=10s&writeTimeout=10s"
 }
 
 func getEnv(key, def string) string {

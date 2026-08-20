@@ -5,6 +5,7 @@ import (
 	"embed"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/go-sql-driver/mysql"
 )
@@ -27,6 +28,9 @@ func Open(dsn string) (*sql.DB, error) {
 	}
 	db.SetMaxOpenConns(20)
 	db.SetMaxIdleConns(5)
+	// MySQL 侧空闲连接可能被服务器/中间件回收，设置最大存活时间避免使用
+	// 已失效的连接（配合 DSN 中的 read/writeTimeout 超时，进一步防止卡死）。
+	db.SetConnMaxLifetime(3 * time.Minute)
 	return db, nil
 }
 

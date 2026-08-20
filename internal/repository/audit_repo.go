@@ -33,3 +33,23 @@ func (r *AuditRepo) Create(e *AuditLog) error {
 		uid, e.Username, e.Action, e.Detail, time.Now())
 	return err
 }
+
+// CleanupOlderThan 删除超过保留天数的审计日志（幂等，多实例重复执行无害）。
+func (r *AuditRepo) CleanupOlderThan(days int) (int64, error) {
+	total := int64(0)
+	for {
+		res, err := r.db.Exec(
+			"DELETE FROM audit_logs WHERE created_at < NOW() - INTERVAL ? DAY LIMIT 1000", days)
+		if err != nil {
+			return total, err
+		}
+		n, err := res.RowsAffected()
+		if err != nil {
+			return total, err
+		}
+		total += n
+		if n < 1000 {
+			return total, nil
+		}
+	}
+}

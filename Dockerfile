@@ -29,6 +29,9 @@ RUN apk add --no-cache ca-certificates tzdata
 WORKDIR /app
 COPY --from=build /notice-service /app/notice-service
 COPY --from=web /app/dist /app/web/dist
-COPY migrations/ /app/migrations/
 EXPOSE 8080
+# 健康检查：依赖 /api/health（含 DB 探测），容器/编排据此摘除故障实例。
+# busybox 自带 wget，无需额外安装。
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+  CMD wget -q -O /dev/null http://127.0.0.1:8080/api/health || exit 1
 CMD ["/app/notice-service"]

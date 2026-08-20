@@ -125,9 +125,11 @@ func TestWebhookTriggerAndIPWhitelist(t *testing.T) {
 	}
 
 	// 触发：无白名单，异步入队成功 → 202 且返回 job_id
+	// （httptest 默认 RemoteAddr=192.0.2.1，显式设置以便 ClientIP 走可信代理判定）
 	req, _ := http.NewRequest("POST", "/api/webhook/"+apiKey, bytes.NewBufferString(`{"variables":{"name":"李四"}}`))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Real-IP", "10.0.0.5")
+	req.RemoteAddr = "192.0.2.1:1234"
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 	if w.Code != http.StatusAccepted {
@@ -147,6 +149,7 @@ func TestWebhookTriggerAndIPWhitelist(t *testing.T) {
 	req2, _ := http.NewRequest("POST", "/api/webhook/"+apiKey, bytes.NewBufferString(`{"variables":{}}`))
 	req2.Header.Set("Content-Type", "application/json")
 	req2.Header.Set("X-Real-IP", "10.0.0.5")
+	req2.RemoteAddr = "192.0.2.1:1234"
 	w2 := httptest.NewRecorder()
 	r.ServeHTTP(w2, req2)
 	if w2.Code != 403 {
@@ -156,6 +159,7 @@ func TestWebhookTriggerAndIPWhitelist(t *testing.T) {
 	req3, _ := http.NewRequest("POST", "/api/webhook/"+apiKey, bytes.NewBufferString(`{"variables":{}}`))
 	req3.Header.Set("Content-Type", "application/json")
 	req3.Header.Set("X-Real-IP", "192.168.1.5")
+	req3.RemoteAddr = "192.0.2.1:1234"
 	w3 := httptest.NewRecorder()
 	r.ServeHTTP(w3, req3)
 	if w3.Code != http.StatusAccepted {

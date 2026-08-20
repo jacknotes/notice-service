@@ -19,13 +19,14 @@ var errTaskDisabled = errors.New("任务已禁用")
 
 // QueueConfig 发送队列的运行时参数（来自 config 或测试直接构造）。
 type QueueConfig struct {
-	Workers          int
-	PollInterval     time.Duration
-	MaxAttempts      int
-	RetryBackoff     []time.Duration
-	ClaimTTL         time.Duration
-	LogRetentionDays int
-	JobRetentionDays int
+	Workers            int
+	PollInterval       time.Duration
+	MaxAttempts        int
+	RetryBackoff       []time.Duration
+	ClaimTTL           time.Duration
+	LogRetentionDays   int
+	JobRetentionDays   int
+	AuditRetentionDays int
 }
 
 // QueueService 持久化发送队列：入队落库，worker 池认领并发送。
@@ -36,6 +37,7 @@ type QueueService struct {
 	jobRepo    *repository.SendJobRepo
 	taskRepo   *repository.TaskRepo
 	logRepo    *repository.TaskLogRepo
+	auditRepo  *repository.AuditRepo
 	ns         *NotificationService
 	cfg        QueueConfig
 	instanceID string
@@ -49,6 +51,7 @@ func NewQueueService(db *sql.DB, ns *NotificationService, cfg QueueConfig, insta
 		jobRepo:    repository.NewSendJobRepo(db),
 		taskRepo:   repository.NewTaskRepo(db),
 		logRepo:    repository.NewTaskLogRepo(db),
+		auditRepo:  repository.NewAuditRepo(db),
 		ns:         ns,
 		cfg:        cfg,
 		instanceID: instanceID,
@@ -227,6 +230,13 @@ func (q *QueueService) cleanup() {
 		log.Printf("queue: cleanup send_jobs: %v", err)
 	} else if n > 0 {
 		log.Printf("queue: cleaned %d send_jobs (done/failed older than %dd)", n, q.cfg.JobRetentionDays)
+	}
+	if q.cfg.AuditRetentionDays > 0 {
+		if n, err := q.auditRepo.CleanupOlderThan(q.cfg.AuditRetentionDays); err != nil {
+			log.Printf("queue: cleanup audit_logs: %v", err)
+		} else if n > 0 {
+			log.Printf("queue: cleaned %d audit_logs (older than %dd)", n, q.cfg.AuditRetentionDays)
+		}
 	}
 }
 
