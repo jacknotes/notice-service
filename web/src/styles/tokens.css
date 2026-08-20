@@ -15,6 +15,7 @@
   --bg-elev: #1e293b;            /* elevated panels                         */
   --bg-elev-2: #263349;          /* hover wells, overlays                   */
   --bg-card: rgba(30, 41, 59, 0.55);
+  --bg-card-solid: #172133;      /* 卡片的不透明等价色（固定列表格列遮挡下层用） */
   --bg-glass: rgba(15, 23, 42, 0.5);
   --bg-scrim: rgba(2, 6, 23, 0.62);
 

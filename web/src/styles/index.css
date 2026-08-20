@@ -368,6 +368,12 @@ body::after {
 .el-table th.el-table__cell { font-weight: 600; letter-spacing: 0.02em; }
 .el-table__inner-wrapper::before { display: none; }
 
+/* 固定列（fixed=right/left）用不透明背景盖住下层滚动内容，避免下层列透出 */
+.el-table .el-table-fixed-column--right,
+.el-table .el-table-fixed-column--left {
+  background-color: var(--bg-card-solid);
+}
+
 /* --- Dialog / message-box -------------------------------------------------- */
 .el-dialog {
   --el-dialog-bg-color: var(--bg-elev);
