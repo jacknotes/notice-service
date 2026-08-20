@@ -1327,8 +1327,8 @@ const docTemplate = `{
 // SwaggerInfo holds exported Swagger Info so clients can modify it
 var SwaggerInfo = &swag.Spec{
 	Version:          "1.0.0",
-	Host:             "localhost:8080",
-	BasePath:         "/api",
+	Host:             "",
+	BasePath:         "",
 	Schemes:          []string{},
 	Title:            "Notice Service API",
 	Description:      "自托管通知发送服务 API（邮箱/企微/钉钉/飞书/PushPlus 多渠道投递）。",

@@ -3,8 +3,6 @@ package main
 // @title Notice Service API
 // @version 1.0.0
 // @description 自托管通知发送服务 API（邮箱/企微/钉钉/飞书/PushPlus 多渠道投递）。
-// @host localhost:8080
-// @BasePath /api
 // @securityDefinitions.apikey BearerAuth
 // @in header
 // @name Authorization

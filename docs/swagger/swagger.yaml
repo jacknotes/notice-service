@@ -1,5 +1,3 @@
-basePath: /api
-host: localhost:8080
 info:
   contact: {}
   description: 自托管通知发送服务 API（邮箱/企微/钉钉/飞书/PushPlus 多渠道投递）。
