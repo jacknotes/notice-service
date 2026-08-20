@@ -59,6 +59,9 @@
                 <el-dropdown-item disabled>
                   <span class="role-tag">{{ auth.user?.role || 'admin' }}</span>
                 </el-dropdown-item>
+                <el-dropdown-item command="swagger">
+                  <el-icon><Document /></el-icon>API 文档
+                </el-dropdown-item>
                 <el-dropdown-item command="settings">
                   <el-icon><Setting /></el-icon>个人设置
                 </el-dropdown-item>
@@ -137,6 +140,7 @@ const avatarLetter = computed<string>(
 )
 
 function onCommand(cmd: string) {
+  if (cmd === 'swagger') window.open('/swagger/index.html', '_blank')
   if (cmd === 'settings') router.push('/settings')
   if (cmd === 'logout') onLogout()
 }

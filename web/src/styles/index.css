@@ -327,6 +327,17 @@ body::after {
   filter: brightness(1.06);
 }
 .el-button--primary:active { transform: translateY(0); }
+
+/* Plain primary 按钮（如仪表盘/日志的日期快捷按钮）：去掉深色渐变，
+   恢复 Element Plus 浅底 + 主色文字，保证深色主题下文字可读。 */
+.el-button--primary.is-plain {
+  background-image: none;
+  border: 1px solid rgba(99, 102, 241, 0.55);
+}
+.el-button--primary.is-plain:hover {
+  border-color: rgba(99, 102, 241, 0.9);
+}
+
 .el-button.is-text { color: var(--text-secondary); }
 .el-button.is-text:hover { color: var(--text-primary); background: rgba(148, 163, 184, 0.08); }
 

@@ -230,7 +230,7 @@ function renderDonut() {
             left: 'center',
             top: '38%',
             style: {
-              text: `${rateDisplay}%`,
+              text: `${rateDisplay.value}%`,
               fill: '#e2e8f0',
               fontSize: 22,
               fontWeight: 700,
