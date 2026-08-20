@@ -39,9 +39,11 @@
           </template>
         </el-table-column>
 
-        <el-table-column prop="username" label="用户名" min-width="180" show-overflow-tooltip>
+        <el-table-column prop="username" label="用户名" min-width="220">
           <template #default="{ row }">
-            <span class="user-name">{{ row.username }}</span>
+            <el-tooltip :content="row.username" placement="top" :show-after="320">
+              <span class="user-name">{{ row.username }}</span>
+            </el-tooltip>
             <span v-if="row.id === auth.user?.id" class="self-tag mono">（我）</span>
           </template>
         </el-table-column>
@@ -490,6 +492,8 @@ onMounted(load)
   line-height: 1.6;
   display: inline-block;
   vertical-align: middle;
+  white-space: normal;   /* 允许换行 */
+  word-break: break-all; /* 长用户名完整显示 */
 }
 .self-tag {
   margin-left: 6px;
