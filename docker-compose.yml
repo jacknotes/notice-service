@@ -9,7 +9,12 @@
 #      CIDR（默认信任 127.0.0.1 / ::1，对应「宿主机 Nginx → 本机端口」形态）。
 services:
   notice-service-1:
-    build: .
+    build:
+      context: .
+      # IMAGE_PREFIX：国内网络设为镜像源前缀（如 docker.m.daocloud.io/library/），
+      # 默认空 = 官方 Docker Hub
+      args:
+        IMAGE_PREFIX: ${IMAGE_PREFIX:-}
     ports:
       - "8080:8080"
     environment:
@@ -31,7 +36,10 @@ services:
     stop_grace_period: 30s
 
   notice-service-2:
-    build: .
+    build:
+      context: .
+      args:
+        IMAGE_PREFIX: ${IMAGE_PREFIX:-}
     ports:
       - "8081:8080"
     environment:
@@ -53,7 +61,8 @@ services:
     stop_grace_period: 30s
 
   mysql:
-    image: mysql:5.7
+    # MYSQL_IMAGE：国内网络可设为 docker.m.daocloud.io/library/mysql:5.7
+    image: ${MYSQL_IMAGE:-mysql:5.7}
     # 仅宿主机可访问（供运维工具），不对外网暴露数据库端口。
     ports:
       - "127.0.0.1:3306:3306"

@@ -113,6 +113,15 @@ docker compose up -d
 
 > 首次启动自动创建默认管理员：`admin` / `admin123`，请尽快修改。
 
+### 国内网络 / 无法访问 Docker Hub 时
+
+服务构建需拉取基础镜像（node/golang/alpine/mysql）。若服务器访问不到 Docker Hub，在 `.env` 设置镜像源即可（不改服务器 Docker 配置）：
+
+```bash
+IMAGE_PREFIX=docker.m.daocloud.io/library/   # 基础镜像前缀（node/golang/alpine）
+MYSQL_IMAGE=docker.m.daocloud.io/library/mysql:5.7
+```
+
 ### 反向代理与 IP 白名单
 
 Webhook 的 IP 白名单依赖 `X-Real-IP` / `X-Forwarded-For` 头，但这些头**只有来自可信反向代理才是可信的**。
