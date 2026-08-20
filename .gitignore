@@ -7,8 +7,26 @@ web/node_modules/
 # Local dev data (MariaDB datadir, Go caches, sockets)
 .dev/
 
-# Environment
-.env
+# Environment（含 .env.local / .env.production / 备份等变体，均可含密钥；
+# .env.example 为无密钥示例，保留跟踪）
+.env*
+!.env.example
+
+# 真实配置文件（可含 DB 密码 / JWT_SECRET / ENCRYPT_KEY / admin 密码），
+# 区别于无密钥的 config.example.yml
+config.yml
+config.local.yml
+
+# 密钥与证书：本地加密密钥、TLS 私钥/证书等
+*.key
+*.pem
+*.p12
+
+# 数据库导出/迁移临时文件（可能含敏感数据）
+migrate.sql
+dump*.sql
+*.dump.sql
+*.sql.bak
 
 # IDE
 .idea/
