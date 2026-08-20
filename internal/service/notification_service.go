@@ -84,6 +84,15 @@ func (s *NotificationService) SendTask(taskID int64, vars map[string]string) err
 			lastErr = err
 			continue
 		}
+		if !ch.Enabled {
+			// 渠道已停用：不参与投递（与前端提示「停用后该渠道不再参与投递」一致），
+			// 落一条失败日志便于追踪；不返回错误，避免对永久停用的渠道做无意义重试。
+			_ = s.logRepo.Create(&model.TaskLog{
+				TaskID: task.ID, ChannelID: ch.ID, Subject: subject, Content: content,
+				Status: "failed", Request: "{}", ErrorMsg: fmt.Sprintf("渠道「%s」已停用", ch.Name),
+			})
+			continue
+		}
 		inst, err := s.Instancer(ch)
 		if err != nil {
 			lastErr = err
