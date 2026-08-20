@@ -1,6 +1,7 @@
 package config
 
 import (
+	"os"
 	"testing"
 	"time"
 )
@@ -107,5 +108,80 @@ func TestWeakSecretWarnings(t *testing.T) {
 	strong := &Config{JWTSecret: "random-secret-1234567890", EncryptKey: "abcdef0123456789abcdef0123456789"}
 	if n := len(strong.WeakSecretWarnings()); n != 0 {
 		t.Errorf("strong secrets should produce 0 warnings, got %d: %v", n, strong.WeakSecretWarnings())
+	}
+}
+
+func TestLoadFile(t *testing.T) {
+	dir := t.TempDir()
+	yml := dir + "/config.yml"
+	if err := os.WriteFile(yml, []byte(`
+server:
+  port: "9090"
+database:
+  host: dbhost
+  port: "3307"
+  user: dbuser
+  password: dbpass
+  name: dbname
+jwt_secret: file-secret
+encrypt_key: 0123456789abcdef0123456789abcdef
+admin:
+  user: fileadmin
+  pass: filepass
+queue:
+  workers: 6
+  poll_ms: 500
+log_retention_days: 45
+`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg := LoadFile(yml)
+	if cfg.Port != "9090" {
+		t.Errorf("port = %q want 9090", cfg.Port)
+	}
+	if cfg.DBHost != "dbhost" || cfg.DBPort != "3307" {
+		t.Errorf("db = %s:%s want dbhost:3307", cfg.DBHost, cfg.DBPort)
+	}
+	if cfg.DBUser != "dbuser" || cfg.DBPassword != "dbpass" || cfg.DBName != "dbname" {
+		t.Errorf("db creds = %s/%s/%s", cfg.DBUser, cfg.DBPassword, cfg.DBName)
+	}
+	if cfg.JWTSecret != "file-secret" {
+		t.Errorf("jwt = %q want file-secret", cfg.JWTSecret)
+	}
+	if cfg.AdminUser != "fileadmin" || cfg.AdminPass != "filepass" {
+		t.Errorf("admin = %s/%s", cfg.AdminUser, cfg.AdminPass)
+	}
+	if cfg.QueueWorkers != 6 {
+		t.Errorf("workers = %d want 6", cfg.QueueWorkers)
+	}
+	if cfg.QueuePollMS != 500 {
+		t.Errorf("poll_ms = %d want 500", cfg.QueuePollMS)
+	}
+	if cfg.LogRetentionDays != 45 {
+		t.Errorf("log_retention_days = %d want 45", cfg.LogRetentionDays)
+	}
+}
+
+func TestEnvOverridesFile(t *testing.T) {
+	dir := t.TempDir()
+	yml := dir + "/config.yml"
+	if err := os.WriteFile(yml, []byte("database:\n  host: filehost\nserver:\n  port: \"8080\"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("DB_HOST", "envhost")
+	t.Setenv("PORT", "7070")
+	cfg := LoadFile(yml)
+	if cfg.DBHost != "envhost" {
+		t.Errorf("DBHost = %q want envhost (env overrides file)", cfg.DBHost)
+	}
+	if cfg.Port != "7070" {
+		t.Errorf("Port = %q want 7070 (env overrides file)", cfg.Port)
+	}
+}
+
+func TestLoadFileMissingFallsBackToDefaults(t *testing.T) {
+	cfg := LoadFile(t.TempDir() + "/nope.yml")
+	if cfg.DBHost != "127.0.0.1" || cfg.Port != "8080" || cfg.QueueWorkers != 4 {
+		t.Errorf("missing file should fall back to defaults, got %s:%s workers=%d", cfg.DBHost, cfg.Port, cfg.QueueWorkers)
 	}
 }

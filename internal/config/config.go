@@ -4,12 +4,14 @@ import (
 	"bufio"
 	"crypto/rand"
 	"encoding/hex"
+	"log"
 	"os"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
+	"gopkg.in/yaml.v3"
 )
 
 type Config struct {
@@ -34,6 +36,35 @@ type Config struct {
 	QueueJobRetentionDays int
 }
 
+// fileConfig 对应 config.yml（键为 kebab-case；指针字段区分「未设置」与「0」）。
+type fileConfig struct {
+	Server struct {
+		Port string `yaml:"port"`
+	} `yaml:"server"`
+	Database struct {
+		Host     string `yaml:"host"`
+		Port     string `yaml:"port"`
+		User     string `yaml:"user"`
+		Password string `yaml:"password"`
+		Name     string `yaml:"name"`
+	} `yaml:"database"`
+	JWTSecret  string `yaml:"jwt_secret"`
+	EncryptKey string `yaml:"encrypt_key"`
+	Admin      struct {
+		User string `yaml:"user"`
+		Pass string `yaml:"pass"`
+	} `yaml:"admin"`
+	Queue struct {
+		Workers          *int   `yaml:"workers"`
+		PollMS           *int   `yaml:"poll_ms"`
+		MaxAttempts      *int   `yaml:"max_attempts"`
+		RetryBackoff     string `yaml:"retry_backoff"`
+		ClaimTTL         *int   `yaml:"claim_ttl"`
+		JobRetentionDays *int   `yaml:"job_retention_days"`
+	} `yaml:"queue"`
+	LogRetentionDays *int `yaml:"log_retention_days"`
+}
+
 // WeakSecretWarnings 返回需要告警的弱密钥配置说明（空表示全部健康）。
 // 防止以默认/示例密钥裸跑导致 JWT 可伪造、渠道配置可被解密。
 func (c *Config) WeakSecretWarnings() []string {
@@ -47,29 +78,82 @@ func (c *Config) WeakSecretWarnings() []string {
 	return w
 }
 
-func Load() *Config {
-	loadDotEnv(".env") // 可选配置文件；已存在的环境变量优先，不会被覆盖
-	return &Config{
-		DBHost:     getEnv("DB_HOST", "127.0.0.1"),
-		DBPort:     getEnv("DB_PORT", "3306"),
-		DBUser:     getEnv("DB_USER", "notice"),
-		DBPassword: getEnv("DB_PASSWORD", "notice123"),
-		DBName:     getEnv("DB_NAME", "notice_service"),
-		JWTSecret:  getEnv("JWT_SECRET", "change-me"),
-		EncryptKey: resolveEncryptKey(),
-		Port:       getEnv("PORT", "8080"),
-		InstanceID: getEnv("INSTANCE_ID", uuid.NewString()),
-		AdminUser:  getEnv("ADMIN_USER", "admin"),
-		AdminPass:  getEnv("ADMIN_PASS", "admin123"),
-
-		QueueWorkers:          getEnvInt("QUEUE_WORKERS", 4),
-		QueuePollMS:           getEnvInt("QUEUE_POLL_MS", 1000),
-		QueueMaxAttempts:      getEnvInt("QUEUE_MAX_ATTEMPTS", 3),
-		QueueRetryBackoff:     parseDurations(getEnv("QUEUE_RETRY_BACKOFF", "5s,30s,60s"), []time.Duration{5 * time.Second, 30 * time.Second, 60 * time.Second}),
-		QueueClaimTTL:         time.Duration(getEnvInt("QUEUE_CLAIM_TTL", 120)) * time.Second,
-		LogRetentionDays:      getEnvInt("LOG_RETENTION_DAYS", 90),
-		QueueJobRetentionDays: getEnvInt("QUEUE_JOB_RETENTION_DAYS", 30),
+// ConfigPathFromArgs 解析配置路径：--config <path> 或 --config=<path> > CONFIG_FILE 环境变量 > 默认 config.yml。
+func ConfigPathFromArgs() string {
+	for i := 1; i < len(os.Args); i++ {
+		if os.Args[i] == "--config" && i+1 < len(os.Args) {
+			return os.Args[i+1]
+		}
+		if strings.HasPrefix(os.Args[i], "--config=") {
+			return strings.TrimPrefix(os.Args[i], "--config=")
+		}
 	}
+	return firstNonEmpty(os.Getenv("CONFIG_FILE"), "config.yml")
+}
+
+// Load 从 环境变量 > config.yml > 默认 三通道加载配置（config 路径由 ConfigPathFromArgs 决定）。
+func Load() *Config {
+	return loadFromPath(ConfigPathFromArgs())
+}
+
+// LoadFile 从指定路径加载配置（测试 / 显式 --config 用）。
+func LoadFile(path string) *Config {
+	return loadFromPath(path)
+}
+
+// loadFromPath 合并三通道：默认值 < config.yml < 环境变量（env 优先）。
+func loadFromPath(path string) *Config {
+	loadDotEnv(".env") // 可选 .env；显式环境变量优先，不会被覆盖
+	f := &fileConfig{} // 文件不存在/解析失败时保持零值，仅用默认与环境变量
+	if data, err := os.ReadFile(path); err == nil {
+		if err := yaml.Unmarshal(data, f); err != nil {
+			log.Printf("[警告] 解析配置文件 %s 失败: %v，使用默认/环境变量", path, err)
+		}
+	}
+	return &Config{
+		DBHost:     firstNonEmpty(os.Getenv("DB_HOST"), f.Database.Host, "127.0.0.1"),
+		DBPort:     firstNonEmpty(os.Getenv("DB_PORT"), f.Database.Port, "3306"),
+		DBUser:     firstNonEmpty(os.Getenv("DB_USER"), f.Database.User, "notice"),
+		DBPassword: firstNonEmpty(os.Getenv("DB_PASSWORD"), f.Database.Password, "notice123"),
+		DBName:     firstNonEmpty(os.Getenv("DB_NAME"), f.Database.Name, "notice_service"),
+		JWTSecret:  firstNonEmpty(os.Getenv("JWT_SECRET"), f.JWTSecret, "change-me"),
+		EncryptKey: resolveEncryptKeyWith(f.EncryptKey),
+		Port:       firstNonEmpty(os.Getenv("PORT"), f.Server.Port, "8080"),
+		InstanceID: getEnv("INSTANCE_ID", uuid.NewString()),
+		AdminUser:  firstNonEmpty(os.Getenv("ADMIN_USER"), f.Admin.User, "admin"),
+		AdminPass:  firstNonEmpty(os.Getenv("ADMIN_PASS"), f.Admin.Pass, "admin123"),
+
+		QueueWorkers:          firstInt("QUEUE_WORKERS", f.Queue.Workers, 4),
+		QueuePollMS:           firstInt("QUEUE_POLL_MS", f.Queue.PollMS, 1000),
+		QueueMaxAttempts:      firstInt("QUEUE_MAX_ATTEMPTS", f.Queue.MaxAttempts, 3),
+		QueueRetryBackoff:     parseDurations(firstNonEmpty(os.Getenv("QUEUE_RETRY_BACKOFF"), f.Queue.RetryBackoff, "5s,30s,60s"), []time.Duration{5 * time.Second, 30 * time.Second, 60 * time.Second}),
+		QueueClaimTTL:         time.Duration(firstInt("QUEUE_CLAIM_TTL", f.Queue.ClaimTTL, 120)) * time.Second,
+		LogRetentionDays:      firstInt("LOG_RETENTION_DAYS", f.LogRetentionDays, 90),
+		QueueJobRetentionDays: firstInt("QUEUE_JOB_RETENTION_DAYS", f.Queue.JobRetentionDays, 30),
+	}
+}
+
+// firstNonEmpty 返回第一个非空值（用于 env > file > default 优先级）。
+func firstNonEmpty(vals ...string) string {
+	for _, v := range vals {
+		if v != "" {
+			return v
+		}
+	}
+	return ""
+}
+
+// firstInt env（可解析数字）> 配置文件 > 默认。
+func firstInt(envKey string, fileVal *int, def int) int {
+	if v := os.Getenv(envKey); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			return n
+		}
+	}
+	if fileVal != nil {
+		return *fileVal
+	}
+	return def
 }
 
 // keyFile 未显式配置 ENCRYPT_KEY 时用于持久化密钥，保证重启后能解密已存的渠道配置。
@@ -77,7 +161,12 @@ const keyFile = ".notice-encrypt.key"
 
 // resolveEncryptKey 优先用环境变量；否则读取本地密钥文件，不存在则生成并持久化。
 func resolveEncryptKey() string {
-	if v := os.Getenv("ENCRYPT_KEY"); v != "" {
+	return resolveEncryptKeyWith("")
+}
+
+// resolveEncryptKeyWith 与 resolveEncryptKey 相同，但 fileKey 参与优先级：env > file > 密钥文件 > 随机。
+func resolveEncryptKeyWith(fileKey string) string {
+	if v := firstNonEmpty(os.Getenv("ENCRYPT_KEY"), fileKey); v != "" {
 		return v
 	}
 	if b, err := os.ReadFile(keyFile); err == nil && len(b) >= 32 {

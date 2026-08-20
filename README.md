@@ -63,6 +63,8 @@ docker compose up -d
 
 ## 环境变量
 
+> 除环境变量外，也支持 `config.yml` 配置文件（参考 `config.example.yml`）。优先级：环境变量 > config.yml > 默认值。启动时可用 `--config <path>` 或 `CONFIG_FILE` 环境变量指定配置文件路径（默认 `./config.yml`）。
+
 | 变量 | 默认 | 说明 |
 |------|------|------|
 | `DB_HOST` / `DB_PORT` / `DB_USER` / `DB_PASSWORD` / `DB_NAME` | 127.0.0.1 / 3306 / notice / notice123 / notice_service | 数据库连接 |
