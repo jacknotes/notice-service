@@ -16,7 +16,7 @@
         </div>
       </div>
 
-      <el-descriptions :column="1" border class="desc">
+      <el-descriptions :column="1" border class="desc" align="center" label-align="center">
         <el-descriptions-item label="用户名">
           <span class="mono desc-value">{{ auth.user?.username || '—' }}</span>
         </el-descriptions-item>
@@ -177,14 +177,17 @@ async function onLogout() {
 <style scoped>
 .settings-card {
   max-width: 560px;
+  margin-inline: auto; /* 卡片整体水平居中 */
   padding: var(--space-6);
 }
 
 .profile-head {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: var(--space-4);
   margin-bottom: var(--space-5);
+  text-align: center;
 }
 .avatar {
   display: grid;
@@ -219,6 +222,7 @@ async function onLogout() {
 .actions-line {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: var(--space-4);
   margin-top: var(--space-6);
 }
@@ -244,5 +248,11 @@ async function onLogout() {
   color: var(--text-faint);
   font-size: 10px;
   letter-spacing: 0.22em;
+}
+
+/* 修改密码表单输入框成列居中（label 仍在上方） */
+.password-card :deep(.el-form-item) {
+  max-width: 340px;
+  margin-inline: auto;
 }
 </style>
