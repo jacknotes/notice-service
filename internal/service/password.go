@@ -3,6 +3,8 @@ package service
 import (
 	"errors"
 	"unicode/utf8"
+
+	"golang.org/x/crypto/bcrypt"
 )
 
 var (
@@ -45,4 +47,16 @@ func validatePassword(pw string) error {
 		return errPasswordNoSpecial
 	}
 	return nil
+}
+
+// HashPassword 校验密码强度并返回 bcrypt 哈希（创建用户 / CLI 离线重置共用，保证策略一致）。
+func HashPassword(pw string) (string, error) {
+	if err := validatePassword(pw); err != nil {
+		return "", err
+	}
+	hash, err := bcrypt.GenerateFromPassword([]byte(pw), bcrypt.DefaultCost)
+	if err != nil {
+		return "", err
+	}
+	return string(hash), nil
 }

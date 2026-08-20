@@ -2,7 +2,10 @@ package main
 
 import (
 	"crypto/sha256"
+	"flag"
+	"fmt"
 	"log"
+	"os"
 	"strings"
 	"time"
 
@@ -19,6 +22,11 @@ import (
 
 func main() {
 	cfg := config.Load()
+
+	// reset-password 子命令：唯一 admin 忘记密码时离线重置，不启动 HTTP 服务。
+	if len(os.Args) > 1 && os.Args[1] == "reset-password" {
+		os.Exit(runResetPasswordCmd(cfg))
+	}
 
 	// 弱默认密钥告警：防止以默认/示例密钥裸跑
 	for _, w := range cfg.WeakSecretWarnings() {
@@ -96,6 +104,38 @@ func main() {
 	if err := engine.Run(":" + cfg.Port); err != nil {
 		log.Fatal(err)
 	}
+}
+
+// runResetPasswordCmd 处理 reset-password 子命令，返回进程退出码。
+func runResetPasswordCmd(cfg *config.Config) int {
+	username := cfg.AdminUser
+	newPassword := ""
+	fs := flag.NewFlagSet("reset-password", flag.ContinueOnError)
+	fs.StringVar(&username, "username", cfg.AdminUser, "要重置的用户名（默认 ADMIN_USER）")
+	fs.StringVar(&newPassword, "new-password", "", "新密码（缺省时交互式输入，不回显）")
+	if err := fs.Parse(os.Args[2:]); err != nil {
+		return 2
+	}
+	if newPassword == "" {
+		pw, err := promptNewPassword(os.Stdin, os.Stdout)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "读取密码失败:", err)
+			return 2
+		}
+		newPassword = pw
+	}
+	db, err := database.Open(cfg.DSN())
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "数据库连接失败:", err)
+		return 1
+	}
+	defer db.Close()
+	if err := resetPassword(db, username, newPassword); err != nil {
+		fmt.Fprintln(os.Stderr, "重置失败:", err)
+		return 1
+	}
+	fmt.Printf("已重置用户 %s 的密码\n", username)
+	return 0
 }
 
 // padKey 保证 32 字节：过长截断，过短用 SHA-256 摘要补齐。
