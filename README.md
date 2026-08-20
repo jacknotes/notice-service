@@ -208,5 +208,6 @@ Dockerfile  docker-compose.yml  .env.example
 
 ## 文档
 
+- **服务器部署指南**：`docs/deployment.md`（从空服务器 clone 代码 → 构建 → 运行 → Nginx 反代 → 升级 → 排错，含国内镜像与常见坑）
 - 设计文档：`docs/superpowers/specs/2026-07-17-notification-service-design.md`
 - 实现计划：`docs/superpowers/plans/2026-08-18-notice-service-implementation.md`
