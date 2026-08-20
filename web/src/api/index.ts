@@ -66,6 +66,12 @@ export const userApi = {
 }
 
 export const dashboardApi = {
-  stats: () => client.get('/dashboard/stats').then((r) => r.data),
-  trend: () => client.get('/dashboard/trend').then((r) => r.data),
+  stats: (params?: { from?: string; to?: string }) =>
+    client.get('/dashboard/stats', { params }).then((r) => r.data),
+  trend: (params?: { from?: string; to?: string }) =>
+    client.get('/dashboard/trend', { params }).then((r) => r.data),
+  topTasks: (params?: { from?: string; to?: string; limit?: number }) =>
+    client.get('/dashboard/top-tasks', { params }).then((r) => r.data),
+  channelStats: (params?: { from?: string; to?: string }) =>
+    client.get('/dashboard/channel-stats', { params }).then((r) => r.data),
 }

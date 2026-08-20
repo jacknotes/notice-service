@@ -15,6 +15,7 @@ export interface TrendPoint {
   date: string
   total: number
   success: number
+  failed?: number
 }
 
 const props = defineProps<{
@@ -48,7 +49,7 @@ function render() {
       valueFormatter: (v: unknown) => String(v),
     },
     legend: {
-      data: ['发送量', '成功'],
+      data: ['发送量', '成功', '失败'],
       top: 0,
       right: 0,
       icon: 'roundRect',
@@ -101,6 +102,18 @@ function render() {
         itemStyle: { color: '#34d399' },
         emphasis: { focus: 'series' },
         data: data.map((d) => d.success),
+      },
+      {
+        name: '失败',
+        type: 'line',
+        smooth: true,
+        symbol: 'circle',
+        symbolSize: 7,
+        showSymbol: false,
+        lineStyle: { width: 3, color: '#f87171' },
+        itemStyle: { color: '#f87171' },
+        emphasis: { focus: 'series' },
+        data: data.map((d) => d.failed ?? 0),
       },
     ],
   })

@@ -55,6 +55,8 @@ func NewRouter(db *sql.DB, authSvc *service.AuthService, cipher *crypto.Cipher, 
 
 		auth.GET("/dashboard/stats", dashH.Stats)
 		auth.GET("/dashboard/trend", dashH.Trend)
+		auth.GET("/dashboard/top-tasks", dashH.TopTasks)
+		auth.GET("/dashboard/channel-stats", dashH.ChannelStats)
 
 		// 写操作与用户管理：仅管理员
 		admin := auth.Group("")

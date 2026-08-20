@@ -216,6 +216,30 @@ paths:
       summary: 批量删除渠道
       tags:
       - 渠道
+  /api/dashboard/channel-stats:
+    get:
+      parameters:
+      - description: 开始日期
+        in: query
+        name: from
+        type: string
+      - description: 结束日期
+        in: query
+        name: to
+        type: string
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              additionalProperties: true
+              type: object
+            type: array
+      security:
+      - BearerAuth: []
+      summary: 区间内各渠道投递统计
+      tags:
+      - 仪表盘
   /api/dashboard/stats:
     get:
       parameters:
@@ -236,6 +260,34 @@ paths:
       security:
       - BearerAuth: []
       summary: 区间内投递统计（缺省近 7 天）
+      tags:
+      - 仪表盘
+  /api/dashboard/top-tasks:
+    get:
+      parameters:
+      - description: 开始日期
+        in: query
+        name: from
+        type: string
+      - description: 结束日期
+        in: query
+        name: to
+        type: string
+      - description: 返回条数（默认 5）
+        in: query
+        name: limit
+        type: integer
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              additionalProperties: true
+              type: object
+            type: array
+      security:
+      - BearerAuth: []
+      summary: 区间内发送量 TOP 任务
       tags:
       - 仪表盘
   /api/dashboard/trend:
@@ -298,6 +350,25 @@ paths:
       security:
       - BearerAuth: []
       summary: 分页查询全部发送日志
+      tags:
+      - 任务
+  /api/logs/{id}/retry:
+    post:
+      parameters:
+      - description: 日志 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      responses:
+        "202":
+          description: Accepted
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 重试失败日志（定向重发该条）
       tags:
       - 任务
   /api/tasks:

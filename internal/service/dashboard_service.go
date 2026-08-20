@@ -20,18 +20,40 @@ type Stats struct {
 	TodaySuccess int     `json:"today_success"`
 	TodayFailed  int     `json:"today_failed"`
 	SuccessRate  float64 `json:"success_rate"`
+	TaskCount    int     `json:"task_count"`
+	ChannelCount int     `json:"channel_count"`
 }
 
 type TrendPoint struct {
 	Date    string `json:"date"`
 	Total   int    `json:"total"`
 	Success int    `json:"success"`
+	Failed  int    `json:"failed"`
 }
 
-func (s *DashboardService) Stats() (*Stats, error) {
-	now := time.Now()
-	start := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
-	total, ok, fail, err := s.logRepo.CountByRange(start, start.Add(24*time.Hour))
+type TopTask struct {
+	TaskID  int64  `json:"task_id"`
+	Name    string `json:"name"`
+	Total   int    `json:"total"`
+	Success int    `json:"success"`
+	Failed  int    `json:"failed"`
+}
+
+type ChannelStat struct {
+	ChannelID int64  `json:"channel_id"`
+	Name      string `json:"name"`
+	Total     int    `json:"total"`
+	Success   int    `json:"success"`
+	Failed    int    `json:"failed"`
+}
+
+// StatsRange 区间统计（含任务/渠道数）；from/to 为半开区间 [from, to)。
+func (s *DashboardService) StatsRange(from, to time.Time) (*Stats, error) {
+	total, ok, fail, err := s.logRepo.CountByRange(from, to)
+	if err != nil {
+		return nil, err
+	}
+	tasks, chans, err := s.logRepo.CountDistinctByRange(from, to)
 	if err != nil {
 		return nil, err
 	}
@@ -39,23 +61,44 @@ func (s *DashboardService) Stats() (*Stats, error) {
 	if total > 0 {
 		rate = float64(ok) / float64(total) * 100
 	}
-	return &Stats{TodayTotal: total, TodaySuccess: ok, TodayFailed: fail, SuccessRate: rate}, nil
+	return &Stats{TodayTotal: total, TodaySuccess: ok, TodayFailed: fail, SuccessRate: rate, TaskCount: tasks, ChannelCount: chans}, nil
 }
 
-func (s *DashboardService) Trend(days int) ([]TrendPoint, error) {
-	now := time.Now()
-	start := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location()).AddDate(0, 0, -(days - 1))
-	end := start.AddDate(0, 0, days)
-	// 单条 GROUP BY 查询一次拿全，替代原来的 N 次 COUNT
-	byDay, err := s.logRepo.CountByDay(start, end)
+// TrendRange 区间内逐日发送趋势（含成功/失败）。
+func (s *DashboardService) TrendRange(from, to time.Time) ([]TrendPoint, error) {
+	byDay, err := s.logRepo.CountByDay(from, to)
 	if err != nil {
 		return nil, err
 	}
-	out := make([]TrendPoint, 0, days)
-	for i := 0; i < days; i++ {
-		key := start.AddDate(0, 0, i).Format("01-02")
+	out := []TrendPoint{}
+	for d := from; d.Before(to); d = d.AddDate(0, 0, 1) {
+		key := d.Format("01-02")
 		v := byDay[key]
-		out = append(out, TrendPoint{Date: key, Total: v.Total, Success: v.Success})
+		out = append(out, TrendPoint{Date: key, Total: v.Total, Success: v.Success, Failed: v.Failed})
+	}
+	return out, nil
+}
+
+func (s *DashboardService) TopTasks(from, to time.Time, limit int) ([]TopTask, error) {
+	rows, err := s.logRepo.CountByTask(from, to, limit)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]TopTask, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, TopTask{TaskID: r.ID, Total: r.Total, Success: r.Success, Failed: r.Failed})
+	}
+	return out, nil
+}
+
+func (s *DashboardService) ChannelStats(from, to time.Time) ([]ChannelStat, error) {
+	rows, err := s.logRepo.CountByChannel(from, to)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]ChannelStat, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, ChannelStat{ChannelID: r.ID, Total: r.Total, Success: r.Success, Failed: r.Failed})
 	}
 	return out, nil
 }

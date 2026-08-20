@@ -167,11 +167,11 @@ func (r *TaskLogRepo) Query(f LogFilter) (total int, logs []*model.TaskLog, err 
 	return total, logs, nil
 }
 
-// CountByDay 单条 GROUP BY 统计 [from,to) 内每天的总发送数与成功数（仪表盘趋势用）。
+// CountByDay 单条 GROUP BY 统计 [from,to) 内每天的总发送数与成功/失败数（仪表盘趋势用）。
 // 返回 key = "MM-DD"（与前端趋势 x 轴格式一致）。
-func (r *TaskLogRepo) CountByDay(from, to time.Time) (map[string]struct{ Total, Success int }, error) {
+func (r *TaskLogRepo) CountByDay(from, to time.Time) (map[string]struct{ Total, Success, Failed int }, error) {
 	rows, err := r.db.Query(
-		`SELECT DATE_FORMAT(sent_at, '%m-%d') AS d, COUNT(*), COALESCE(SUM(status='success'),0)
+		`SELECT DATE_FORMAT(sent_at, '%m-%d') AS d, COUNT(*), COALESCE(SUM(status='success'),0), COALESCE(SUM(status='failed'),0)
 		 FROM task_logs WHERE sent_at >= ? AND sent_at < ?
 		 GROUP BY d ORDER BY d`,
 		from, to)
@@ -179,14 +179,70 @@ func (r *TaskLogRepo) CountByDay(from, to time.Time) (map[string]struct{ Total, 
 		return nil, err
 	}
 	defer rows.Close()
-	out := map[string]struct{ Total, Success int }{}
+	out := map[string]struct{ Total, Success, Failed int }{}
 	for rows.Next() {
 		var d string
-		var total, success int
-		if err := rows.Scan(&d, &total, &success); err != nil {
+		var total, success, failed int
+		if err := rows.Scan(&d, &total, &success, &failed); err != nil {
 			return nil, err
 		}
-		out[d] = struct{ Total, Success int }{Total: total, Success: success}
+		out[d] = struct{ Total, Success, Failed int }{Total: total, Success: success, Failed: failed}
+	}
+	return out, rows.Err()
+}
+
+// CountDistinctByRange 区间内 distinct 任务数 / 渠道数。
+func (r *TaskLogRepo) CountDistinctByRange(from, to time.Time) (tasks, channels int, err error) {
+	err = r.db.QueryRow(
+		`SELECT COUNT(DISTINCT task_id), COUNT(DISTINCT channel_id) FROM task_logs WHERE sent_at >= ? AND sent_at < ?`,
+		from, to).Scan(&tasks, &channels)
+	return
+}
+
+// RowCount 单行分组统计结果（任务/渠道）。
+type RowCount struct {
+	ID      int64
+	Total   int
+	Success int
+	Failed  int
+}
+
+// CountByTask 按任务分组统计区间发送量，按 total 降序取前 limit。
+func (r *TaskLogRepo) CountByTask(from, to time.Time, limit int) ([]RowCount, error) {
+	rows, err := r.db.Query(
+		`SELECT task_id, COUNT(*), COALESCE(SUM(status='success'),0), COALESCE(SUM(status='failed'),0)
+		 FROM task_logs WHERE sent_at >= ? AND sent_at < ?
+		 GROUP BY task_id ORDER BY COUNT(*) DESC LIMIT ?`,
+		from, to, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return scanRowCounts(rows)
+}
+
+// CountByChannel 按渠道分组统计区间发送量。
+func (r *TaskLogRepo) CountByChannel(from, to time.Time) ([]RowCount, error) {
+	rows, err := r.db.Query(
+		`SELECT channel_id, COUNT(*), COALESCE(SUM(status='success'),0), COALESCE(SUM(status='failed'),0)
+		 FROM task_logs WHERE sent_at >= ? AND sent_at < ?
+		 GROUP BY channel_id ORDER BY COUNT(*) DESC`,
+		from, to)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return scanRowCounts(rows)
+}
+
+func scanRowCounts(rows *sql.Rows) ([]RowCount, error) {
+	out := []RowCount{}
+	for rows.Next() {
+		var rc RowCount
+		if err := rows.Scan(&rc.ID, &rc.Total, &rc.Success, &rc.Failed); err != nil {
+			return nil, err
+		}
+		out = append(out, rc)
 	}
 	return out, rows.Err()
 }
