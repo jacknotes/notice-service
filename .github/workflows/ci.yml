@@ -3,12 +3,53 @@ name: CI
 on:
   push:
     branches: [main]
+    # 纯文档变更（README / CHANGELOG / docs / LICENSE 等）跳过整个 CI，
+    # 不触发任何构建与测试；混有代码变更的提交仍会全量跑。
+    paths-ignore:
+      - 'docs/**'
+      - '*.md'
+      - 'LICENSE'
   pull_request:
     branches: [main]
+    paths-ignore:
+      - 'docs/**'
+      - '*.md'
+      - 'LICENSE'
 
 jobs:
+  # 检测本次变更涉及哪些模块，据此只跑相关的 job（避免每次全量构建）
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+      frontend: ${{ steps.filter.outputs.frontend }}
+      docker: ${{ steps.filter.outputs.docker }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            backend:
+              - '**/*.go'
+              - 'go.mod'
+              - 'go.sum'
+            frontend:
+              - 'web/**'
+            docker:
+              - '**/*.go'
+              - 'go.mod'
+              - 'go.sum'
+              - 'web/**'
+              - 'Dockerfile'
+              - 'docker-compose.yml'
+              - '.dockerignore'
+
   backend:
     name: Backend (Go)
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
     runs-on: ubuntu-latest
     services:
       mysql:
@@ -57,6 +98,8 @@ jobs:
 
   frontend:
     name: Frontend (Vue3)
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -77,6 +120,8 @@ jobs:
 
   docker:
     name: Docker image build
+    needs: changes
+    if: needs.changes.outputs.docker == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
