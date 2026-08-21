@@ -321,6 +321,19 @@ func TestAuditModuleAndIP(t *testing.T) {
 	if resp2.Items[0]["module"] != "channel" {
 		t.Fatalf("first filtered module = %v", resp2.Items[0]["module"])
 	}
+
+	// 关键词支持按来源 IP 搜索（10.9.9.9 为上述登录记录的来源 IP）
+	wip := authReq(t, r, tok, "GET", "/api/audit?keyword=10.9.9.9&page_size=5", "")
+	if wip.Code != 200 {
+		t.Fatalf("audit keyword ip filter = %d", wip.Code)
+	}
+	var respIP struct {
+		Total int `json:"total"`
+	}
+	_ = json.Unmarshal(wip.Body.Bytes(), &respIP)
+	if respIP.Total < 1 {
+		t.Fatal("keyword by source IP should match audit rows")
+	}
 }
 
 // TestUserCreateProfileEndpoint 验证创建用户支持显示名/邮箱，且列表返回。

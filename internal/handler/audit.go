@@ -51,3 +51,12 @@ func auditActor(db *sql.DB, uid int64, username, ip, action, detail string) {
 func auditf(c *gin.Context, db *sql.DB, action, format string, args ...interface{}) {
 	auditCtx(c, db, action, fmt.Sprintf(format, args...))
 }
+
+// auditStr 格式化可选字符串：非 nil 输出值，nil 输出 "-"。
+// 用于审计详情格式化，避免把 *string 指针以 %v/%s 打印成内存地址（如 0xc000…）。
+func auditStr(p *string) string {
+	if p == nil {
+		return "-"
+	}
+	return *p
+}

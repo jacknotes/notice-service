@@ -103,7 +103,7 @@ func (h *UserHandler) Update(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	auditf(c, h.db, "user.update", "更新用户 id=%d (role=%v display_name=%v email=%v)", id, req.Role, req.DisplayName, req.Email)
+	auditf(c, h.db, "user.update", "更新用户 id=%d (role=%s display_name=%s email=%s)", id, auditStr(req.Role), auditStr(req.DisplayName), auditStr(req.Email))
 	c.JSON(http.StatusOK, gin.H{"ok": true})
 }
 

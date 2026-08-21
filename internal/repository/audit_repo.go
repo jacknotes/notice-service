@@ -58,7 +58,7 @@ func (r *AuditRepo) CleanupOlderThan(days int) (int64, error) {
 
 // AuditFilter 审计日志查询过滤条件（后端分页/筛选下推 DB）。
 type AuditFilter struct {
-	Keyword  string // 匹配 username / detail
+	Keyword  string // 匹配 username / ip / detail
 	Action   string // 精确匹配 action
 	Module   string // 精确匹配 module
 	From, To time.Time
@@ -71,9 +71,9 @@ func (r *AuditRepo) Query(f AuditFilter) (total int, logs []*AuditLog, err error
 	where := "WHERE 1=1"
 	args := []interface{}{}
 	if f.Keyword != "" {
-		where += " AND (username LIKE ? OR detail LIKE ?)"
+		where += " AND (username LIKE ? OR ip LIKE ? OR detail LIKE ?)"
 		like := "%" + f.Keyword + "%"
-		args = append(args, like, like)
+		args = append(args, like, like, like)
 	}
 	if f.Action != "" {
 		where += " AND action=?"

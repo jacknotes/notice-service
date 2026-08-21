@@ -23,7 +23,7 @@ func NewAuditHandler(db *sql.DB) *AuditHandler {
 // @Summary 操作审计日志（仅管理员）
 // @Tags 审计
 // @Security BearerAuth
-// @Param keyword query string false "关键词（匹配用户名/详情）"
+// @Param keyword query string false "关键词（匹配用户名/IP/详情）"
 // @Param action query string false "操作类型（精确匹配）"
 // @Param from query string false "开始日期 YYYY-MM-DD"
 // @Param to query string false "结束日期 YYYY-MM-DD"

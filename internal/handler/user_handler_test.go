@@ -288,3 +288,44 @@ func TestUserUpdateDefaultAdminProtectedAPI(t *testing.T) {
 		t.Fatalf("demote promoted admin = %d body=%s", w.Code, w.Body.String())
 	}
 }
+
+// TestUserUpdateAuditDetail 更新用户后，审计详情应输出可读值（role=…/display_name=…），
+// 而不是 *string 指针的内存地址（如 0xc000…）或 <nil>。
+func TestUserUpdateAuditDetail(t *testing.T) {
+	r := testRouter(t)
+	adminTok := login(t, r)
+
+	// 创建临时用户并更新角色/显示名/邮箱
+	w := authReq(t, r, adminTok, "POST", "/api/users", `{"username":"aud_detail","password":"TestPass123!","role":"user"}`)
+	if w.Code != 200 {
+		t.Fatalf("create user = %d body=%s", w.Code, w.Body.String())
+	}
+	uid := int64(mustJSON(t, w)["id"].(float64))
+	t.Cleanup(func() { testDB(t).Exec("DELETE FROM users WHERE id=?", uid) })
+	wu := authReq(t, r, adminTok, "PUT", "/api/users/"+num(uid), `{"role":"admin","display_name":"新名字","email":"a@b.com"}`)
+	if wu.Code != 200 {
+		t.Fatalf("update user = %d body=%s", wu.Code, wu.Body.String())
+	}
+
+	// 按 action + 详情中的目标 id 定位本次 user.update 审计记录
+	wa := authReq(t, r, adminTok, "GET", "/api/audit?action=user.update&keyword="+num(uid)+"&page_size=5", "")
+	if wa.Code != 200 {
+		t.Fatalf("audit list = %d body=%s", wa.Code, wa.Body.String())
+	}
+	var resp struct {
+		Items []struct {
+			Detail string `json:"detail"`
+		} `json:"items"`
+	}
+	_ = json.Unmarshal(wa.Body.Bytes(), &resp)
+	if len(resp.Items) == 0 {
+		t.Fatal("expected user.update audit rows for this target")
+	}
+	d := resp.Items[0].Detail
+	if strings.Contains(d, "0x") || strings.Contains(d, "<nil>") {
+		t.Fatalf("audit detail should not contain pointer address / <nil>: %s", d)
+	}
+	if !strings.Contains(d, "role=admin") || !strings.Contains(d, "display_name=新名字") || !strings.Contains(d, "email=a@b.com") {
+		t.Fatalf("audit detail should contain readable values, got: %s", d)
+	}
+}

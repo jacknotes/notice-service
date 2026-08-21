@@ -15,7 +15,7 @@
           class="search-input"
           clearable
           :prefix-icon="Search"
-          placeholder="搜索用户 / 详情…"
+          placeholder="搜索用户 / 来源 IP / 详情…"
           @keyup.enter="applyKeyword"
           @clear="applyKeyword"
         />
