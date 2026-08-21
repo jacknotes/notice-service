@@ -33,25 +33,26 @@
     <div v-loading="loading" class="card table-card">
       <el-table
         ref="tableRef"
-        :data="filteredTemplates"
+        :data="paged"
         style="width: 100%"
         empty-text="暂无模板，点击右上角「新建模板」开始"
         @selection-change="onSelectionChange"
+        @sort-change="onSortChange"
       >
         <el-table-column v-if="isAdmin" type="selection" width="48" align="center" />
-        <el-table-column prop="id" label="ID" width="72" align="center">
+        <el-table-column prop="id" label="ID" width="72" align="center" sortable="custom">
           <template #default="{ row }">
             <span class="mono id-cell">#{{ row.id }}</span>
           </template>
         </el-table-column>
 
-        <el-table-column prop="name" label="名称" min-width="170">
+        <el-table-column prop="name" label="名称" min-width="170" sortable="custom">
           <template #default="{ row }">
             <span class="tpl-name">{{ row.name }}</span>
           </template>
         </el-table-column>
 
-        <el-table-column prop="subject" label="标题" min-width="220" show-overflow-tooltip>
+        <el-table-column prop="subject" label="标题" min-width="220" show-overflow-tooltip sortable="custom">
           <template #default="{ row }">
             <span class="subject-cell">{{ row.subject || '—' }}</span>
           </template>
@@ -64,22 +65,35 @@
           </template>
         </el-table-column>
 
-        <el-table-column label="更新时间" min-width="150">
+        <el-table-column label="更新时间" min-width="150" sortable="custom" prop="updated_at">
           <template #default="{ row }">
             <span class="mono time-cell">{{ row.updated_at || '—' }}</span>
           </template>
         </el-table-column>
 
-        <el-table-column label="操作" width="150" align="center" fixed="right">
+        <el-table-column label="操作" width="190" align="center" fixed="right">
           <template #default="{ row }">
             <template v-if="isAdmin">
               <el-button link type="primary" size="small" @click="openEdit(row)">编辑</el-button>
+              <el-button link type="success" size="small" @click="duplicateTemplate(row)">复制</el-button>
               <el-button link type="danger" size="small" @click="removeTemplate(row)">删除</el-button>
             </template>
             <span v-else class="text-muted">—</span>
           </template>
         </el-table-column>
       </el-table>
+    </div>
+
+    <div v-if="total > 0" class="pager-row">
+      <el-pagination
+        v-model:current-page="page"
+        v-model:page-size="size"
+        :total="total"
+        :page-sizes="[10, 20, 50, 100]"
+        layout="total, sizes, prev, pager, next, jumper"
+        background
+        @size-change="onPageSizeChange"
+      />
     </div>
 
     <!-- ── Create / Edit dialog ─────────────────────────────────────── -->
@@ -186,6 +200,7 @@ import { Plus, Delete, View, Search } from '@element-plus/icons-vue'
 import { templateApi } from '@/api'
 import MarkdownPreview from '@/components/MarkdownPreview.vue'
 import { useAuthStore } from '@/stores/auth'
+import { useTablePaging } from '@/composables/useTablePaging'
 
 interface TemplateVar { name: string; default: string }
 interface TemplateRow {
@@ -227,6 +242,9 @@ const filteredTemplates = computed<TemplateRow[]>(() => {
     (t.subject || '').toLowerCase().includes(kw)
   )
 })
+
+// 客户端排序 + 分页（整表数据在前端）
+const { page, size, onSortChange, paged, total, onPageSizeChange } = useTablePaging<TemplateRow>(filteredTemplates)
 
 const dialogVisible = ref(false)
 const saving = ref(false)
@@ -308,6 +326,17 @@ function openEdit(row: TemplateRow) {
   dialogVisible.value = true
 }
 
+// 复制模板：打开「新建模板」并预填源模板内容（名称加「（副本）」），id=0 走创建路径。
+function duplicateTemplate(row: TemplateRow) {
+  form.id = 0
+  form.name = `${row.name}（副本）`
+  form.subject = row.subject
+  form.content_md = row.content_md
+  form.variables = (row.variables || []).map((v) => ({ name: v.name, default: v.default ?? '' }))
+  serverPreview.value = null
+  dialogVisible.value = true
+}
+
 function addVar() {
   form.variables.push({ name: '', default: '' })
 }
@@ -349,20 +378,19 @@ async function saveTemplate() {
 }
 
 /* ── Server preview ────────────────────────────────────────────────── */
+// 使用「当前表单值」（未保存的新值）渲染，不再回退已保存值；新模板（id=0）也可预览。
 async function useServerPreview() {
-  // New template has no id yet → local preview only.
-  if (!form.id) {
-    ElMessage.info('模板尚未保存，当前为本地实时预览')
-    serverPreview.value = null
-    return
-  }
   const vars: Record<string, string> = {}
   for (const v of form.variables) {
     if (v.name.trim()) vars[v.name.trim()] = v.default
   }
   previewing.value = true
   try {
-    const res = await templateApi.preview(form.id, vars)
+    const res = await templateApi.preview(form.id, {
+      subject: form.subject,
+      content_md: form.content_md,
+      variables: vars,
+    })
     serverPreview.value = { subject: res?.subject ?? form.subject, content: res?.content ?? form.content_md }
     ElMessage.success('已按当前变量值渲染')
   } catch (e: any) {
@@ -420,6 +448,12 @@ onMounted(load)
 
 <style scoped>
 .search-input { width: 220px; }
+
+.pager-row {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: var(--space-4);
+}
 
 .title-row {
   display: flex;

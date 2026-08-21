@@ -37,7 +37,8 @@ func NewNotificationService(db *sql.DB, cipher *crypto.Cipher) *NotificationServ
 
 // SendTask 渲染并发送任务（对每个绑定渠道发送，单次尝试；重试由发送队列负责）。
 // 邮件渠道 → 逐个接收地址发送；IM 渠道（企微/钉钉/飞书/PushPlus）→ 发送一次到机器人/token 绑定目标。
-func (s *NotificationService) SendTask(taskID int64, vars map[string]string) error {
+// tr 为触发来源信息（谁触发 / 从哪个 IP / 触发方式），随每条日志落库。
+func (s *NotificationService) SendTask(taskID int64, vars map[string]string, tr Trigger) error {
 	task, err := s.taskRepo.GetByID(taskID)
 	if err != nil {
 		return err
@@ -95,6 +96,7 @@ func (s *NotificationService) SendTask(taskID int64, vars map[string]string) err
 			_ = s.logRepo.Create(&model.TaskLog{
 				TaskID: task.ID, ChannelID: ch.ID, Subject: subject, Content: content,
 				Status: "failed", Request: "{}", ErrorMsg: fmt.Sprintf("渠道「%s」已停用", ch.Name),
+				TriggerType: tr.Type, TriggerBy: tr.By, TriggerIP: tr.IP,
 			})
 			continue
 		}
@@ -109,14 +111,14 @@ func (s *NotificationService) SendTask(taskID int64, vars map[string]string) err
 				continue
 			}
 			for _, addr := range receivers {
-				if err := s.sendOnce(inst, msg, addr, task, ch); err != nil {
+				if err := s.sendOnce(inst, msg, addr, task, ch, tr); err != nil {
 					lastErr = err
 				}
 			}
 			continue
 		}
 		// IM 渠道：发送一次到机器人/token 绑定的目标（空地址）
-		if err := s.sendOnce(inst, msg, "", task, ch); err != nil {
+		if err := s.sendOnce(inst, msg, "", task, ch, tr); err != nil {
 			lastErr = err
 		}
 	}
@@ -124,25 +126,27 @@ func (s *NotificationService) SendTask(taskID int64, vars map[string]string) err
 }
 
 // sendOnce 单次发送并写一条日志（成功或失败各一条；重试由队列调度）。
-func (s *NotificationService) sendOnce(inst channel.Channel, msg *channel.Message, addr string, task *model.Task, ch *model.Channel) error {
+func (s *NotificationService) sendOnce(inst channel.Channel, msg *channel.Message, addr string, task *model.Task, ch *model.Channel, tr Trigger) error {
 	reqBody, _ := json.Marshal(map[string]string{"address": addr})
 	if err := inst.Send(msg, &channel.Receiver{Address: addr}); err != nil {
 		_ = s.logRepo.Create(&model.TaskLog{
 			TaskID: task.ID, ChannelID: ch.ID, Subject: msg.Subject, Content: msg.Content,
 			Status: "failed", Request: string(reqBody), ErrorMsg: err.Error(),
+			TriggerType: tr.Type, TriggerBy: tr.By, TriggerIP: tr.IP,
 		})
 		return err
 	}
 	_ = s.logRepo.Create(&model.TaskLog{
 		TaskID: task.ID, ChannelID: ch.ID, Subject: msg.Subject, Content: msg.Content,
 		Status: "success", Request: string(reqBody), Response: "ok",
+		TriggerType: tr.Type, TriggerBy: tr.By, TriggerIP: tr.IP,
 	})
 	return nil
 }
 
 // ResendLog 定向重发一条失败日志：用日志已渲染的 Subject/Content 向原渠道/接收人重发，
 // 并写入一条新的发送日志（保留原失败历史）。单次尝试，由调用方决定是否异步。
-func (s *NotificationService) ResendLog(logID int64) error {
+func (s *NotificationService) ResendLog(logID int64, tr Trigger) error {
 	logRow, err := s.logRepo.GetByID(logID)
 	if err != nil {
 		return err
@@ -174,12 +178,14 @@ func (s *NotificationService) ResendLog(logID int64) error {
 		_ = s.logRepo.Create(&model.TaskLog{
 			TaskID: logRow.TaskID, ChannelID: ch.ID, Subject: logRow.Subject, Content: logRow.Content,
 			Status: "failed", Request: logRow.Request, ErrorMsg: err.Error(),
+			TriggerType: tr.Type, TriggerBy: tr.By, TriggerIP: tr.IP,
 		})
 		return err
 	}
 	_ = s.logRepo.Create(&model.TaskLog{
 		TaskID: logRow.TaskID, ChannelID: ch.ID, Subject: logRow.Subject, Content: logRow.Content,
 		Status: "success", Request: logRow.Request, Response: "ok",
+		TriggerType: tr.Type, TriggerBy: tr.By, TriggerIP: tr.IP,
 	})
 	return nil
 }

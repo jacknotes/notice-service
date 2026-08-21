@@ -82,10 +82,27 @@
         :data="filteredLogs"
         style="width: 100%"
         empty-text="没有符合条件的日志，试试调整筛选条件"
+        @sort-change="onSortChange"
       >
         <el-table-column type="expand">
           <template #default="{ row }">
             <div class="log-detail">
+              <div v-if="row.trigger_type || row.trigger_by || row.trigger_ip" class="detail-block detail-trigger">
+                <span class="detail-label">触发来源</span>
+                <div class="trigger-line">
+                  <el-tag
+                    v-if="row.trigger_type"
+                    :style="triggerTagStyle(row.trigger_type)"
+                    effect="plain"
+                    size="small"
+                  >
+                    {{ triggerLabel(row.trigger_type) }}
+                  </el-tag>
+                  <span class="mono detail-trigger-text">人：{{ row.trigger_by || '—' }}</span>
+                  <span class="mono detail-trigger-text">IP：{{ row.trigger_ip || '—' }}</span>
+                </div>
+              </div>
+
               <div v-if="row.subject" class="detail-block">
                 <span class="detail-label">标题</span>
                 <p class="detail-subject">{{ row.subject }}</p>
@@ -114,7 +131,7 @@
           </template>
         </el-table-column>
 
-        <el-table-column prop="id" label="ID" width="72" align="center">
+        <el-table-column prop="id" label="ID" width="72" align="center" sortable="custom">
           <template #default="{ row }">
             <span class="mono id-cell">#{{ row.id }}</span>
           </template>
@@ -127,21 +144,42 @@
           </template>
         </el-table-column>
 
-        <el-table-column label="任务" min-width="160">
+        <el-table-column label="任务" min-width="160" sortable="custom" prop="task_id">
           <template #default="{ row }">
             <span class="task-name-cell">{{ taskName(row.task_id) }}</span>
             <span class="mono task-id-cell">#{{ row.task_id }}</span>
           </template>
         </el-table-column>
 
-        <el-table-column label="渠道" min-width="160">
+        <el-table-column label="渠道" min-width="150" sortable="custom" prop="channel_id">
           <template #default="{ row }">
             <span class="task-name-cell">{{ channelName(row.channel_id) }}</span>
             <span class="mono task-id-cell">#{{ row.channel_id }}</span>
           </template>
         </el-table-column>
 
-        <el-table-column label="状态" width="100" align="center">
+        <el-table-column label="触发" min-width="150" sortable="custom" prop="trigger_type">
+          <template #default="{ row }">
+            <el-tag
+              v-if="row.trigger_type"
+              :style="triggerTagStyle(row.trigger_type)"
+              effect="plain"
+              size="small"
+            >
+              {{ triggerLabel(row.trigger_type) }}
+            </el-tag>
+            <span v-else class="ok-cell">—</span>
+            <span class="mono trigger-by">{{ row.trigger_by || '' }}</span>
+          </template>
+        </el-table-column>
+
+        <el-table-column label="触发 IP" min-width="110" sortable="custom" prop="trigger_ip">
+          <template #default="{ row }">
+            <span class="mono time-cell">{{ row.trigger_ip || '—' }}</span>
+          </template>
+        </el-table-column>
+
+        <el-table-column label="状态" width="100" align="center" sortable="custom" prop="status">
           <template #default="{ row }">
             <el-tag :type="row.status === 'success' ? 'success' : 'danger'" effect="light" size="small">
               {{ row.status === 'success' ? '成功' : '失败' }}
@@ -149,20 +187,20 @@
           </template>
         </el-table-column>
 
-        <el-table-column label="重试" width="80" align="center">
+        <el-table-column label="重试" width="80" align="center" sortable="custom" prop="retry_count">
           <template #default="{ row }">
             <span class="mono retry-cell">{{ row.retry_count ?? 0 }}</span>
           </template>
         </el-table-column>
 
-        <el-table-column label="错误信息" min-width="220" show-overflow-tooltip>
+        <el-table-column label="错误信息" min-width="200" show-overflow-tooltip>
           <template #default="{ row }">
             <span v-if="row.error_msg" class="err-cell">{{ row.error_msg }}</span>
             <span v-else class="ok-cell">—</span>
           </template>
         </el-table-column>
 
-        <el-table-column label="时间" min-width="170">
+        <el-table-column label="时间" min-width="170" sortable="custom" prop="sent_at">
           <template #default="{ row }">
             <span class="mono time-cell">{{ fmtTime(row.sent_at) }}</span>
           </template>
@@ -225,6 +263,9 @@ interface LogRow {
   response?: string
   error_msg?: string
   retry_count?: number
+  trigger_type?: string
+  trigger_by?: string
+  trigger_ip?: string
   sent_at?: string
 }
 
@@ -239,6 +280,38 @@ const logs = ref<LogRow[]>([])
 const taskFilter = ref<number | undefined>(undefined)
 const statusFilter = ref<'success' | 'failed' | ''>('')
 const keyword = ref('')
+
+/* ── 后端排序 ──────────────────────────────────────────────────────── */
+const sortBy = ref<string>('')
+const sortOrder = ref<'asc' | 'desc'>('desc')
+
+// el-table sort-change：仅在后端白名单列上生效（列上标 sortable="custom"）。
+function onSortChange({ prop, order }: { prop: string; order: string | null }) {
+  if (!order) {
+    sortBy.value = ''
+    sortOrder.value = 'desc'
+  } else {
+    sortBy.value = prop
+    sortOrder.value = order === 'ascending' ? 'asc' : 'desc'
+  }
+  page.value = 1
+  loadLogs()
+}
+
+// 触发方式 → 中文标签 / 标签配色
+const TRIGGER_META: Record<string, { label: string; color: string }> = {
+  cron: { label: '定时', color: '#38bdf8' },
+  webhook: { label: 'Webhook', color: '#8b5cf6' },
+  manual: { label: '手动', color: '#fbbf24' },
+  retry: { label: '重试', color: '#f87171' },
+}
+function triggerLabel(t?: string) {
+  return (t && TRIGGER_META[t]?.label) || t || '—'
+}
+function triggerTagStyle(t?: string) {
+  const c = (t && TRIGGER_META[t]?.color) || '#94a3b8'
+  return { color: c, borderColor: `${c}55`, backgroundColor: `${c}1a` }
+}
 
 /* ── 日期范围 ──────────────────────────────────────────────────────────
    默认展示最近一个月（不展示全部）；快捷按钮 + 自定义日期范围；
@@ -311,7 +384,10 @@ const filteredLogs = computed<LogRow[]>(() => {
       channelName(l.channel_id).toLowerCase().includes(kw) ||
       (l.subject || '').toLowerCase().includes(kw) ||
       (l.content || '').toLowerCase().includes(kw) ||
-      (l.error_msg || '').toLowerCase().includes(kw)
+      (l.error_msg || '').toLowerCase().includes(kw) ||
+      (l.trigger_by || '').toLowerCase().includes(kw) ||
+      (l.trigger_ip || '').toLowerCase().includes(kw) ||
+      triggerLabel(l.trigger_type).toLowerCase().includes(kw)
     return hit
   })
 })
@@ -359,7 +435,10 @@ async function retryLog(row: LogRow) {
 async function loadLogs() {
   loading.value = true
   try {
-    const params: { task_id?: number; status?: string; from?: string; to?: string; page: number; page_size: number } = {
+    const params: {
+      task_id?: number; status?: string; from?: string; to?: string
+      page: number; page_size: number; sort_by?: string; sort_order?: 'asc' | 'desc'
+    } = {
       page: page.value,
       page_size: pageSize.value,
     }
@@ -368,6 +447,10 @@ async function loadLogs() {
     if (dateRange.value) {
       params.from = dateRange.value[0]
       params.to = dateRange.value[1]
+    }
+    if (sortBy.value) {
+      params.sort_by = sortBy.value
+      params.sort_order = sortOrder.value
     }
     const data = await logApi.query(params)
     logs.value = (data?.items || []) as LogRow[]
@@ -492,6 +575,11 @@ onMounted(() => {
   color: var(--text-secondary);
   font-size: var(--text-xs);
 }
+.trigger-by {
+  margin-left: 6px;
+  color: var(--text-faint);
+  font-size: var(--text-xs);
+}
 .err-cell {
   color: var(--rose-400);
   font-size: var(--text-xs);
@@ -533,6 +621,16 @@ onMounted(() => {
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--text-faint);
+}
+.trigger-line {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+.detail-trigger-text {
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
 }
 .detail-subject {
   color: var(--text-primary);

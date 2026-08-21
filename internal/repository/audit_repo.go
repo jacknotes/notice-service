@@ -7,12 +7,12 @@ import (
 
 // AuditLog 审计日志记录（管理员操作追溯）。
 type AuditLog struct {
-	ID        int64
-	UserID    int64
-	Username  string
-	Action    string
-	Detail    string
-	CreatedAt time.Time
+	ID        int64     `json:"id"`
+	UserID    int64     `json:"user_id"`
+	Username  string    `json:"username"`
+	Action    string    `json:"action"`
+	Detail    string    `json:"detail"`
+	CreatedAt time.Time `json:"created_at"`
 }
 
 type AuditRepo struct{ db *sql.DB }
@@ -52,4 +52,65 @@ func (r *AuditRepo) CleanupOlderThan(days int) (int64, error) {
 			return total, nil
 		}
 	}
+}
+
+// AuditFilter 审计日志查询过滤条件（后端分页/筛选下推 DB）。
+type AuditFilter struct {
+	Keyword  string // 匹配 username / detail
+	Action   string // 精确匹配 action
+	From, To time.Time
+	Page     int
+	PageSize int
+}
+
+// Query 按过滤条件分页查询审计日志，返回总数与当前页数据（按时间倒序）。
+func (r *AuditRepo) Query(f AuditFilter) (total int, logs []*AuditLog, err error) {
+	where := "WHERE 1=1"
+	args := []interface{}{}
+	if f.Keyword != "" {
+		where += " AND (username LIKE ? OR detail LIKE ?)"
+		like := "%" + f.Keyword + "%"
+		args = append(args, like, like)
+	}
+	if f.Action != "" {
+		where += " AND action=?"
+		args = append(args, f.Action)
+	}
+	if !f.From.IsZero() {
+		where += " AND created_at >= ?"
+		args = append(args, f.From)
+	}
+	if !f.To.IsZero() {
+		where += " AND created_at < ?"
+		args = append(args, f.To)
+	}
+	if err = r.db.QueryRow("SELECT COUNT(*) FROM audit_logs "+where, args...).Scan(&total); err != nil {
+		return 0, nil, err
+	}
+	limit := f.PageSize
+	if limit <= 0 || limit > 200 {
+		limit = 50
+	}
+	offset := (f.Page - 1) * limit
+	if offset < 0 {
+		offset = 0
+	}
+	queryArgs := append(append([]interface{}{}, args...), limit, offset)
+	rows, err := r.db.Query(
+		"SELECT id, user_id, username, action, detail, created_at FROM audit_logs "+where+" ORDER BY id DESC LIMIT ? OFFSET ?",
+		queryArgs...)
+	if err != nil {
+		return 0, nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		e := &AuditLog{}
+		var uid sql.NullInt64
+		if err := rows.Scan(&e.ID, &uid, &e.Username, &e.Action, &e.Detail, &e.CreatedAt); err != nil {
+			return 0, nil, err
+		}
+		e.UserID = uid.Int64
+		logs = append(logs, e)
+	}
+	return total, logs, rows.Err()
 }

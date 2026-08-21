@@ -32,11 +32,26 @@ func (r *UserRepo) Create(u *model.User) error {
 	return nil
 }
 
-func (r *UserRepo) GetByUsername(username string) (*model.User, error) {
+// userCols 用户常用列（含 2FA 字段）。
+const userCols = "id, username, password_hash, role, created_at, updated_at, totp_secret, totp_enabled, totp_recovery_codes"
+
+func scanUser(row interface{ Scan(...any) error }) (*model.User, error) {
 	u := &model.User{}
-	err := r.db.QueryRow(
-		"SELECT id, username, password_hash, role, created_at, updated_at FROM users WHERE username = ? AND deleted_at IS NULL",
-		username).Scan(&u.ID, &u.Username, &u.PasswordHash, &u.Role, &u.CreatedAt, &u.UpdatedAt)
+	var secret, recovery sql.NullString
+	var enabled bool
+	if err := row.Scan(&u.ID, &u.Username, &u.PasswordHash, &u.Role, &u.CreatedAt, &u.UpdatedAt, &secret, &enabled, &recovery); err != nil {
+		return nil, err
+	}
+	u.TOTPSecret = secret.String
+	u.TOTPEnabled = enabled
+	u.TOTPRecoveryJSON = recovery.String
+	return u, nil
+}
+
+func (r *UserRepo) GetByUsername(username string) (*model.User, error) {
+	u, err := scanUser(r.db.QueryRow(
+		"SELECT "+userCols+" FROM users WHERE username = ? AND deleted_at IS NULL",
+		username))
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -47,10 +62,9 @@ func (r *UserRepo) GetByUsername(username string) (*model.User, error) {
 }
 
 func (r *UserRepo) GetByID(id int64) (*model.User, error) {
-	u := &model.User{}
-	err := r.db.QueryRow(
-		"SELECT id, username, password_hash, role, created_at, updated_at FROM users WHERE id = ? AND deleted_at IS NULL",
-		id).Scan(&u.ID, &u.Username, &u.PasswordHash, &u.Role, &u.CreatedAt, &u.UpdatedAt)
+	u, err := scanUser(r.db.QueryRow(
+		"SELECT "+userCols+" FROM users WHERE id = ? AND deleted_at IS NULL",
+		id))
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -72,15 +86,15 @@ func (r *UserRepo) Update(u *model.User) error {
 }
 
 func (r *UserRepo) List() ([]*model.User, error) {
-	rows, err := r.db.Query("SELECT id, username, password_hash, role, created_at, updated_at FROM users WHERE deleted_at IS NULL ORDER BY id")
+	rows, err := r.db.Query("SELECT " + userCols + " FROM users WHERE deleted_at IS NULL ORDER BY id")
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 	out := []*model.User{}
 	for rows.Next() {
-		u := &model.User{}
-		if err := rows.Scan(&u.ID, &u.Username, &u.PasswordHash, &u.Role, &u.CreatedAt, &u.UpdatedAt); err != nil {
+		u, err := scanUser(rows)
+		if err != nil {
 			return nil, err
 		}
 		out = append(out, u)
@@ -135,4 +149,46 @@ func (r *UserRepo) BatchDelete(ids []int64) error {
 	_, err := r.db.Exec(
 		"UPDATE users SET deleted_at = NOW() WHERE id IN ("+placeholders+") AND deleted_at IS NULL", args...)
 	return err
+}
+
+/* ── 双因子认证（TOTP） ────────────────────────────────────────────── */
+
+// SetTOTP 写入 TOTP 密钥与备用码哈希（启用前/重新生成用）。启用标记置 0，
+// 用户在设置页用动态码验证通过后才置 1（EnableTOTP）。
+func (r *UserRepo) SetTOTP(userID int64, secret, recoveryCodesJSON string) error {
+	_, err := r.db.Exec(
+		"UPDATE users SET totp_secret=?, totp_recovery_codes=?, totp_enabled=0 WHERE id=? AND deleted_at IS NULL",
+		secret, nullableJSON(recoveryCodesJSON), userID)
+	return err
+}
+
+// EnableTOTP 验证通过后启用双因子认证。
+func (r *UserRepo) EnableTOTP(userID int64) error {
+	_, err := r.db.Exec(
+		"UPDATE users SET totp_enabled=1 WHERE id=? AND deleted_at IS NULL", userID)
+	return err
+}
+
+// DisableTOTP 关闭双因子认证并清除密钥与备用码。
+func (r *UserRepo) DisableTOTP(userID int64) error {
+	_, err := r.db.Exec(
+		"UPDATE users SET totp_secret=NULL, totp_enabled=0, totp_recovery_codes=NULL WHERE id=? AND deleted_at IS NULL",
+		userID)
+	return err
+}
+
+// SetTOTPRecoveryCodes 更新备用码列表（消费一条备用码后回写剩余哈希）。
+func (r *UserRepo) SetTOTPRecoveryCodes(userID int64, codesJSON string) error {
+	_, err := r.db.Exec(
+		"UPDATE users SET totp_recovery_codes=? WHERE id=? AND deleted_at IS NULL",
+		nullableJSON(codesJSON), userID)
+	return err
+}
+
+// nullableJSON 空字符串 → NULL（JSON 列不落空串）。
+func nullableJSON(s string) interface{} {
+	if s == "" {
+		return nil
+	}
+	return s
 }

@@ -37,7 +37,7 @@
         end-placeholder="结束日期"
         value-format="YYYY-MM-DD"
         :clearable="false"
-        style="width: 260px"
+        style="width: 240px"
         @change="onDateRangeChange"
       />
       <span class="range-hint mono">{{ dateRange ? `${dateRange[0]} ~ ${dateRange[1]}` : '' }}</span>

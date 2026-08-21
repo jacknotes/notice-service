@@ -22,10 +22,11 @@
     <div v-loading="loading" class="card table-card">
       <el-table
         ref="tableRef"
-        :data="users"
+        :data="paged"
         style="width: 100%"
         empty-text="暂无用户，点击右上角「新建用户」开始"
         @selection-change="onSelectionChange"
+        @sort-change="onSortChange"
       >
         <el-table-column
           type="selection"
@@ -33,13 +34,13 @@
           align="center"
           :selectable="isSelectableRow"
         />
-        <el-table-column prop="id" label="ID" width="72" align="center">
+        <el-table-column prop="id" label="ID" width="72" align="center" sortable="custom">
           <template #default="{ row }">
             <span class="mono id-cell">#{{ row.id }}</span>
           </template>
         </el-table-column>
 
-        <el-table-column prop="username" label="用户名" min-width="220">
+        <el-table-column prop="username" label="用户名" min-width="220" sortable="custom">
           <template #default="{ row }">
             <el-tooltip :content="row.username" placement="top" :show-after="320">
               <span class="user-name">{{ row.username }}</span>
@@ -48,7 +49,7 @@
           </template>
         </el-table-column>
 
-        <el-table-column prop="role" label="角色" width="140" align="center">
+        <el-table-column prop="role" label="角色" width="140" align="center" sortable="custom">
           <template #default="{ row }">
             <el-tag :style="roleTagStyle(row.role)" effect="plain" size="small">
               {{ row.role === 'admin' ? '管理员' : '普通用户' }}
@@ -56,7 +57,7 @@
           </template>
         </el-table-column>
 
-        <el-table-column label="创建时间" min-width="170">
+        <el-table-column label="创建时间" min-width="170" sortable="custom" prop="created_at">
           <template #default="{ row }">
             <span class="mono time-cell">{{ row.created_at || '—' }}</span>
           </template>
@@ -102,6 +103,18 @@
           </template>
         </el-table-column>
       </el-table>
+    </div>
+
+    <div v-if="total > 0" class="pager-row">
+      <el-pagination
+        v-model:current-page="page"
+        v-model:page-size="size"
+        :total="total"
+        :page-sizes="[10, 20, 50, 100]"
+        layout="total, sizes, prev, pager, next, jumper"
+        background
+        @size-change="onPageSizeChange"
+      />
     </div>
 
     <!-- ── 重置密码：生成一次性令牌，线下交给用户自助重置 ─────────────── -->
@@ -222,6 +235,7 @@ import type { FormInstance, FormRules, TableInstance } from 'element-plus'
 import { Plus, Delete, CopyDocument } from '@element-plus/icons-vue'
 import { userApi } from '@/api'
 import { useAuthStore } from '@/stores/auth'
+import { useTablePaging } from '@/composables/useTablePaging'
 
 interface UserRow {
   id: number
@@ -237,6 +251,9 @@ const loading = ref(false)
 const users = ref<UserRow[]>([])
 const tableRef = ref<TableInstance>()
 const selectedRows = ref<UserRow[]>([])
+
+// 客户端排序 + 分页（整表数据在前端）
+const { page, size, onSortChange, paged, total, onPageSizeChange } = useTablePaging<UserRow>(users)
 
 function onSelectionChange(rows: UserRow[]) {
   selectedRows.value = rows
@@ -479,6 +496,12 @@ onMounted(load)
 .table-card {
   padding: 8px 14px 14px;
   overflow: hidden;
+}
+
+.pager-row {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: var(--space-4);
 }
 
 .id-cell {

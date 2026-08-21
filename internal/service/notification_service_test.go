@@ -54,7 +54,7 @@ func TestNotificationServiceSendOnceWithoutReceivers(t *testing.T) {
 	cc := &countingChan{}
 	ns.Instancer = func(c *model.Channel) (channel.Channel, error) { return cc, nil }
 
-	if err := ns.SendTask(tkID, map[string]string{}); err != nil {
+	if err := ns.SendTask(tkID, map[string]string{}, Trigger{}); err != nil {
 		t.Fatal(err)
 	}
 	if cc.sends != 1 {
@@ -101,7 +101,7 @@ func TestNotificationServiceTaskVariablesMerge(t *testing.T) {
 	ns.Instancer = func(c *model.Channel) (channel.Channel, error) { return cc, nil }
 
 	// 请求变量覆盖 a；预期：a=reqA（请求）> b=taskB（任务）> c=defaultC（模板默认）
-	if err := ns.SendTask(tkID, map[string]string{"a": "reqA"}); err != nil {
+	if err := ns.SendTask(tkID, map[string]string{"a": "reqA"}, Trigger{}); err != nil {
 		t.Fatal(err)
 	}
 	if cc.lastMsg == nil {
@@ -129,7 +129,7 @@ func TestNotificationServiceSendsAndLogs(t *testing.T) {
 		return &fakeChan{}, nil
 	}
 
-	if err := ns.SendTask(tkID, map[string]string{"name": "张三"}); err != nil {
+	if err := ns.SendTask(tkID, map[string]string{"name": "张三"}, Trigger{}); err != nil {
 		t.Fatal(err)
 	}
 	var n int
@@ -159,7 +159,7 @@ func TestNotificationServiceDefaultInstancerWithCipher(t *testing.T) {
 	tkID := seedServiceTask(t, db, uid, ch.ID, tplID)
 
 	// default Instancer path: decrypt config + return the registered fake channel
-	if err := ns.SendTask(tkID, map[string]string{}); err != nil {
+	if err := ns.SendTask(tkID, map[string]string{}, Trigger{}); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -194,7 +194,7 @@ func TestNotificationServiceRejectsDisabledTask(t *testing.T) {
 	cc := &countingChan{}
 	ns.Instancer = func(c *model.Channel) (channel.Channel, error) { return cc, nil }
 
-	if err := ns.SendTask(tkID, map[string]string{}); err == nil {
+	if err := ns.SendTask(tkID, map[string]string{}, Trigger{}); err == nil {
 		t.Fatal("SendTask on disabled task should error")
 	}
 	if cc.sends != 0 {
@@ -221,7 +221,7 @@ func TestNotificationServiceSkipsDisabledChannel(t *testing.T) {
 	cc := &countingChan{}
 	ns.Instancer = func(c *model.Channel) (channel.Channel, error) { return cc, nil }
 
-	if err := ns.SendTask(tkID, map[string]string{}); err != nil {
+	if err := ns.SendTask(tkID, map[string]string{}, Trigger{}); err != nil {
 		t.Fatalf("disabled channel should not error the whole task, got %v", err)
 	}
 	if cc.sends != 0 {
@@ -273,7 +273,7 @@ func TestNotificationServiceMultiChannelFanOut(t *testing.T) {
 	tkID, _ := res.LastInsertId()
 	t.Cleanup(func() { db.Exec("DELETE FROM tasks WHERE id=?", tkID) })
 
-	if err := ns.SendTask(tkID, map[string]string{}); err != nil {
+	if err := ns.SendTask(tkID, map[string]string{}, Trigger{}); err != nil {
 		t.Fatal(err)
 	}
 	if len(sent) != 2 {
@@ -303,7 +303,7 @@ func TestNotificationResendLog(t *testing.T) {
 
 	// 用 fake 渠道实例（发送恒成功）
 	ns.Instancer = func(c *model.Channel) (channel.Channel, error) { return &fakeChan{}, nil }
-	if err := ns.ResendLog(fail.ID); err != nil {
+	if err := ns.ResendLog(fail.ID, Trigger{}); err != nil {
 		t.Fatalf("resend failed: %v", err)
 	}
 
@@ -345,7 +345,7 @@ func TestNotificationResendLogRejectsSuccessAndMissingChannel(t *testing.T) {
 	if err := logRepo.Create(ok); err != nil {
 		t.Fatal(err)
 	}
-	if err := ns.ResendLog(ok.ID); err == nil {
+	if err := ns.ResendLog(ok.ID, Trigger{}); err == nil {
 		t.Fatal("resend of a success log should be rejected")
 	}
 
@@ -354,7 +354,7 @@ func TestNotificationResendLogRejectsSuccessAndMissingChannel(t *testing.T) {
 	if err := logRepo.Create(bad); err != nil {
 		t.Fatal(err)
 	}
-	if err := ns.ResendLog(bad.ID); err == nil {
+	if err := ns.ResendLog(bad.ID, Trigger{}); err == nil {
 		t.Fatal("resend with missing channel should error")
 	}
 }

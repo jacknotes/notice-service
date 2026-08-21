@@ -101,7 +101,9 @@ func (h *WebhookHandler) Trigger(c *gin.Context) {
 	}
 	_ = c.ShouldBindJSON(&req)
 	// 异步入队：请求立即返回 202，发送由后台 worker 池消费（含重试/崩溃接管）。
-	jobID, err := h.queue.Enqueue(task.ID, req.Variables, "")
+	// 触发来源：webhook，触发 IP 取可信反代判定后的客户端地址。
+	jobID, err := h.queue.Enqueue(task.ID, req.Variables, "",
+		service.Trigger{Type: "webhook", By: "webhook", IP: c.ClientIP()})
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return

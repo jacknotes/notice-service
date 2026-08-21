@@ -185,7 +185,8 @@ func (h *TaskHandler) SendNow(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	jobID, err := h.queue.Enqueue(id, nil, "")
+	jobID, err := h.queue.Enqueue(id, nil, "",
+		service.Trigger{Type: "manual", By: c.GetString("username"), IP: c.ClientIP()})
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -207,13 +208,40 @@ func (h *TaskHandler) RetryLog(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "参数错误"})
 		return
 	}
-	jobID, err := h.queue.EnqueueLogRetry(id)
+	jobID, err := h.queue.EnqueueLogRetry(id,
+		service.Trigger{Type: "retry", By: c.GetString("username"), IP: c.ClientIP()})
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 	auditf(c, h.db, "log.retry", "重试日志 id=%d job=%d", id, jobID)
 	c.JSON(http.StatusAccepted, gin.H{"ok": true, "job_id": jobID})
+}
+
+// Preview 任务发送预览：用模板 + 当前任务变量渲染最终效果（不落库、不发送）。
+// @Summary 任务发送预览（渲染标题/正文/接收地址）
+// @Tags 任务
+// @Security BearerAuth
+// @Accept json
+// @Param body body object true "预览参数"
+// @Success 200 {object} map[string]interface{}
+// @Router /api/tasks/preview [post]
+func (h *TaskHandler) Preview(c *gin.Context) {
+	var req struct {
+		TemplateID int64             `json:"template_id"`
+		Variables  map[string]string `json:"variables"`
+		Receivers  []string          `json:"receivers"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil || req.TemplateID <= 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "参数错误"})
+		return
+	}
+	out, err := h.svc.TaskPreview(req.TemplateID, req.Variables, req.Receivers)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, out)
 }
 
 // LogsAll 分页/筛选查询全部发送日志（筛选条件后端下推 DB）。
@@ -258,6 +286,13 @@ func (h *TaskHandler) LogsAll(c *gin.Context) {
 		if n, err := strconv.Atoi(v); err == nil && n > 0 {
 			f.PageSize = n
 		}
+	}
+	// 后端排序（白名单在仓储层校验，非法值回退 id desc）
+	if v := c.Query("sort_by"); v != "" {
+		f.SortBy = v
+	}
+	if v := c.Query("sort_order"); v == "asc" || v == "desc" {
+		f.SortOrder = v
 	}
 	total, logs, err := h.svc.QueryLogs(f)
 	if err != nil {

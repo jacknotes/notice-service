@@ -25,7 +25,7 @@
         size="large"
         @submit.prevent="onSubmit"
       >
-        <el-form-item label="用户名" prop="username">
+        <el-form-item v-if="step === 'password'" label="用户名" prop="username">
           <el-input
             v-model="form.username"
             placeholder="请输入用户名"
@@ -35,7 +35,7 @@
           />
         </el-form-item>
 
-        <el-form-item label="密码" prop="password">
+        <el-form-item v-if="step === 'password'" label="密码" prop="password">
           <el-input
             v-model="form.password"
             type="password"
@@ -47,6 +47,25 @@
           />
         </el-form-item>
 
+        <template v-if="step === '2fa'">
+          <el-form-item label="动态验证码" prop="code">
+            <el-input
+              v-model="form.code"
+              placeholder="输入 6 位动态码或备用码"
+              :prefix-icon="Key"
+              maxlength="16"
+              class="mono code-input"
+              @keyup.enter="onVerify2FA"
+            />
+            <div class="code-hint">
+              账号已开启双因子认证，请输入认证器中的 6 位动态码（或一次性备用码）
+            </div>
+          </el-form-item>
+          <el-button link type="primary" size="small" class="back-login" @click="backToPassword">
+            ← 返回重新登录
+          </el-button>
+        </template>
+
         <transition name="el-fade-in">
           <div v-if="error" class="error-box" role="alert">
             <el-icon><WarningFilled /></el-icon>
@@ -55,6 +74,7 @@
         </transition>
 
         <el-button
+          v-if="step === 'password'"
           type="primary"
           class="submit-btn"
           :loading="loading"
@@ -62,8 +82,17 @@
         >
           {{ loading ? '验证中…' : '登 录' }}
         </el-button>
+        <el-button
+          v-else
+          type="primary"
+          class="submit-btn"
+          :loading="loading"
+          @click="onVerify2FA"
+        >
+          {{ loading ? '验证中…' : '验 证' }}
+        </el-button>
 
-        <div class="forgot-row">
+        <div v-if="step === 'password'" class="forgot-row">
           <el-button link type="primary" size="small" @click="openForgot">忘记密码？</el-button>
         </div>
       </el-form>
@@ -110,7 +139,7 @@
 import { reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
-import { User, Lock, WarningFilled, Sunny, Moon } from '@element-plus/icons-vue'
+import { User, Lock, WarningFilled, Sunny, Moon, Key } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 import { theme, toggleTheme } from '@/composables/useTheme'
 import { authApi } from '@/api'
@@ -122,11 +151,16 @@ const formRef = ref<FormInstance>()
 const loading = ref(false)
 const error = ref('')
 
-const form = reactive({ username: '', password: '' })
+// 两步登录：password（账号密码）→ 2fa（动态验证码/备用码）
+const step = ref<'password' | '2fa'>('password')
+const pendingToken = ref('')
+
+const form = reactive({ username: '', password: '', code: '' })
 
 const rules: FormRules = {
   username: [{ required: true, message: '请输入用户名', trigger: 'blur' }],
   password: [{ required: true, message: '请输入密码', trigger: 'blur' }],
+  code: [{ required: true, message: '请输入动态验证码', trigger: 'blur' }],
 }
 
 async function onSubmit() {
@@ -137,13 +171,50 @@ async function onSubmit() {
 
   loading.value = true
   try {
-    await auth.login(form.username.trim(), form.password.trim())
-    router.push('/dashboard')
+    const res = await auth.login(form.username.trim(), form.password.trim())
+    if (res.requires_2fa) {
+      pendingToken.value = res.pending_token || ''
+      step.value = '2fa'
+      form.code = ''
+      formRef.value?.clearValidate()
+    } else if (res.token) {
+      auth.completeLogin(res as any)
+      router.push('/dashboard')
+    } else {
+      error.value = '登录响应异常，请重试'
+    }
   } catch (e: any) {
     error.value = e?.response?.data?.error || '登录失败，请检查网络连接'
   } finally {
     loading.value = false
   }
+}
+
+// 第二步：校验动态码/备用码，换取完整登录令牌
+async function onVerify2FA() {
+  if (loading.value) return
+  error.value = ''
+  if (!form.code.trim()) {
+    error.value = '请输入 6 位动态验证码'
+    return
+  }
+  loading.value = true
+  try {
+    const data = await authApi.verify2FA(pendingToken.value, form.code.trim())
+    auth.completeLogin(data)
+    router.push('/dashboard')
+  } catch (e: any) {
+    error.value = e?.response?.data?.error || '验证码不正确，请重试'
+  } finally {
+    loading.value = false
+  }
+}
+
+function backToPassword() {
+  step.value = 'password'
+  pendingToken.value = ''
+  form.code = ''
+  error.value = ''
 }
 
 /* ── 忘记密码（方案A：一次性令牌自助重置） ───────────────────────────── */
@@ -333,6 +404,23 @@ async function submitForgot() {
   margin-top: 12px;
   display: flex;
   justify-content: center;
+}
+
+/* ── 2FA 验证码 ────────────────────────────────────────────────────── */
+.code-input {
+  letter-spacing: 0.3em;
+  text-align: center;
+  font-size: var(--text-lg);
+}
+.code-hint {
+  width: 100%;
+  margin-top: 4px;
+  color: var(--text-faint);
+  font-size: 11px;
+  line-height: 1.6;
+}
+.back-login {
+  margin: -4px 0 8px;
 }
 
 .forgot-hint {

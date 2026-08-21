@@ -2,6 +2,7 @@ package service
 
 import (
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"strings"
 	"time"
@@ -12,11 +13,13 @@ import (
 
 	"notice-service/internal/model"
 	"notice-service/internal/repository"
+	"notice-service/internal/totp"
 )
 
 type AuthClaims struct {
 	UserID int64  `json:"uid"`
 	Role   string `json:"role"`
+	TwoFA  bool   `json:"2fa,omitempty"` // true = 2FA 待验证令牌
 	jwt.RegisteredClaims
 }
 
@@ -57,6 +60,39 @@ func (s *AuthService) IssueTokenWithTTL(userID int64, role string, ttl time.Dura
 	return jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString(s.jwtSecret)
 }
 
+// IssuePending2FAToken 签发 2FA 待验证令牌（短时效，仅用于登录第二步）。
+func (s *AuthService) IssuePending2FAToken(userID int64) (string, error) {
+	claims := AuthClaims{
+		UserID: userID,
+		TwoFA:  true,
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(twoFATokenTTL)),
+			IssuedAt:  jwt.NewNumericDate(time.Now()),
+			Issuer:    "notice-service",
+		},
+	}
+	return jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString(s.jwtSecret)
+}
+
+// VerifyPending2FAToken 校验 2FA 待验证令牌，返回用户 ID（仅接受 TwoFA 标记的令牌）。
+func (s *AuthService) VerifyPending2FAToken(token string) (int64, error) {
+	claims := &AuthClaims{}
+	if _, err := jwt.ParseWithClaims(token, claims, func(t *jwt.Token) (interface{}, error) {
+		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, errors.New("unexpected signing method")
+		}
+		return s.jwtSecret, nil
+	}); err != nil {
+		return 0, errors.New("验证会话已过期，请重新登录")
+	}
+	if !claims.TwoFA || claims.UserID <= 0 {
+		return 0, errors.New("无效的验证会话")
+	}
+	return claims.UserID, nil
+}
+
+const twoFATokenTTL = 5 * time.Minute
+
 func (s *AuthService) VerifyToken(token string) (*AuthClaims, error) {
 	claims := &AuthClaims{}
 	_, err := jwt.ParseWithClaims(token, claims, func(t *jwt.Token) (interface{}, error) {
@@ -76,6 +112,21 @@ func (s *AuthService) VerifyToken(token string) (*AuthClaims, error) {
 func (s *AuthService) UserActive(userID int64) bool {
 	_, err := s.users.GetByID(userID)
 	return err == nil
+}
+
+// GetUsername 返回用户名（用户不存在/已删除时返回空串）。用于审计与发送日志
+// 记录「谁触发」。
+func (s *AuthService) GetUsername(userID int64) string {
+	u, err := s.users.GetByID(userID)
+	if err != nil {
+		return ""
+	}
+	return u.Username
+}
+
+// User 返回用户完整信息（含 2FA 启用状态，供 /auth/me 使用）。
+func (s *AuthService) User(userID int64) (*model.User, error) {
+	return s.users.GetByID(userID)
 }
 
 func (s *AuthService) BootstrapAdmin() error {
@@ -99,30 +150,161 @@ func (s *AuthService) BootstrapAdmin() error {
 	return nil
 }
 
-func (s *AuthService) Login(username, password string) (string, *model.User, error) {
+// LoginResult 登录结果：未启用 2FA 时直接返回完整 Token；已启用 2FA 时
+// 返回 Requires2FA=true + 短时效 PendingToken，由前端走第二步验证。
+type LoginResult struct {
+	User         *model.User
+	Token        string
+	Requires2FA  bool
+	PendingToken string
+}
+
+func (s *AuthService) Login(username, password string) (*LoginResult, error) {
 	username = strings.TrimSpace(username) // 忽略首尾空格
 	password = strings.TrimSpace(password)
 	if err := s.limiter.checkLocked(username); err != nil {
-		return "", nil, err
+		return nil, err
 	}
 	u, err := s.users.GetByUsername(username)
 	if errors.Is(err, repository.ErrNotFound) {
 		s.limiter.recordFailure(username)
-		return "", nil, errors.New("用户名或密码错误")
+		return nil, errors.New("用户名或密码错误")
 	}
 	if err != nil {
-		return "", nil, err
+		return nil, err
 	}
 	if bcrypt.CompareHashAndPassword([]byte(u.PasswordHash), []byte(password)) != nil {
 		s.limiter.recordFailure(username)
-		return "", nil, errors.New("用户名或密码错误")
+		return nil, errors.New("用户名或密码错误")
 	}
 	s.limiter.reset(username)
+	if u.TOTPEnabled {
+		pending, err := s.IssuePending2FAToken(u.ID)
+		if err != nil {
+			return nil, err
+		}
+		return &LoginResult{User: u, Requires2FA: true, PendingToken: pending}, nil
+	}
+	tok, err := s.IssueToken(u.ID, u.Role)
+	if err != nil {
+		return nil, err
+	}
+	return &LoginResult{User: u, Token: tok}, nil
+}
+
+/* ── 双因子认证（TOTP + 备用码） ────────────────────────────────────── */
+
+// Setup2FA 生成 TOTP 密钥与一次性备用码并落库（启用标记置 0，验证后启用）。
+// 返回明文密钥、otpauth URL 与明文备用码（仅此一次展示）。
+func (s *AuthService) Setup2FA(userID int64) (secret, otpauthURL string, recoveryCodes []string, err error) {
+	u, err := s.users.GetByID(userID)
+	if err != nil {
+		return "", "", nil, errors.New("用户不存在")
+	}
+	secret, err = totp.GenerateSecret()
+	if err != nil {
+		return "", "", nil, err
+	}
+	codes, err := totp.GenerateRecoveryCodes(8)
+	if err != nil {
+		return "", "", nil, err
+	}
+	hashed := totp.HashRecoveryCodes(codes)
+	b, _ := json.Marshal(hashed)
+	if err := s.users.SetTOTP(userID, secret, string(b)); err != nil {
+		return "", "", nil, err
+	}
+	return secret, totp.OTPAuthURI("Notice Service", u.Username, secret), codes, nil
+}
+
+// Enable2FA 用动态码验证密钥后启用双因子认证。
+func (s *AuthService) Enable2FA(userID int64, code string) error {
+	u, err := s.users.GetByID(userID)
+	if err != nil {
+		return errors.New("用户不存在")
+	}
+	if u.TOTPSecret == "" {
+		return errors.New("请先完成双因子认证设置")
+	}
+	if !totp.Validate(code, u.TOTPSecret) {
+		return errors.New("验证码不正确，请检查认证器中的 6 位动态码")
+	}
+	return s.users.EnableTOTP(userID)
+}
+
+// Disable2FA 校验当前动态码或备用码后关闭双因子认证（防止他人恶意关闭）。
+func (s *AuthService) Disable2FA(userID int64, code string) error {
+	u, err := s.users.GetByID(userID)
+	if err != nil {
+		return errors.New("用户不存在")
+	}
+	if !u.TOTPEnabled || u.TOTPSecret == "" {
+		return errors.New("当前未启用双因子认证")
+	}
+	if !totp.Validate(code, u.TOTPSecret) {
+		if idx := s.matchRecovery(u, code); idx < 0 {
+			return errors.New("验证码不正确，无法关闭双因子认证")
+		}
+	}
+	return s.users.DisableTOTP(userID)
+}
+
+// Verify2FA 登录第二步：校验动态码或备用码，成功返回完整 JWT。
+// 使用备用码登录时该备用码被消费（从列表中移除）。
+func (s *AuthService) Verify2FA(pendingToken, code string) (string, *model.User, error) {
+	uid, err := s.VerifyPending2FAToken(pendingToken)
+	if err != nil {
+		return "", nil, err
+	}
+	u, err := s.users.GetByID(uid)
+	if err != nil || !u.TOTPEnabled {
+		return "", nil, errors.New("用户不存在或未启用双因子认证")
+	}
+	if !totp.Validate(code, u.TOTPSecret) {
+		// 备用码：命中则消费并从列表移除
+		idx := s.matchRecovery(u, code)
+		if idx < 0 {
+			return "", nil, errors.New("验证码不正确")
+		}
+		if err := s.consumeRecovery(uid, idx); err != nil {
+			return "", nil, errors.New("备用码校验失败，请重试")
+		}
+	}
 	tok, err := s.IssueToken(u.ID, u.Role)
 	if err != nil {
 		return "", nil, err
 	}
 	return tok, u, nil
+}
+
+// matchRecovery 校验 code 是否为该用户的备用码，命中返回下标，否则 -1。
+func (s *AuthService) matchRecovery(u *model.User, code string) int {
+	var hashed []string
+	if u.TOTPRecoveryJSON != "" {
+		_ = json.Unmarshal([]byte(u.TOTPRecoveryJSON), &hashed)
+	}
+	return totp.MatchRecoveryCode(code, hashed)
+}
+
+// consumeRecovery 消费（删除）第 idx 个备用码。
+func (s *AuthService) consumeRecovery(userID int64, idx int) error {
+	u, err := s.users.GetByID(userID)
+	if err != nil {
+		return err
+	}
+	var hashed []string
+	if u.TOTPRecoveryJSON != "" {
+		_ = json.Unmarshal([]byte(u.TOTPRecoveryJSON), &hashed)
+	}
+	if idx < 0 || idx >= len(hashed) {
+		return errors.New("备用码无效")
+	}
+	hashed = append(hashed[:idx], hashed[idx+1:]...)
+	b, _ := json.Marshal(hashed)
+	if len(hashed) == 0 {
+		return s.users.SetTOTPRecoveryCodes(userID, "")
+	}
+	return s.users.SetTOTPRecoveryCodes(userID, string(b))
 }
 
 // ChangePassword 校验旧密码并更新为新密码。

@@ -3,6 +3,7 @@ package handler
 import (
 	"database/sql"
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 
@@ -18,8 +19,8 @@ func NewAuthHandler(db *sql.DB, authSvc *service.AuthService) *AuthHandler {
 	return &AuthHandler{Svc: authSvc, db: db}
 }
 
-// Login 登录
-// @Summary 账号密码登录，返回 JWT
+// Login 登录（两步：密码 → 双因子认证）。
+// @Summary 账号密码登录；已启用 2FA 时返回待验证令牌
 // @Tags 认证
 // @Accept json
 // @Produce json
@@ -35,13 +36,107 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "请输入用户名和密码"})
 		return
 	}
-	token, user, err := h.Svc.Login(req.Username, req.Password)
+	res, err := h.Svc.Login(req.Username, req.Password)
 	if err != nil {
 		auditActor(h.db, 0, req.Username, "login.failed", "登录失败")
 		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
 		return
 	}
-	auditActor(h.db, user.ID, user.Username, "login.success", "登录成功")
+	if res.Requires2FA {
+		auditActor(h.db, res.User.ID, res.User.Username, "login.step1", "密码验证通过，等待双因子验证")
+		c.JSON(http.StatusOK, gin.H{"requires_2fa": true, "pending_token": res.PendingToken, "user": res.User})
+		return
+	}
+	auditActor(h.db, res.User.ID, res.User.Username, "login.success", "登录成功")
+	c.JSON(http.StatusOK, gin.H{"token": res.Token, "user": res.User})
+}
+
+// Setup2FA 生成 TOTP 密钥与备用码（仅展示一次，验证后启用）。
+// @Summary 开启双因子认证：生成密钥与备用码
+// @Tags 认证
+// @Security BearerAuth
+// @Success 200 {object} map[string]interface{}
+// @Router /api/auth/2fa/setup [post]
+func (h *AuthHandler) Setup2FA(c *gin.Context) {
+	secret, uri, codes, err := h.Svc.Setup2FA(c.GetInt64("uid"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	auditf(c, h.db, "auth.2fa_setup", "重新生成双因子认证密钥与备用码")
+	c.JSON(http.StatusOK, gin.H{"secret": secret, "otpauth_url": uri, "recovery_codes": codes})
+}
+
+// Enable2FA 用动态码验证后启用双因子认证。
+// @Summary 启用双因子认证
+// @Tags 认证
+// @Security BearerAuth
+// @Accept json
+// @Param body body object true "code"
+// @Success 200 {object} map[string]interface{}
+// @Router /api/auth/2fa/enable [post]
+func (h *AuthHandler) Enable2FA(c *gin.Context) {
+	var req struct {
+		Code string `json:"code"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil || strings.TrimSpace(req.Code) == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "请输入 6 位动态验证码"})
+		return
+	}
+	if err := h.Svc.Enable2FA(c.GetInt64("uid"), req.Code); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	auditf(c, h.db, "auth.2fa_enable", "启用双因子认证")
+	c.JSON(http.StatusOK, gin.H{"ok": true})
+}
+
+// Disable2FA 校验当前动态码/备用码后关闭双因子认证。
+// @Summary 关闭双因子认证
+// @Tags 认证
+// @Security BearerAuth
+// @Accept json
+// @Param body body object true "code"
+// @Success 200 {object} map[string]interface{}
+// @Router /api/auth/2fa/disable [post]
+func (h *AuthHandler) Disable2FA(c *gin.Context) {
+	var req struct {
+		Code string `json:"code"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil || strings.TrimSpace(req.Code) == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "请输入 6 位动态验证码或备用码"})
+		return
+	}
+	if err := h.Svc.Disable2FA(c.GetInt64("uid"), req.Code); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	auditf(c, h.db, "auth.2fa_disable", "关闭双因子认证")
+	c.JSON(http.StatusOK, gin.H{"ok": true})
+}
+
+// Verify2FA 登录第二步：校验动态码/备用码，返回完整 JWT。
+// @Summary 双因子验证（登录第二步）
+// @Tags 认证
+// @Accept json
+// @Param body body object true "待验证令牌与验证码"
+// @Success 200 {object} map[string]interface{}
+// @Router /api/auth/2fa/verify [post]
+func (h *AuthHandler) Verify2FA(c *gin.Context) {
+	var req struct {
+		Token string `json:"token"`
+		Code  string `json:"code"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil || req.Token == "" || strings.TrimSpace(req.Code) == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "参数错误"})
+		return
+	}
+	token, user, err := h.Svc.Verify2FA(req.Token, req.Code)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		return
+	}
+	auditActor(h.db, user.ID, user.Username, "login.success", "双因子验证通过，登录成功")
 	c.JSON(http.StatusOK, gin.H{"token": token, "user": user})
 }
 
@@ -64,9 +159,12 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 // @Success 200 {object} map[string]interface{}
 // @Router /api/auth/me [get]
 func (h *AuthHandler) Me(c *gin.Context) {
-	uid := c.GetInt64("uid")
-	role := c.GetString("role")
-	c.JSON(http.StatusOK, gin.H{"id": uid, "role": role})
+	u, err := h.Svc.User(c.GetInt64("uid"))
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "账号已被禁用"})
+		return
+	}
+	c.JSON(http.StatusOK, u)
 }
 
 // ChangePassword 修改密码

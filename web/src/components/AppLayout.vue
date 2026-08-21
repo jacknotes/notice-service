@@ -102,7 +102,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessageBox } from 'element-plus'
 import {
   Odometer, Connection, Document, AlarmClock, MessageBox,
-  Setting, SwitchButton, User, ArrowDown, Sunny, Moon,
+  Setting, SwitchButton, User, ArrowDown, Sunny, Moon, List,
 } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 import { theme, toggleTheme } from '@/composables/useTheme'
@@ -125,6 +125,7 @@ const navItems: NavItem[] = [
   { path: '/templates', label: '模板管理', icon: Document },
   { path: '/tasks', label: '任务管理', icon: AlarmClock },
   { path: '/logs', label: '发送日志', icon: MessageBox },
+  { path: '/audit', label: '操作审计', icon: List, adminOnly: true },
   { path: '/users', label: '用户管理', icon: User, adminOnly: true },
 ]
 

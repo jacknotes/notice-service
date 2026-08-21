@@ -196,10 +196,10 @@ func TestUserServiceUpdate(t *testing.T) {
 	if err := svc.Update(adminOp.ID, "admin", normal.ID, nil, strPtr("Newpass456!x")); err != nil {
 		t.Fatalf("reset password: %v", err)
 	}
-	if _, _, err := auth.Login(normal.Username, "TestPass123!"); err == nil {
+	if _, err := auth.Login(normal.Username, "TestPass123!"); err == nil {
 		t.Error("old password should no longer work")
 	}
-	if _, _, err := auth.Login(normal.Username, "Newpass456!x"); err != nil {
+	if _, err := auth.Login(normal.Username, "Newpass456!x"); err != nil {
 		t.Error("new password should work")
 	}
 

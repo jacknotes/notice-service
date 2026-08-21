@@ -2,6 +2,7 @@ package repository
 
 import (
 	"database/sql"
+	"strings"
 	"time"
 
 	"notice-service/internal/model"
@@ -11,13 +12,16 @@ type TaskLogRepo struct{ db *sql.DB }
 
 func NewTaskLogRepo(db *sql.DB) *TaskLogRepo { return &TaskLogRepo{db: db} }
 
+// taskLogCols 发送日志的通用列清单（各查询复用）。
+const taskLogCols = "id, task_id, channel_id, subject, content, status, request, response, error_msg, retry_count, trigger_type, trigger_by, trigger_ip, sent_at"
+
 func (r *TaskLogRepo) Create(l *model.TaskLog) error {
 	if l.SentAt.IsZero() {
 		l.SentAt = time.Now() // 未显式指定时用当前时间，避免零值覆盖 DB 默认
 	}
 	res, err := r.db.Exec(
-		"INSERT INTO task_logs (task_id, channel_id, subject, content, status, request, response, error_msg, retry_count, sent_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-		l.TaskID, l.ChannelID, l.Subject, l.Content, l.Status, l.Request, l.Response, l.ErrorMsg, l.RetryCount, l.SentAt)
+		"INSERT INTO task_logs (task_id, channel_id, subject, content, status, request, response, error_msg, retry_count, trigger_type, trigger_by, trigger_ip, sent_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+		l.TaskID, l.ChannelID, l.Subject, l.Content, l.Status, l.Request, l.Response, l.ErrorMsg, l.RetryCount, l.TriggerType, l.TriggerBy, l.TriggerIP, l.SentAt)
 	if err != nil {
 		return err
 	}
@@ -27,9 +31,7 @@ func (r *TaskLogRepo) Create(l *model.TaskLog) error {
 }
 
 func (r *TaskLogRepo) GetByID(id int64) (*model.TaskLog, error) {
-	rows, err := r.db.Query(
-		"SELECT id, task_id, channel_id, subject, content, status, request, response, error_msg, retry_count, sent_at FROM task_logs WHERE id=?",
-		id)
+	rows, err := r.db.Query("SELECT "+taskLogCols+" FROM task_logs WHERE id=?", id)
 	if err != nil {
 		return nil, err
 	}
@@ -45,8 +47,7 @@ func (r *TaskLogRepo) GetByID(id int64) (*model.TaskLog, error) {
 }
 
 func (r *TaskLogRepo) ListByTask(taskID int64) ([]*model.TaskLog, error) {
-	rows, err := r.db.Query(
-		"SELECT id, task_id, channel_id, subject, content, status, request, response, error_msg, retry_count, sent_at FROM task_logs WHERE task_id=? ORDER BY id DESC LIMIT 200",
+	rows, err := r.db.Query("SELECT "+taskLogCols+" FROM task_logs WHERE task_id=? ORDER BY id DESC LIMIT 200",
 		taskID)
 	if err != nil {
 		return nil, err
@@ -56,8 +57,7 @@ func (r *TaskLogRepo) ListByTask(taskID int64) ([]*model.TaskLog, error) {
 }
 
 func (r *TaskLogRepo) Recent(limit int) ([]*model.TaskLog, error) {
-	rows, err := r.db.Query(
-		"SELECT id, task_id, channel_id, subject, content, status, request, response, error_msg, retry_count, sent_at FROM task_logs ORDER BY id DESC LIMIT ?",
+	rows, err := r.db.Query("SELECT "+taskLogCols+" FROM task_logs ORDER BY id DESC LIMIT ?",
 		limit)
 	if err != nil {
 		return nil, err
@@ -70,8 +70,8 @@ func scanLogs(rows *sql.Rows) ([]*model.TaskLog, error) {
 	out := []*model.TaskLog{}
 	for rows.Next() {
 		l := &model.TaskLog{}
-		var subj, content, req, resp, errMsg sql.NullString
-		if err := rows.Scan(&l.ID, &l.TaskID, &l.ChannelID, &subj, &content, &l.Status, &req, &resp, &errMsg, &l.RetryCount, &l.SentAt); err != nil {
+		var subj, content, req, resp, errMsg, trigBy, trigIP sql.NullString
+		if err := rows.Scan(&l.ID, &l.TaskID, &l.ChannelID, &subj, &content, &l.Status, &req, &resp, &errMsg, &l.RetryCount, &l.TriggerType, &trigBy, &trigIP, &l.SentAt); err != nil {
 			return nil, err
 		}
 		l.Subject = subj.String
@@ -79,6 +79,8 @@ func scanLogs(rows *sql.Rows) ([]*model.TaskLog, error) {
 		l.Request = req.String
 		l.Response = resp.String
 		l.ErrorMsg = errMsg.String
+		l.TriggerBy = trigBy.String
+		l.TriggerIP = trigIP.String
 		out = append(out, l)
 	}
 	return out, rows.Err()
@@ -119,6 +121,18 @@ type LogFilter struct {
 	From, To time.Time
 	Page     int
 	PageSize int
+	// SortBy / SortOrder 后端排序（SortBy 为白名单内的列名）。
+	SortBy    string // id | sent_at | task_id | channel_id | status | retry_count
+	SortOrder string // asc | desc（默认 desc）
+}
+
+// sortColumn 排序白名单：防 SQL 注入，非法值回退 id。
+func (f LogFilter) sortColumn() (string, bool) {
+	switch f.SortBy {
+	case "sent_at", "task_id", "channel_id", "status", "retry_count":
+		return f.SortBy, true
+	}
+	return "id", false // 默认按 id 倒序（与既有行为一致）
 }
 
 // Query 按过滤条件分页查询发送日志，返回总数与当前页数据。
@@ -152,9 +166,15 @@ func (r *TaskLogRepo) Query(f LogFilter) (total int, logs []*model.TaskLog, err 
 	if offset < 0 {
 		offset = 0
 	}
+	order := "DESC"
+	if strings.EqualFold(f.SortOrder, "asc") {
+		order = "ASC"
+	}
+	col, _ := f.sortColumn()
+	// 固定 id 作为次级排序键，保证同值分页稳定不重不漏。
 	queryArgs := append(append([]interface{}{}, args...), limit, offset)
 	rows, err := r.db.Query(
-		"SELECT id, task_id, channel_id, subject, content, status, request, response, error_msg, retry_count, sent_at FROM task_logs "+where+" ORDER BY id DESC LIMIT ? OFFSET ?",
+		"SELECT "+taskLogCols+" FROM task_logs "+where+" ORDER BY "+col+" "+order+", id DESC LIMIT ? OFFSET ?",
 		queryArgs...)
 	if err != nil {
 		return 0, nil, err

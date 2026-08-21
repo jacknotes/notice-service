@@ -29,6 +29,7 @@ func Auth(svc *service.AuthService) gin.HandlerFunc {
 		}
 		c.Set("uid", claims.UserID)
 		c.Set("role", claims.Role)
+		c.Set("username", svc.GetUsername(claims.UserID))
 		c.Next()
 	}
 }

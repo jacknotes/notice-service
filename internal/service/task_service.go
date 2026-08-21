@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 
 	"notice-service/internal/model"
+	"notice-service/internal/render"
 	"notice-service/internal/repository"
 )
 
@@ -21,18 +22,20 @@ type Scheduler interface {
 }
 
 type TaskService struct {
-	repo        *repository.TaskRepo
-	logRepo     *repository.TaskLogRepo
-	channelRepo *repository.ChannelRepo
-	sched       Scheduler
+	repo         *repository.TaskRepo
+	logRepo      *repository.TaskLogRepo
+	channelRepo  *repository.ChannelRepo
+	templateRepo *repository.TemplateRepo
+	sched        Scheduler
 }
 
 func NewTaskService(db *sql.DB, sched Scheduler) *TaskService {
 	return &TaskService{
-		repo:        repository.NewTaskRepo(db),
-		logRepo:     repository.NewTaskLogRepo(db),
-		channelRepo: repository.NewChannelRepo(db),
-		sched:       sched,
+		repo:         repository.NewTaskRepo(db),
+		logRepo:      repository.NewTaskLogRepo(db),
+		channelRepo:  repository.NewChannelRepo(db),
+		templateRepo: repository.NewTemplateRepo(db),
+		sched:        sched,
 	}
 }
 
@@ -177,6 +180,33 @@ func (s *TaskService) Logs(taskID int64) ([]*model.TaskLog, error) {
 // QueryLogs 按过滤条件分页查询发送日志（后端筛选下推 DB）。
 func (s *TaskService) QueryLogs(f repository.LogFilter) (int, []*model.TaskLog, error) {
 	return s.logRepo.Query(f)
+}
+
+// TaskPreviewResult 任务预览结果（发送视角：渲染后的标题/正文与解析后的接收地址）。
+type TaskPreviewResult struct {
+	Subject   string   `json:"subject"`
+	Content   string   `json:"content"`
+	Receivers []string `json:"receivers"`
+}
+
+// TaskPreview 用模板 + 任务变量渲染任务预览。变量优先级：请求变量 > 模板默认值。
+// 接收地址中的 {{变量}} 一并替换，模拟发送时最终送达地址。
+func (s *TaskService) TaskPreview(templateID int64, variables map[string]string, receivers []string) (*TaskPreviewResult, error) {
+	tpl, err := s.templateRepo.GetByID(templateID)
+	if err != nil {
+		return nil, errors.New("模板不存在或已被删除")
+	}
+	var tplVars []model.TemplateVar
+	_ = json.Unmarshal([]byte(tpl.VariablesJSON), &tplVars)
+	full := mergeVars(tplVars, variables)
+	subject, content := render.RenderMessage(tpl.Subject, tpl.ContentMD, full)
+	rendered := make([]string, 0, len(receivers))
+	for _, r := range receivers {
+		if r = render.RenderVariables(r, full); r != "" {
+			rendered = append(rendered, r)
+		}
+	}
+	return &TaskPreviewResult{Subject: subject, Content: content, Receivers: rendered}, nil
 }
 
 func (s *TaskService) validate(t *model.Task) error {

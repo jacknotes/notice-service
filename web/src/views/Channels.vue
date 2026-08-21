@@ -35,25 +35,26 @@
     <div v-loading="loading" class="card table-card">
       <el-table
         ref="tableRef"
-        :data="filteredChannels"
+        :data="paged"
         style="width: 100%"
         empty-text="暂无渠道，点击右上角「新建渠道」开始"
         @selection-change="onSelectionChange"
+        @sort-change="onSortChange"
       >
         <el-table-column v-if="isAdmin" type="selection" width="48" align="center" />
-        <el-table-column prop="id" label="ID" width="72" align="center">
+        <el-table-column prop="id" label="ID" width="72" align="center" sortable="custom">
           <template #default="{ row }">
             <span class="mono id-cell">#{{ row.id }}</span>
           </template>
         </el-table-column>
 
-        <el-table-column prop="name" label="名称" min-width="160">
+        <el-table-column prop="name" label="名称" min-width="160" sortable="custom">
           <template #default="{ row }">
             <span class="ch-name">{{ row.name }}</span>
           </template>
         </el-table-column>
 
-        <el-table-column prop="type" label="类型" width="150">
+        <el-table-column prop="type" label="类型" width="150" sortable="custom">
           <template #default="{ row }">
             <el-tag :style="typeTagStyle(row.type)" effect="plain" size="small">
               {{ typeLabel(row.type) }}
@@ -61,7 +62,7 @@
           </template>
         </el-table-column>
 
-        <el-table-column label="状态" width="110" align="center">
+        <el-table-column label="状态" width="110" align="center" sortable="custom" prop="enabled">
           <template #default="{ row }">
             <el-tag :type="row.enabled ? 'success' : 'info'" effect="light" size="small">
               {{ row.enabled ? '启用' : '停用' }}
@@ -69,13 +70,13 @@
           </template>
         </el-table-column>
 
-        <el-table-column label="创建时间" min-width="150">
+        <el-table-column label="创建时间" min-width="150" sortable="custom" prop="created_at">
           <template #default="{ row }">
             <span class="mono time-cell">{{ row.created_at || '—' }}</span>
           </template>
         </el-table-column>
 
-        <el-table-column label="操作" width="210" align="center" fixed="right">
+        <el-table-column label="操作" width="250" align="center" fixed="right">
           <template #default="{ row }">
             <template v-if="isAdmin">
               <el-button link type="primary" size="small" :loading="testingId === row.id" @click="testChannel(row)">
@@ -83,6 +84,9 @@
               </el-button>
               <el-button link type="primary" size="small" @click="openEdit(row)">
                 编辑
+              </el-button>
+              <el-button link type="success" size="small" @click="duplicateChannel(row)">
+                复制
               </el-button>
               <el-button link type="danger" size="small" @click="removeChannel(row)">
                 删除
@@ -92,6 +96,18 @@
           </template>
         </el-table-column>
       </el-table>
+    </div>
+
+    <div v-if="total > 0" class="pager-row">
+      <el-pagination
+        v-model:current-page="page"
+        v-model:page-size="size"
+        :total="total"
+        :page-sizes="[10, 20, 50, 100]"
+        layout="total, sizes, prev, pager, next, jumper"
+        background
+        @size-change="onPageSizeChange"
+      />
     </div>
 
     <!-- ── Create / Edit dialog ────────────────────────────────────── -->
@@ -164,6 +180,7 @@ import { Plus, Edit, Delete, Promotion, Search } from '@element-plus/icons-vue'
 import client from '@/api/client'
 import { channelApi } from '@/api'
 import { useAuthStore } from '@/stores/auth'
+import { useTablePaging } from '@/composables/useTablePaging'
 
 interface ChannelRow {
   id: number
@@ -247,6 +264,9 @@ const filteredChannels = computed<ChannelRow[]>(() => {
   )
 })
 
+// 客户端排序 + 分页（整表数据在前端）
+const { page, size, onSortChange, paged, total, onPageSizeChange } = useTablePaging<ChannelRow>(filteredChannels)
+
 const dialogVisible = ref(false)
 const saving = ref(false)
 const testing = ref(false)
@@ -310,6 +330,16 @@ function openCreate() {
 function openEdit(row: ChannelRow) {
   form.id = row.id
   form.name = row.name
+  form.type = row.type
+  form.enabled = row.enabled
+  form.config = { ...(row.config || {}) }
+  dialogVisible.value = true
+}
+
+// 复制渠道：打开「新建渠道」并预填源渠道配置（名称加「（副本）」），id=0 走创建路径。
+function duplicateChannel(row: ChannelRow) {
+  form.id = 0
+  form.name = `${row.name}（副本）`
   form.type = row.type
   form.enabled = row.enabled
   form.config = { ...(row.config || {}) }
@@ -420,6 +450,12 @@ onMounted(load)
 
 <style scoped>
 .search-input { width: 220px; }
+
+.pager-row {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: var(--space-4);
+}
 
 .title-row {
   display: flex;

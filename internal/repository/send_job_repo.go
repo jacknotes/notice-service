@@ -12,16 +12,16 @@ type SendJobRepo struct{ db *sql.DB }
 
 func NewSendJobRepo(db *sql.DB) *SendJobRepo { return &SendJobRepo{db: db} }
 
-const sendJobCols = `id, task_id, log_id, vars_json, status, claimed_by, claimed_at, attempts,
+const sendJobCols = `id, task_id, log_id, trigger_type, trigger_by, trigger_ip, vars_json, status, claimed_by, claimed_at, attempts,
 	next_retry_at, last_error, created_at, updated_at, sent_at, dedupe_key`
 
 // Create 落库入队。dedupe_key 非空且重复时幂等：返回已存在行的 id（不新增行）。
 func (r *SendJobRepo) Create(j *model.SendJob) error {
 	res, err := r.db.Exec(
-		`INSERT INTO send_jobs (task_id, log_id, vars_json, status, dedupe_key)
-		 VALUES (?, ?, ?, ?, ?)
+		`INSERT INTO send_jobs (task_id, log_id, trigger_type, trigger_by, trigger_ip, vars_json, status, dedupe_key)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 		 ON DUPLICATE KEY UPDATE id = LAST_INSERT_ID(id)`,
-		j.TaskID, nullableInt(j.LogID), j.VarsJSON, j.Status, nullableString(j.DedupeKey))
+		j.TaskID, nullableInt(j.LogID), j.TriggerType, j.TriggerBy, j.TriggerIP, j.VarsJSON, j.Status, nullableString(j.DedupeKey))
 	if err != nil {
 		return err
 	}
@@ -37,7 +37,7 @@ func (r *SendJobRepo) GetByID(id int64) (*model.SendJob, error) {
 	var claimedAt, nextRetry, sentAt sql.NullTime
 	var createdAt, updatedAt time.Time
 	err := r.db.QueryRow("SELECT "+sendJobCols+" FROM send_jobs WHERE id=?", id).Scan(
-		&j.ID, &j.TaskID, &logID, &vars, &j.Status, &claimedBy, &claimedAt, &j.Attempts,
+		&j.ID, &j.TaskID, &logID, &j.TriggerType, &j.TriggerBy, &j.TriggerIP, &vars, &j.Status, &claimedBy, &claimedAt, &j.Attempts,
 		&nextRetry, &lastError, &createdAt, &updatedAt, &sentAt, &dedupe)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound

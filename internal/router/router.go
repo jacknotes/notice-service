@@ -66,6 +66,7 @@ func NewRouter(db *sql.DB, authSvc *service.AuthService, cipher *crypto.Cipher, 
 	webhookH := handler.NewWebhookHandler(db, queue)
 	dashH := handler.NewDashboardHandler(db)
 	userH := handler.NewUserHandler(db)
+	auditH := handler.NewAuditHandler(db)
 
 	r.GET("/api/health", handler.Health(db))
 	if o.SwaggerEnabled {
@@ -76,6 +77,7 @@ func NewRouter(db *sql.DB, authSvc *service.AuthService, cipher *crypto.Cipher, 
 	api.Use(bodyLimit(o.MaxBodyBytes))
 	api.POST("/auth/login", authH.Login)
 	api.POST("/auth/forgot-password", authH.ForgotPassword) // 公开：一次性令牌自助重置密码
+	api.POST("/auth/2fa/verify", authH.Verify2FA)          // 公开：登录第二步（持待验证令牌）
 
 	auth := api.Group("")
 	auth.Use(middleware.Auth(authSvc))
@@ -83,12 +85,16 @@ func NewRouter(db *sql.DB, authSvc *service.AuthService, cipher *crypto.Cipher, 
 		auth.POST("/auth/logout", authH.Logout)
 		auth.GET("/auth/me", authH.Me)
 		auth.POST("/auth/change-password", authH.ChangePassword)
+		auth.POST("/auth/2fa/setup", authH.Setup2FA)
+		auth.POST("/auth/2fa/enable", authH.Enable2FA)
+		auth.POST("/auth/2fa/disable", authH.Disable2FA)
 
 		// 读操作：所有登录用户可见全部共享数据
 		auth.GET("/channels", channelH.List)
 		auth.GET("/templates", templateH.List)
 		auth.POST("/templates/:id/preview", templateH.Preview)
 		auth.GET("/tasks", taskH.List)
+		auth.POST("/tasks/preview", taskH.Preview) // 任务发送预览（渲染，不发送）
 		auth.GET("/tasks/:id/logs", taskH.Logs)
 		auth.GET("/logs", taskH.LogsAll) // 日志分页/筛选（后端下推）
 
@@ -126,6 +132,8 @@ func NewRouter(db *sql.DB, authSvc *service.AuthService, cipher *crypto.Cipher, 
 			admin.DELETE("/users/:id", userH.Delete)
 			admin.POST("/users/:id/reset-token", userH.ResetToken) // 生成一次性重置令牌
 			admin.POST("/users/batch-delete", userH.BatchDelete)
+
+			admin.GET("/audit", auditH.List) // 操作审计日志
 		}
 	}
 	api.POST("/webhook/:api_key", webhookH.Trigger)

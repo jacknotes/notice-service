@@ -33,19 +33,20 @@
     <div v-loading="loading" class="card table-card">
       <el-table
         ref="tableRef"
-        :data="filteredTasks"
+        :data="paged"
         style="width: 100%"
         empty-text="暂无任务，点击右上角「新建任务」开始"
         @selection-change="onSelectionChange"
+        @sort-change="onSortChange"
       >
         <el-table-column v-if="isAdmin" type="selection" width="48" align="center" />
-        <el-table-column prop="id" label="ID" width="64" align="center">
+        <el-table-column prop="id" label="ID" width="64" align="center" sortable="custom">
           <template #default="{ row }">
             <span class="mono id-cell">#{{ row.id }}</span>
           </template>
         </el-table-column>
 
-        <el-table-column prop="name" label="名称" min-width="150">
+        <el-table-column prop="name" label="名称" min-width="150" sortable="custom">
           <template #default="{ row }">
             <span class="task-name">{{ row.name }}</span>
           </template>
@@ -79,7 +80,7 @@
           </template>
         </el-table-column>
 
-        <el-table-column label="状态" width="96" align="center">
+        <el-table-column label="状态" width="96" align="center" sortable="custom" prop="enabled">
           <template #default="{ row }">
             <el-switch
               :model-value="row.enabled"
@@ -93,7 +94,7 @@
           </template>
         </el-table-column>
 
-        <el-table-column label="操作" width="300" align="center" fixed="right">
+        <el-table-column label="操作" width="340" align="center" fixed="right">
           <template #default="{ row }">
             <el-button
               v-if="row.trigger_type === 'api'"
@@ -117,11 +118,24 @@
             <el-button link type="primary" size="small" @click="goLogs(row)">日志</el-button>
             <template v-if="isAdmin">
               <el-button link type="primary" size="small" @click="openEdit(row)">编辑</el-button>
+              <el-button link type="success" size="small" @click="duplicateTask(row)">复制</el-button>
               <el-button link type="danger" size="small" @click="removeTask(row)">删除</el-button>
             </template>
           </template>
         </el-table-column>
       </el-table>
+    </div>
+
+    <div v-if="total > 0" class="pager-row">
+      <el-pagination
+        v-model:current-page="page"
+        v-model:page-size="size"
+        :total="total"
+        :page-sizes="[10, 20, 50, 100]"
+        layout="total, sizes, prev, pager, next, jumper"
+        background
+        @size-change="onPageSizeChange"
+      />
     </div>
 
     <!-- ── Create / Edit dialog ─────────────────────────────────────── -->
@@ -234,11 +248,61 @@
 
       <template #footer>
         <div class="dialog-footer">
+          <el-button :icon="View" :loading="previewing" @click="openPreview">
+            预览
+          </el-button>
           <span class="footer-grow"></span>
           <el-button @click="dialogVisible = false">取消</el-button>
           <el-button type="primary" :loading="saving" @click="saveTask">
             {{ form.id ? '保存' : '创建' }}
           </el-button>
+        </div>
+      </template>
+    </el-dialog>
+
+    <!-- ── 发送预览 dialog：渲染最终效果（不落库、不发送） ───────────── -->
+    <el-dialog
+      v-model="previewVisible"
+      title="发送预览"
+      width="640px"
+      top="6vh"
+      :close-on-click-modal="false"
+      destroy-on-close
+    >
+      <div v-loading="previewing" class="preview-panel">
+        <template v-if="previewData">
+          <div class="preview-block">
+            <span class="preview-label">标题</span>
+            <p class="preview-subject">{{ previewData.subject || '—' }}</p>
+          </div>
+          <div class="preview-block">
+            <span class="preview-label">内容（Markdown）</span>
+            <div class="preview-md">
+              <MarkdownPreview :content="previewData.content" />
+            </div>
+          </div>
+          <div class="preview-block">
+            <span class="preview-label">接收地址（变量已替换）</span>
+            <div v-if="previewData.receivers.length" class="preview-receivers">
+              <el-tag
+                v-for="(r, i) in previewData.receivers"
+                :key="i"
+                effect="plain"
+                size="small"
+                class="receiver-tag"
+              >
+                {{ r }}
+              </el-tag>
+            </div>
+            <span v-else class="preview-empty">—</span>
+          </div>
+        </template>
+        <div v-else class="preview-hint">填写模板变量后点击「预览」查看最终效果</div>
+      </div>
+      <template #footer>
+        <div class="dialog-footer">
+          <span class="footer-grow"></span>
+          <el-button @click="previewVisible = false">关闭</el-button>
         </div>
       </template>
     </el-dialog>
@@ -274,9 +338,11 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { FormInstance, FormRules, TableInstance } from 'element-plus'
-import { Plus, CopyDocument, Search, Delete } from '@element-plus/icons-vue'
+import { Plus, CopyDocument, Search, Delete, View } from '@element-plus/icons-vue'
 import { channelApi, taskApi, templateApi } from '@/api'
 import { useAuthStore } from '@/stores/auth'
+import { useTablePaging } from '@/composables/useTablePaging'
+import MarkdownPreview from '@/components/MarkdownPreview.vue'
 
 interface TaskRow {
   id: number
@@ -337,6 +403,9 @@ const filteredTasks = computed<TaskRow[]>(() => {
     )
   })
 })
+
+// 客户端排序 + 分页（整表数据在前端）
+const { page, size, onSortChange, paged, total, onPageSizeChange } = useTablePaging<TaskRow>(filteredTasks)
 
 const dialogVisible = ref(false)
 const saving = ref(false)
@@ -568,6 +637,49 @@ function openEdit(row: TaskRow) {
   dialogVisible.value = true
 }
 
+// 复制任务：打开「新建任务」并预填源任务的全部配置（名称加「（副本）」），
+// id=0 走创建路径；api_key 由后端创建时重新生成。
+function duplicateTask(row: TaskRow) {
+  form.id = 0
+  form.name = `${row.name}（副本）`
+  form.channel_ids = row.channel_ids?.length ? [...row.channel_ids] : [row.channel_id]
+  form.template_id = row.template_id
+  form.trigger_type = row.trigger_type
+  form.cron_expr = row.cron_expr || ''
+  form.receivers = (row.receivers || []).join('\n')
+  form.allowed_ips = (row.allowed_ips || []).join('\n')
+  form.variables = row.variables ? { ...row.variables } : {}
+  form.enabled = row.enabled
+  dialogVisible.value = true
+}
+
+/* ── 发送预览（任务编辑时查看最终效果，不落库、不发送） ─────────────── */
+const previewVisible = ref(false)
+const previewing = ref(false)
+const previewData = ref<{ subject: string; content: string; receivers: string[] } | null>(null)
+
+async function openPreview() {
+  if (!form.template_id) {
+    ElMessage.warning('请先选择通知模板')
+    return
+  }
+  previewing.value = true
+  previewData.value = null
+  previewVisible.value = true
+  try {
+    const data = await taskApi.preview({
+      template_id: form.template_id,
+      variables: { ...form.variables },
+      receivers: splitLines(form.receivers),
+    })
+    previewData.value = data || { subject: '', content: '', receivers: [] }
+  } catch (e: any) {
+    ElMessage.error(errMsg(e, '预览生成失败'))
+  } finally {
+    previewing.value = false
+  }
+}
+
 /* ── Template variables editor ──────────────────────────────────────── */
 // 切换模板时清空变量：不同模板的变量互不通用
 function onTemplateChange() {
@@ -686,6 +798,65 @@ onMounted(() => {
 
 <style scoped>
 .search-input { width: 220px; }
+
+.pager-row {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: var(--space-4);
+}
+
+/* ── 发送预览 dialog ───────────────────────────────────────────────── */
+.preview-panel {
+  min-height: 180px;
+}
+.preview-block {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: var(--space-4);
+}
+.preview-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+.preview-subject {
+  color: var(--text-primary);
+  font-size: var(--text-md);
+  font-weight: 600;
+  word-break: break-word;
+}
+.preview-md {
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: rgba(148, 163, 184, 0.05);
+  max-height: 280px;
+  overflow: auto;
+}
+.preview-receivers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.receiver-tag {
+  color: var(--sky-400) !important;
+  border-color: rgba(56, 189, 248, 0.35) !important;
+  background: rgba(56, 189, 248, 0.1) !important;
+}
+.preview-empty {
+  color: var(--text-faint);
+  font-size: var(--text-xs);
+}
+.preview-hint {
+  display: grid;
+  place-items: center;
+  min-height: 140px;
+  color: var(--text-faint);
+  font-size: var(--text-sm);
+}
 
 .title-row {
   display: flex;

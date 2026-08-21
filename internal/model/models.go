@@ -10,6 +10,12 @@ type User struct {
 	CreatedAt    time.Time  `json:"created_at"`
 	UpdatedAt    time.Time  `json:"updated_at"`
 	DeletedAt    *time.Time `json:"-"`
+
+	// 双因子认证（TOTP）
+	TOTPSecret         string   `json:"-"`
+	TOTPEnabled        bool     `json:"totp_enabled"`
+	TOTPRecoveryCodes  []string `json:"-"`
+	TOTPRecoveryJSON   string   `json:"-"`
 }
 
 type Channel struct {
@@ -83,6 +89,9 @@ type TaskLog struct {
 	Response   string    `json:"response"`
 	ErrorMsg   string    `json:"error_msg"`
 	RetryCount int       `json:"retry_count"`
+	TriggerType string   `json:"trigger_type"`
+	TriggerBy  string    `json:"trigger_by"`
+	TriggerIP  string    `json:"trigger_ip"`
 	SentAt     time.Time `json:"sent_at"`
 }
 
@@ -90,6 +99,9 @@ type SendJob struct {
 	ID          int64      `json:"id"`
 	TaskID      int64      `json:"task_id"`
 	LogID       int64      `json:"-"`
+	TriggerType string     `json:"-"`
+	TriggerBy   string     `json:"-"`
+	TriggerIP   string     `json:"-"`
 	VarsJSON    string     `json:"-"`
 	Status      string     `json:"status"`
 	ClaimedBy   string     `json:"-"`

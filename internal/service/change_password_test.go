@@ -41,10 +41,10 @@ func TestChangePassword(t *testing.T) {
 	if err := svc.ChangePassword(u.ID, "oldpass123", "Newpass123!a"); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := svc.Login(u.Username, "oldpass123"); err == nil {
+	if _, err := svc.Login(u.Username, "oldpass123"); err == nil {
 		t.Error("old password should no longer work")
 	}
-	if _, _, err := svc.Login(u.Username, "Newpass123!a"); err != nil {
+	if _, err := svc.Login(u.Username, "Newpass123!a"); err != nil {
 		t.Error("new password should work")
 	}
 }

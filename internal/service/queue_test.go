@@ -97,7 +97,7 @@ func TestEnqueueAndWorkerConsumes(t *testing.T) {
 	q.Start()
 	defer q.Stop()
 
-	jobID, err := q.Enqueue(tkID, map[string]string{"name": "张三"}, "")
+	jobID, err := q.Enqueue(tkID, map[string]string{"name": "张三"}, "", Trigger{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -132,11 +132,11 @@ func TestEnqueueAndWorkerConsumes(t *testing.T) {
 
 func TestEnqueueDedupeKey(t *testing.T) {
 	q, tkID, _ := newTestQueue(t, queueCfg())
-	id1, err := q.Enqueue(tkID, nil, "dedupe-1")
+	id1, err := q.Enqueue(tkID, nil, "dedupe-1", Trigger{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	id2, err := q.Enqueue(tkID, nil, "dedupe-1")
+	id2, err := q.Enqueue(tkID, nil, "dedupe-1", Trigger{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -160,7 +160,7 @@ func TestRetryBackoffAndEventuallySucceeds(t *testing.T) {
 	q.Start()
 	defer q.Stop()
 
-	jobID, err := q.Enqueue(tkID, nil, "")
+	jobID, err := q.Enqueue(tkID, nil, "", Trigger{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -189,7 +189,7 @@ func TestMaxAttemptsFailed(t *testing.T) {
 	q.Start()
 	defer q.Stop()
 
-	jobID, err := q.Enqueue(tkID, nil, "")
+	jobID, err := q.Enqueue(tkID, nil, "", Trigger{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -222,7 +222,7 @@ func TestStaleRecoveryReclaims(t *testing.T) {
 	q.Start()
 	defer q.Stop()
 
-	jobID, err := q.Enqueue(tkID, nil, "")
+	jobID, err := q.Enqueue(tkID, nil, "", Trigger{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -256,14 +256,14 @@ func TestEnqueueDisabledTaskRejected(t *testing.T) {
 	if _, err := q.db.Exec("UPDATE tasks SET enabled=0 WHERE id=?", tkID); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := q.Enqueue(tkID, nil, ""); err == nil {
+	if _, err := q.Enqueue(tkID, nil, "", Trigger{}); err == nil {
 		t.Fatal("enqueue of disabled task should error")
 	}
 }
 
 func TestWorkerSkipsDisabledTask(t *testing.T) {
 	q, tkID, sink := newTestQueue(t, queueCfg())
-	jobID, err := q.Enqueue(tkID, nil, "")
+	jobID, err := q.Enqueue(tkID, nil, "", Trigger{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -297,7 +297,7 @@ func TestQueueEnqueueLogRetry(t *testing.T) {
 	if err := logRepo.Create(fail); err != nil {
 		t.Fatal(err)
 	}
-	jobID, err := q.EnqueueLogRetry(fail.ID)
+	jobID, err := q.EnqueueLogRetry(fail.ID, Trigger{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -317,7 +317,7 @@ func TestQueueEnqueueLogRetryRejectsSuccess(t *testing.T) {
 	if err := repository.NewTaskLogRepo(db).Create(ok); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := q.EnqueueLogRetry(ok.ID); err == nil {
+	if _, err := q.EnqueueLogRetry(ok.ID, Trigger{}); err == nil {
 		t.Fatal("retry of a success log should be rejected")
 	}
 }

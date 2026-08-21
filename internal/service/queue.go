@@ -17,6 +17,16 @@ import (
 
 var errTaskDisabled = errors.New("任务已禁用")
 
+// Trigger 描述一次发送的触发来源（写入发送日志：谁触发 / 从哪个 IP / 触发方式）。
+type Trigger struct {
+	// Type 触发方式：cron（定时）/ webhook（API）/ manual（立即发送）/ retry（日志重试）。
+	Type string
+	// By 触发人用户名（webhook 统一记 "webhook"，cron 统一记 "scheduler"）。
+	By string
+	// IP 触发来源 IP（cron 无来源为空）。
+	IP string
+}
+
 // QueueConfig 发送队列的运行时参数（来自 config 或测试直接构造）。
 type QueueConfig struct {
 	Workers            int
@@ -76,8 +86,9 @@ func (q *QueueService) Stop() {
 }
 
 // Enqueue 落库入队。dedupeKey 非空时保证相同键只入队一次（cron 用）；
-// webhook 传空串（UNIQUE 列允许多个 NULL）。返回 job id。
-func (q *QueueService) Enqueue(taskID int64, vars map[string]string, dedupeKey string) (int64, error) {
+// webhook 传空串（UNIQUE 列允许多个 NULL）。tr 记录触发来源，随 job 落库，
+// 发送时写入日志。返回 job id。
+func (q *QueueService) Enqueue(taskID int64, vars map[string]string, dedupeKey string, tr Trigger) (int64, error) {
 	task, err := q.taskRepo.GetByID(taskID)
 	if err != nil {
 		return 0, err
@@ -93,7 +104,8 @@ func (q *QueueService) Enqueue(taskID int64, vars map[string]string, dedupeKey s
 		}
 		varsJSON = string(b)
 	}
-	job := &model.SendJob{TaskID: taskID, VarsJSON: varsJSON, Status: "pending", DedupeKey: dedupeKey}
+	job := &model.SendJob{TaskID: taskID, VarsJSON: varsJSON, Status: "pending", DedupeKey: dedupeKey,
+		TriggerType: tr.Type, TriggerBy: tr.By, TriggerIP: tr.IP}
 	if err := q.jobRepo.Create(job); err != nil {
 		return 0, err
 	}
@@ -104,7 +116,7 @@ func (q *QueueService) Enqueue(taskID int64, vars map[string]string, dedupeKey s
 }
 
 // EnqueueLogRetry 把一条失败日志的定向重发入队（校验日志为失败、任务存在启用）。
-func (q *QueueService) EnqueueLogRetry(logID int64) (int64, error) {
+func (q *QueueService) EnqueueLogRetry(logID int64, tr Trigger) (int64, error) {
 	l, err := q.logRepo.GetByID(logID)
 	if err != nil {
 		return 0, err
@@ -119,7 +131,8 @@ func (q *QueueService) EnqueueLogRetry(logID int64) (int64, error) {
 	if !task.Enabled {
 		return 0, errTaskDisabled
 	}
-	job := &model.SendJob{TaskID: l.TaskID, LogID: logID, VarsJSON: "null", Status: "pending"}
+	job := &model.SendJob{TaskID: l.TaskID, LogID: logID, VarsJSON: "null", Status: "pending",
+		TriggerType: tr.Type, TriggerBy: tr.By, TriggerIP: tr.IP}
 	if err := q.jobRepo.Create(job); err != nil {
 		return 0, err
 	}
@@ -157,7 +170,8 @@ func (q *QueueService) process(j *model.SendJob) {
 	}()
 	// 日志定向重发：单次尝试，完成即终止（不叠加队列退避）。
 	if j.LogID > 0 {
-		if err := q.ns.ResendLog(j.LogID); err != nil {
+		tr := Trigger{Type: j.TriggerType, By: j.TriggerBy, IP: j.TriggerIP}
+		if err := q.ns.ResendLog(j.LogID, tr); err != nil {
 			log.Printf("queue: log retry %d failed: %v", j.LogID, err)
 		}
 		_ = q.jobRepo.MarkDone(j.ID)
@@ -174,7 +188,8 @@ func (q *QueueService) process(j *model.SendJob) {
 	}
 	var vars map[string]string
 	_ = json.Unmarshal([]byte(j.VarsJSON), &vars)
-	if err := q.ns.SendTask(j.TaskID, vars); err != nil {
+	tr := Trigger{Type: j.TriggerType, By: j.TriggerBy, IP: j.TriggerIP}
+	if err := q.ns.SendTask(j.TaskID, vars, tr); err != nil {
 		_ = q.jobRepo.MarkFailed(j.ID, err.Error(), q.cfg.MaxAttempts, q.cfg.RetryBackoff)
 		return
 	}

@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"os"
 	"testing"
+
+	"notice-service/internal/service"
 )
 
 // TestEmailRealSMTP 向真实 SMTP 服务器发信（真实渠道联调）。
@@ -36,7 +38,7 @@ func TestEmailRealSMTP(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := fx.ns.SendTask(fx.taskID, map[string]string{}); err != nil {
+	if err := fx.ns.SendTask(fx.taskID, map[string]string{}, service.Trigger{}); err != nil {
 		t.Fatalf("真实发信失败: %v", err)
 	}
 	t.Logf("✅ 真实邮件已发送：%s:%s，发件人 %s → 收件人 %s（标题：%s），请检查收件箱", host, port, from, to, fx.subject)

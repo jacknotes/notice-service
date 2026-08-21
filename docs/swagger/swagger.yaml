@@ -4,6 +4,121 @@ info:
   title: Notice Service API
   version: 1.0.0
 paths:
+  /api/audit:
+    get:
+      parameters:
+      - description: 关键词（匹配用户名/详情）
+        in: query
+        name: keyword
+        type: string
+      - description: 操作类型（精确匹配）
+        in: query
+        name: action
+        type: string
+      - description: 开始日期 YYYY-MM-DD
+        in: query
+        name: from
+        type: string
+      - description: 结束日期 YYYY-MM-DD
+        in: query
+        name: to
+        type: string
+      - description: 页码
+        in: query
+        name: page
+        type: integer
+      - description: 每页数量
+        in: query
+        name: page_size
+        type: integer
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 操作审计日志（仅管理员）
+      tags:
+      - 审计
+  /api/auth/2fa/disable:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: code
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 关闭双因子认证
+      tags:
+      - 认证
+  /api/auth/2fa/enable:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: code
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 启用双因子认证
+      tags:
+      - 认证
+  /api/auth/2fa/setup:
+    post:
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 开启双因子认证：生成密钥与备用码
+      tags:
+      - 认证
+  /api/auth/2fa/verify:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 待验证令牌与验证码
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 双因子验证（登录第二步）
+      tags:
+      - 认证
   /api/auth/change-password:
     post:
       consumes:
@@ -65,7 +180,7 @@ paths:
           schema:
             additionalProperties: true
             type: object
-      summary: 账号密码登录，返回 JWT
+      summary: 账号密码登录；已启用 2FA 时返回待验证令牌
       tags:
       - 认证
   /api/auth/logout:
@@ -535,6 +650,28 @@ paths:
       summary: 批量删除任务（仅管理员）
       tags:
       - 任务
+  /api/tasks/preview:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 预览参数
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 任务发送预览（渲染标题/正文/接收地址）
+      tags:
+      - 任务
   /api/templates:
     get:
       responses:
@@ -621,12 +758,12 @@ paths:
       consumes:
       - application/json
       parameters:
-      - description: 模板 ID
+      - description: 模板 ID（0 表示未保存的新模板）
         in: path
         name: id
         required: true
         type: integer
-      - description: 变量
+      - description: 预览参数（subject/content_md 缺省回退已保存值）
         in: body
         name: body
         required: true
@@ -640,7 +777,7 @@ paths:
             type: object
       security:
       - BearerAuth: []
-      summary: 用变量渲染模板预览
+      summary: 用变量渲染模板预览（使用当前表单值）
       tags:
       - 模板
   /api/templates/batch-delete:

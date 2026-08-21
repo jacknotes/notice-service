@@ -1,13 +1,34 @@
 import client from './client'
 
+export interface AuthUser {
+  id: number
+  username: string
+  role: string
+  totp_enabled?: boolean
+}
+
 export interface AuthResponse {
   token: string
-  user: { id: number; username: string; role: string }
+  user: AuthUser
+}
+
+// LoginResponse 兼容两步登录：Requires2FA=true 时无 token，返回 pending_token。
+export interface LoginResponse {
+  token?: string
+  requires_2fa?: boolean
+  pending_token?: string
+  user: AuthUser
 }
 
 export const authApi = {
-  login: (username: string, password: string): Promise<AuthResponse> =>
+  login: (username: string, password: string): Promise<LoginResponse> =>
     client.post('/auth/login', { username, password }).then((r) => r.data),
+  verify2FA: (token: string, code: string): Promise<AuthResponse> =>
+    client.post('/auth/2fa/verify', { token, code }).then((r) => r.data),
+  setup2FA: (): Promise<{ secret: string; otpauth_url: string; recovery_codes: string[] }> =>
+    client.post('/auth/2fa/setup').then((r) => r.data),
+  enable2FA: (code: string) => client.post('/auth/2fa/enable', { code }).then((r) => r.data),
+  disable2FA: (code: string) => client.post('/auth/2fa/disable', { code }).then((r) => r.data),
   me: () => client.get('/auth/me').then((r) => r.data),
   changePassword: (old_password: string, new_password: string) =>
     client.post('/auth/change-password', { old_password, new_password }).then((r) => r.data),
@@ -30,7 +51,12 @@ export const templateApi = {
   update: (id: number, d: any) => client.put(`/templates/${id}`, d).then((r) => r.data),
   remove: (id: number) => client.delete(`/templates/${id}`).then((r) => r.data),
   batchRemove: (ids: number[]) => client.post('/templates/batch-delete', { ids }).then((r) => r.data),
-  preview: (id: number, variables: any) => client.post(`/templates/${id}/preview`, { variables }).then((r) => r.data),
+  // 预览使用当前表单值：subject/content_md 缺省回退已保存值；id=0 表示未保存的新模板
+  preview: (
+    id: number,
+    payload: { subject?: string; content_md?: string; variables: Record<string, string> }
+  ): Promise<{ subject: string; content: string }> =>
+    client.post(`/templates/${id}/preview`, payload).then((r) => r.data),
 }
 
 export const taskApi = {
@@ -42,6 +68,12 @@ export const taskApi = {
   toggle: (id: number, enabled: boolean) => client.post(`/tasks/${id}/toggle`, { enabled }).then((r) => r.data),
   sendNow: (id: number) => client.post(`/tasks/${id}/send`).then((r) => r.data),
   logs: (id: number) => client.get(`/tasks/${id}/logs`).then((r) => r.data),
+  preview: (d: {
+    template_id: number
+    variables: Record<string, string>
+    receivers: string[]
+  }): Promise<{ subject: string; content: string; receivers: string[] }> =>
+    client.post('/tasks/preview', d).then((r) => r.data),
 }
 
 export const logApi = {
@@ -52,6 +84,8 @@ export const logApi = {
     to?: string
     page?: number
     page_size?: number
+    sort_by?: string
+    sort_order?: 'asc' | 'desc'
   }) => client.get('/logs', { params }).then((r) => r.data),
   retry: (id: number) => client.post(`/logs/${id}/retry`).then((r) => r.data),
 }
@@ -63,6 +97,17 @@ export const userApi = {
   remove: (id: number) => client.delete(`/users/${id}`).then((r) => r.data),
   batchRemove: (ids: number[]) => client.post('/users/batch-delete', { ids }).then((r) => r.data),
   resetToken: (id: number) => client.post(`/users/${id}/reset-token`).then((r) => r.data),
+}
+
+export const auditApi = {
+  list: (params: {
+    keyword?: string
+    action?: string
+    from?: string
+    to?: string
+    page?: number
+    page_size?: number
+  }) => client.get('/audit', { params }).then((r) => r.data),
 }
 
 export const dashboardApi = {

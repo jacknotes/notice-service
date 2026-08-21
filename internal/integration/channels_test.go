@@ -300,7 +300,7 @@ func TestIntegrationEmailSMTP(t *testing.T) {
 		"host": "127.0.0.1", "port": strings.SplitN(sink.addr(), ":", 2)[1],
 		"username": "u", "password": "p", "from": "a@x.com", "allow_insecure": "true",
 	})
-	if err := fx.ns.SendTask(fx.taskID, map[string]string{}); err != nil {
+	if err := fx.ns.SendTask(fx.taskID, map[string]string{}, service.Trigger{}); err != nil {
 		t.Fatalf("email send: %v", err)
 	}
 	msg := sink.lastMessage()
@@ -323,7 +323,7 @@ func TestIntegrationEmailSMTP(t *testing.T) {
 func TestIntegrationWecom(t *testing.T) {
 	sink := newHookSink(t, map[string]interface{}{"errcode": 0, "errmsg": "ok"})
 	fx := buildFixture(t, "wecom", map[string]string{"webhook_url": sink.url()})
-	if err := fx.ns.SendTask(fx.taskID, map[string]string{}); err != nil {
+	if err := fx.ns.SendTask(fx.taskID, map[string]string{}, service.Trigger{}); err != nil {
 		t.Fatalf("wecom send: %v", err)
 	}
 	var body struct {
@@ -347,7 +347,7 @@ func TestIntegrationDingtalk(t *testing.T) {
 	secret := "sec-test-secret"
 	sink := newHookSink(t, map[string]interface{}{"errcode": 0})
 	fx := buildFixture(t, "dingtalk", map[string]string{"webhook_url": sink.url() + "?access_token=x", "secret": secret})
-	if err := fx.ns.SendTask(fx.taskID, map[string]string{}); err != nil {
+	if err := fx.ns.SendTask(fx.taskID, map[string]string{}, service.Trigger{}); err != nil {
 		t.Fatalf("dingtalk send: %v", err)
 	}
 	u, err := url.Parse(sink.lastURL())
@@ -385,7 +385,7 @@ func TestIntegrationDingtalk(t *testing.T) {
 func TestIntegrationFeishu(t *testing.T) {
 	sink := newHookSink(t, map[string]interface{}{"code": 0, "msg": "success"})
 	fx := buildFixture(t, "feishu", map[string]string{"webhook_url": sink.url()})
-	if err := fx.ns.SendTask(fx.taskID, map[string]string{}); err != nil {
+	if err := fx.ns.SendTask(fx.taskID, map[string]string{}, service.Trigger{}); err != nil {
 		t.Fatalf("feishu send: %v", err)
 	}
 	var body struct {
@@ -407,7 +407,7 @@ func TestIntegrationPushPlus(t *testing.T) {
 	fx := buildFixture(t, "wechat", map[string]string{
 		"pushplus_token": "tok123", "pushplus_url": sink.url(),
 	})
-	if err := fx.ns.SendTask(fx.taskID, map[string]string{}); err != nil {
+	if err := fx.ns.SendTask(fx.taskID, map[string]string{}, service.Trigger{}); err != nil {
 		t.Fatalf("pushplus send: %v", err)
 	}
 	form := sink.lastForm()
@@ -426,7 +426,7 @@ func TestIntegrationPushPlus(t *testing.T) {
 func TestIntegrationWebhookErrorDetection(t *testing.T) {
 	sink := newHookSink(t, map[string]interface{}{"errcode": 40035, "errmsg": "bad"})
 	fx := buildFixture(t, "wecom", map[string]string{"webhook_url": sink.url()})
-	if err := fx.ns.SendTask(fx.taskID, map[string]string{}); err == nil {
+	if err := fx.ns.SendTask(fx.taskID, map[string]string{}, service.Trigger{}); err == nil {
 		t.Fatal("wecom errcode!=0 should fail the send")
 	}
 	// 失败应写入 failed 日志
