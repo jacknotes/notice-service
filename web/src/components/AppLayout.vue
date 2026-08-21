@@ -16,10 +16,10 @@
         <span>{{ signalLabel }}</span>
       </button>
 
-      <el-menu router :default-active="route.path" class="side-menu" :collapse="collapsed" :collapse-transition="false">
+      <el-menu router :default-active="route.path" class="side-menu">
         <el-menu-item v-for="item in visibleNavItems" :key="item.path" :index="item.path">
           <el-icon><component :is="item.icon" /></el-icon>
-          <span>{{ item.label }}</span>
+          <span v-if="!collapsed">{{ item.label }}</span>
         </el-menu-item>
       </el-menu>
 
@@ -470,8 +470,18 @@ async function onLogout() {
   justify-content: center;
   padding: 5px 10px;
 }
+/* 折叠态：菜单项改为图标居中（flex），避免 el-menu 内建 collapse 与自定义
+   padding 冲突导致的图标偏移/不居中对齐 */
 .sidebar.is-collapsed .side-menu :deep(.el-menu-item) {
-  padding-left: 20px !important; /* 与 el-menu 折叠态的图标居中一致 */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding-left: 0 !important;
+  margin-left: 0;
+  margin-right: 0;
+}
+.sidebar.is-collapsed .side-menu :deep(.el-menu-item .el-icon) {
+  margin-right: 0;
 }
 
 /* ── Main column ─────────────────────────────────────────────────── */

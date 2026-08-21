@@ -111,6 +111,9 @@ func (s *UserService) Delete(operator *model.User, targetID int64) error {
 	}
 	target, err := s.users.GetByID(targetID)
 	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return errors.New("用户不存在")
+		}
 		return err
 	}
 	if isDefaultAdmin(target) {
@@ -134,6 +137,9 @@ func (s *UserService) BatchDelete(operator *model.User, ids []int64) error {
 		}
 		target, err := s.users.GetByID(id)
 		if err != nil {
+			if errors.Is(err, repository.ErrNotFound) {
+				return errors.New("用户不存在")
+			}
 			return err
 		}
 		if isDefaultAdmin(target) {
@@ -158,6 +164,9 @@ func (s *UserService) DisableUser(operator *model.User, targetID int64) error {
 	}
 	target, err := s.users.GetByID(targetID)
 	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return errors.New("用户不存在")
+		}
 		return err
 	}
 	if isDefaultAdmin(target) {
@@ -177,6 +186,9 @@ func (s *UserService) EnableUser(operator *model.User, targetID int64) error {
 	}
 	target, err := s.users.GetByID(targetID)
 	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return errors.New("用户不存在")
+		}
 		return err
 	}
 	if isDefaultAdmin(target) {
