@@ -85,6 +85,7 @@ func NewRouter(db *sql.DB, authSvc *service.AuthService, cipher *crypto.Cipher, 
 	{
 		auth.POST("/auth/logout", authH.Logout)
 		auth.GET("/auth/me", authH.Me)
+		auth.PUT("/auth/profile", authH.UpdateProfile) // 自助修改显示名/邮箱
 		auth.POST("/auth/change-password", authH.ChangePassword)
 		auth.POST("/auth/2fa/setup", authH.Setup2FA)
 		auth.POST("/auth/2fa/enable", authH.Enable2FA)

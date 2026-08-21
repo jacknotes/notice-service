@@ -87,6 +87,15 @@ func (r *UserRepo) Update(u *model.User) error {
 	return err
 }
 
+// UpdateProfile 仅更新当前用户的显示名与邮箱（个人设置自助修改，
+// 不动角色/密码等管理字段）。
+func (r *UserRepo) UpdateProfile(userID int64, displayName, email string) error {
+	_, err := r.db.Exec(
+		"UPDATE users SET display_name=?, email=?, updated_at=NOW() WHERE id=? AND deleted_at IS NULL",
+		displayName, email, userID)
+	return err
+}
+
 func (r *UserRepo) List() ([]*model.User, error) {
 	rows, err := r.db.Query("SELECT " + userCols + " FROM users WHERE deleted_at IS NULL ORDER BY id")
 	if err != nil {

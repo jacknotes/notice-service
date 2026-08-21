@@ -167,6 +167,31 @@ func (h *AuthHandler) Me(c *gin.Context) {
 	c.JSON(http.StatusOK, u)
 }
 
+// UpdateProfile 自助修改当前用户资料（显示名/邮箱）。
+// @Summary 修改自己的显示名/邮箱
+// @Tags 认证
+// @Security BearerAuth
+// @Accept json
+// @Param body body object true "资料"
+// @Success 200 {object} map[string]interface{}
+// @Router /api/auth/profile [put]
+func (h *AuthHandler) UpdateProfile(c *gin.Context) {
+	var req struct {
+		DisplayName string `json:"display_name"`
+		Email       string `json:"email"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "参数错误"})
+		return
+	}
+	if err := h.Svc.UpdateProfile(c.GetInt64("uid"), req.DisplayName, req.Email); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	auditf(c, h.db, "auth.profile_update", "更新个人资料（显示名/邮箱）")
+	c.JSON(http.StatusOK, gin.H{"ok": true})
+}
+
 // ChangePassword 修改密码
 // @Summary 修改当前用户密码
 // @Tags 认证

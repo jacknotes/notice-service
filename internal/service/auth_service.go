@@ -6,6 +6,7 @@ import (
 	"errors"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/go-sql-driver/mysql"
 	"github.com/golang-jwt/jwt/v5"
@@ -127,6 +128,26 @@ func (s *AuthService) GetUsername(userID int64) string {
 // User 返回用户完整信息（含 2FA 启用状态，供 /auth/me 使用）。
 func (s *AuthService) User(userID int64) (*model.User, error) {
 	return s.users.GetByID(userID)
+}
+
+// UpdateProfile 自助更新当前用户资料（显示名/邮箱）。角色与密码不允许自助修改。
+// 显示名可选（可清空），邮箱非空时校验格式；长度与表结构列宽一致。
+func (s *AuthService) UpdateProfile(userID int64, displayName, email string) error {
+	displayName = strings.TrimSpace(displayName)
+	email = strings.TrimSpace(email)
+	if utf8.RuneCountInString(displayName) > 100 {
+		return errors.New("显示名不能超过 100 个字符")
+	}
+	if email != "" && !emailRe.MatchString(email) {
+		return errors.New("邮箱格式不正确")
+	}
+	if utf8.RuneCountInString(email) > 190 {
+		return errors.New("邮箱不能超过 190 个字符")
+	}
+	if _, err := s.users.GetByID(userID); err != nil {
+		return errors.New("用户不存在")
+	}
+	return s.users.UpdateProfile(userID, displayName, email)
 }
 
 func (s *AuthService) BootstrapAdmin() error {

@@ -32,6 +32,8 @@ export const authApi = {
   enable2FA: (code: string) => client.post('/auth/2fa/enable', { code }).then((r) => r.data),
   disable2FA: (code: string) => client.post('/auth/2fa/disable', { code }).then((r) => r.data),
   me: () => client.get('/auth/me').then((r) => r.data),
+  updateProfile: (display_name: string, email: string) =>
+    client.put('/auth/profile', { display_name, email }).then((r) => r.data),
   changePassword: (old_password: string, new_password: string) =>
     client.post('/auth/change-password', { old_password, new_password }).then((r) => r.data),
   forgotPassword: (username: string, token: string, new_password: string) =>

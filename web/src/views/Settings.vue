@@ -35,6 +35,44 @@
       </el-descriptions>
     </div>
 
+    <div class="card settings-card profile-edit-card">
+      <div class="pwd-head">
+        <h3>编辑资料</h3>
+        <span class="pwd-sub mono">PROFILE</span>
+      </div>
+      <el-form
+        ref="profileFormRef"
+        :model="profileForm"
+        :rules="profileRules"
+        label-position="top"
+        size="large"
+        @submit.prevent="saveProfile"
+      >
+        <el-form-item label="显示名" prop="display_name">
+          <el-input
+            v-model="profileForm.display_name"
+            placeholder="显示名/昵称（可选）"
+            :prefix-icon="User"
+            maxlength="100"
+          />
+        </el-form-item>
+        <el-form-item label="邮箱" prop="email">
+          <el-input
+            v-model="profileForm.email"
+            placeholder="用于接收通知的邮箱（可选）"
+            :prefix-icon="Message"
+            maxlength="190"
+          />
+        </el-form-item>
+        <div class="actions-line">
+          <el-button type="primary" :loading="profileSaving" native-type="submit" :icon="EditPen">
+            {{ profileSaving ? '保存中…' : '保存资料' }}
+          </el-button>
+          <span class="hint">保存后右上角头像与个人设置会同步更新</span>
+        </div>
+      </el-form>
+    </div>
+
     <div class="card settings-card twofa-card">
       <div class="pwd-head">
         <h3>双因子认证</h3>
@@ -216,7 +254,7 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
-import { EditPen, Key, Lock, CopyDocument } from '@element-plus/icons-vue'
+import { EditPen, Key, Lock, CopyDocument, User, Message } from '@element-plus/icons-vue'
 import QRCode from 'qrcode'
 import { authApi } from '@/api'
 import { useAuthStore } from '@/stores/auth'
@@ -231,6 +269,45 @@ const displayName = computed<string>(
 const avatarLetter = computed<string>(
   () => (displayName.value || 'N').slice(0, 1).toUpperCase()
 )
+
+/* ── 编辑资料（自助修改显示名/邮箱） ────────────────────────────────── */
+const profileFormRef = ref<FormInstance>()
+const profileSaving = ref(false)
+const profileForm = reactive({
+  display_name: auth.user?.display_name || '',
+  email: auth.user?.email || '',
+})
+
+const profileRules: FormRules = {
+  display_name: [{ max: 100, message: '显示名不能超过 100 个字符', trigger: 'blur' }],
+  email: [
+    { max: 190, message: '邮箱不能超过 190 个字符', trigger: 'blur' },
+    {
+      validator: (_rule, value, callback) => {
+        if (value && !/^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/.test(value))
+          callback(new Error('邮箱格式不正确'))
+        else callback()
+      },
+      trigger: 'blur',
+    },
+  ],
+}
+
+async function saveProfile() {
+  if (profileSaving.value) return
+  const valid = await profileFormRef.value?.validate().catch(() => false)
+  if (!valid) return
+  profileSaving.value = true
+  try {
+    await authApi.updateProfile(profileForm.display_name.trim(), profileForm.email.trim())
+    ElMessage.success('资料已更新')
+    await refresh2FA() // 同步 auth store 与 localStorage，右上角头像即时生效
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.error || '更新失败，请重试')
+  } finally {
+    profileSaving.value = false
+  }
+}
 
 /* ── 双因子认证（TOTP） ────────────────────────────────────────────── */
 const totpEnabled = ref(false)
@@ -259,6 +336,9 @@ async function refresh2FA() {
       auth.user.role = me.role
       auth.user.totp_enabled = !!me.totp_enabled
       localStorage.setItem('user', JSON.stringify(auth.user))
+      // 同步编辑表单（进入页面或保存后都取服务端最新值）
+      profileForm.display_name = me.display_name || ''
+      profileForm.email = me.email || ''
     }
   } catch {
     /* 忽略：会话过期由拦截器处理 */
