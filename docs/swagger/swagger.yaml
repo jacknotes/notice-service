@@ -7,7 +7,7 @@ paths:
   /api/audit:
     get:
       parameters:
-      - description: 关键词（匹配用户名/详情）
+      - description: 关键词（匹配用户名/IP/详情）
         in: query
         name: keyword
         type: string
@@ -207,6 +207,28 @@ paths:
       security:
       - BearerAuth: []
       summary: 获取当前登录用户信息
+      tags:
+      - 认证
+  /api/auth/profile:
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: 资料
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 修改自己的显示名/邮箱
       tags:
       - 认证
   /api/channels:
@@ -930,6 +952,44 @@ paths:
       security:
       - BearerAuth: []
       summary: 管理员为用户强制开启双因子认证（仅管理员）
+      tags:
+      - 用户
+  /api/users/{id}/disable:
+    post:
+      parameters:
+      - description: 用户 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 禁用用户（仅管理员）
+      tags:
+      - 用户
+  /api/users/{id}/enable:
+    post:
+      parameters:
+      - description: 用户 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 启用用户（仅管理员）
       tags:
       - 用户
   /api/users/{id}/reset-token:

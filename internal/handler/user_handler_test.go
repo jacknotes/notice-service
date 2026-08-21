@@ -5,10 +5,12 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
@@ -406,5 +408,43 @@ func TestUserDisableEnableAPI(t *testing.T) {
 	userTok2 := loginAs(t, r, "de_user", "TestPass123!")
 	if w := authReq(t, r, userTok2, "POST", "/api/users/"+num(nID)+"/disable", ""); w.Code != 403 {
 		t.Fatalf("non-admin disable = %d, want 403", w.Code)
+	}
+}
+
+// TestUserDeleteAuditShowsUsername 删除用户后，审计详情应显示用户名（如
+// 删除用户 test1 (id=2)），而不是只有裸 ID——用户被删除后仍能看出删的是谁。
+func TestUserDeleteAuditShowsUsername(t *testing.T) {
+	r := testRouter(t)
+	adminTok := login(t, r)
+	username := "aud_del_" + fmt.Sprintf("%d", time.Now().UnixNano())
+	w := authReq(t, r, adminTok, "POST", "/api/users", `{"username":"`+username+`","password":"TestPass123!","role":"user"}`)
+	if w.Code != 200 {
+		t.Fatalf("create user = %d body=%s", w.Code, w.Body.String())
+	}
+	uid := int64(mustJSON(t, w)["id"].(float64))
+	t.Cleanup(func() { testDB(t).Exec("DELETE FROM users WHERE id=?", uid) })
+
+	// 删除
+	if wd := authReq(t, r, adminTok, "DELETE", "/api/users/"+num(uid), ""); wd.Code != 200 {
+		t.Fatalf("delete user = %d body=%s", wd.Code, wd.Body.String())
+	}
+
+	// 查审计详情（关键词匹配详情中的用户名）
+	wa := authReq(t, r, adminTok, "GET", "/api/audit?action=user.delete&keyword="+username+"&page_size=5", "")
+	if wa.Code != 200 {
+		t.Fatalf("audit list = %d body=%s", wa.Code, wa.Body.String())
+	}
+	var resp struct {
+		Items []struct {
+			Detail string `json:"detail"`
+		} `json:"items"`
+	}
+	_ = json.Unmarshal(wa.Body.Bytes(), &resp)
+	if len(resp.Items) == 0 {
+		t.Fatal("expected user.delete audit rows")
+	}
+	d := resp.Items[0].Detail
+	if !strings.Contains(d, username) || !strings.Contains(d, fmt.Sprintf("(id=%d)", uid)) {
+		t.Fatalf("delete audit detail should contain username and id, got: %s", d)
 	}
 }

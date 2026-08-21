@@ -78,7 +78,8 @@ func (h *TemplateHandler) Update(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	auditf(c, h.db, "template.update", "更新模板 id=%d", id)
+	name, _ := h.svc.Name(id)
+	auditf(c, h.db, "template.update", "更新模板 %s", auditRef(name, id))
 	c.JSON(http.StatusOK, in)
 }
 
@@ -91,11 +92,12 @@ func (h *TemplateHandler) Update(c *gin.Context) {
 // @Router /api/templates/{id} [delete]
 func (h *TemplateHandler) Delete(c *gin.Context) {
 	id, _ := strconv.ParseInt(c.Param("id"), 10, 64)
+	name, _ := h.svc.Name(id) // 删除前取名称
 	if err := h.svc.Delete(c.GetInt64("uid"), id); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	auditf(c, h.db, "template.delete", "删除模板 id=%d", id)
+	auditf(c, h.db, "template.delete", "删除模板 %s", auditRef(name, id))
 	c.JSON(http.StatusOK, gin.H{"ok": true})
 }
 
@@ -115,11 +117,15 @@ func (h *TemplateHandler) BatchDelete(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "参数错误"})
 		return
 	}
+	names := make([]string, len(req.IDs))
+	for i, tid := range req.IDs {
+		names[i], _ = h.svc.Name(tid)
+	}
 	if err := h.svc.BatchDelete(req.IDs); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	auditf(c, h.db, "template.batch_delete", "批量删除模板 ids=%v", req.IDs)
+	auditf(c, h.db, "template.batch_delete", "批量删除模板 %s", auditRefs(names, req.IDs))
 	c.JSON(http.StatusOK, gin.H{"ok": true})
 }
 

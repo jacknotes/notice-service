@@ -21,6 +21,15 @@ func NewChannelService(db *sql.DB, cipher *crypto.Cipher) *ChannelService {
 	return &ChannelService{repo: repository.NewChannelRepo(db), cipher: cipher}
 }
 
+// Name 返回渠道 ID 对应的名称（用于审计详情可读性；不存在返回错误）。
+func (s *ChannelService) Name(id int64) (string, error) {
+	ch, err := s.repo.GetByID(id)
+	if err != nil {
+		return "", err
+	}
+	return ch.Name, nil
+}
+
 // List 返回全部未删除渠道（所有用户共享的数据集）；userID 参数仅为兼容保留，不再过滤。
 func (s *ChannelService) List(userID int64) ([]*model.Channel, error) {
 	list, err := s.repo.List()

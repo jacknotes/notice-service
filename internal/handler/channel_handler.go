@@ -78,7 +78,8 @@ func (h *ChannelHandler) Update(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	auditf(c, h.db, "channel.update", "更新渠道 id=%d", id)
+	name, _ := h.svc.Name(id)
+	auditf(c, h.db, "channel.update", "更新渠道 %s", auditRef(name, id))
 	c.JSON(http.StatusOK, in)
 }
 
@@ -91,11 +92,12 @@ func (h *ChannelHandler) Update(c *gin.Context) {
 // @Router /api/channels/{id} [delete]
 func (h *ChannelHandler) Delete(c *gin.Context) {
 	id, _ := strconv.ParseInt(c.Param("id"), 10, 64)
+	name, _ := h.svc.Name(id) // 删除前取名称
 	if err := h.svc.Delete(c.GetInt64("uid"), id); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	auditf(c, h.db, "channel.delete", "删除渠道 id=%d", id)
+	auditf(c, h.db, "channel.delete", "删除渠道 %s", auditRef(name, id))
 	c.JSON(http.StatusOK, gin.H{"ok": true})
 }
 
@@ -115,11 +117,15 @@ func (h *ChannelHandler) BatchDelete(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "参数错误"})
 		return
 	}
+	names := make([]string, len(req.IDs))
+	for i, cid := range req.IDs {
+		names[i], _ = h.svc.Name(cid)
+	}
 	if err := h.svc.BatchDelete(req.IDs); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	auditf(c, h.db, "channel.batch_delete", "批量删除渠道 ids=%v", req.IDs)
+	auditf(c, h.db, "channel.batch_delete", "批量删除渠道 %s", auditRefs(names, req.IDs))
 	c.JSON(http.StatusOK, gin.H{"ok": true})
 }
 

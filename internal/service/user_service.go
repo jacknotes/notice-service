@@ -38,6 +38,16 @@ func NewUserService(db *sql.DB) *UserService {
 	return &UserService{users: repository.NewUserRepo(db)}
 }
 
+// Username 返回用户 ID 对应的用户名（不存在/已删除返回空串）。用于审计详情可读性。
+// 删除类操作需在删除之前调用，否则软删除后查询不到。
+func (s *UserService) Username(id int64) string {
+	u, err := s.users.GetByID(id)
+	if err != nil {
+		return ""
+	}
+	return u.Username
+}
+
 // GenerateResetToken 生成一次性重置令牌（15 分钟有效），返回给管理员线下转交用户。
 // 内置 admin 账号的密码不可由管理员重置（防止把默认管理员锁死），请走离线 CLI。
 func (s *UserService) GenerateResetToken(userID int64) (string, time.Time, error) {

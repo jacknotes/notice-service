@@ -39,6 +39,29 @@ func NewTaskService(db *sql.DB, sched Scheduler) *TaskService {
 	}
 }
 
+// Name 返回任务 ID 对应的名称（用于审计详情可读性；不存在返回错误）。
+func (s *TaskService) Name(id int64) (string, error) {
+	t, err := s.repo.GetByID(id)
+	if err != nil {
+		return "", err
+	}
+	return t.Name, nil
+}
+
+// TaskNameByLogID 返回发送日志所属任务名称（用于审计详情可读性；
+// 日志不存在或任务已删除返回空串）。
+func (s *TaskService) TaskNameByLogID(logID int64) string {
+	log, err := s.logRepo.GetByID(logID)
+	if err != nil {
+		return ""
+	}
+	t, err := s.repo.GetByID(log.TaskID)
+	if err != nil {
+		return ""
+	}
+	return t.Name
+}
+
 // List 返回全部未删除任务（所有用户共享的数据集）；userID 参数仅为兼容保留，不再过滤。
 func (s *TaskService) List(userID int64) ([]*model.Task, error) {
 	list, err := s.repo.List()

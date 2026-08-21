@@ -60,3 +60,25 @@ func auditStr(p *string) string {
 	}
 	return *p
 }
+
+// auditRef 生成「名称 (id=N)」形式的可读引用，用于审计详情；名称为空时退化为 "id=N"。
+// 例如：删除用户 test1 (id=2)，使用户被删除后仍能看出操作对象是谁。
+func auditRef(name string, id int64) string {
+	if name == "" {
+		return fmt.Sprintf("id=%d", id)
+	}
+	return fmt.Sprintf("%s (id=%d)", name, id)
+}
+
+// auditRefs 生成「名称1 (id=1)、名称2 (id=2)」形式的可读 ID 列表（批量操作审计用）。
+func auditRefs(names []string, ids []int64) string {
+	parts := make([]string, 0, len(ids))
+	for i, id := range ids {
+		name := ""
+		if i < len(names) {
+			name = names[i]
+		}
+		parts = append(parts, auditRef(name, id))
+	}
+	return strings.Join(parts, "、")
+}

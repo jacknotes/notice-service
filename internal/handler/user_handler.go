@@ -109,7 +109,7 @@ func (h *UserHandler) Update(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	auditf(c, h.db, "user.update", "更新用户 id=%d (role=%s display_name=%s email=%s)", id, auditStr(req.Role), auditStr(req.DisplayName), auditStr(req.Email))
+	auditf(c, h.db, "user.update", "更新用户 %s (role=%s display_name=%s email=%s)", auditRef(h.svc.Username(id), id), auditStr(req.Role), auditStr(req.DisplayName), auditStr(req.Email))
 	c.JSON(http.StatusOK, gin.H{"ok": true})
 }
 
@@ -127,11 +127,12 @@ func (h *UserHandler) Delete(c *gin.Context) {
 		return
 	}
 	id, _ := strconv.ParseInt(c.Param("id"), 10, 64)
+	name := h.svc.Username(id) // 删除前取用户名，软删除后查不到
 	if err := h.svc.Delete(operatorFromCtx(c), id); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	auditf(c, h.db, "user.delete", "删除用户 id=%d", id)
+	auditf(c, h.db, "user.delete", "删除用户 %s", auditRef(name, id))
 	c.JSON(http.StatusOK, gin.H{"ok": true})
 }
 
@@ -155,11 +156,15 @@ func (h *UserHandler) BatchDelete(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "参数错误"})
 		return
 	}
+	names := make([]string, len(req.IDs))
+	for i, uid := range req.IDs {
+		names[i] = h.svc.Username(uid) // 批量删除前取用户名
+	}
 	if err := h.svc.BatchDelete(operatorFromCtx(c), req.IDs); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	auditf(c, h.db, "user.batch_delete", "批量删除用户 ids=%v", req.IDs)
+	auditf(c, h.db, "user.batch_delete", "批量删除用户 %s", auditRefs(names, req.IDs))
 	c.JSON(http.StatusOK, gin.H{"ok": true})
 }
 
@@ -181,7 +186,7 @@ func (h *UserHandler) Disable(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	auditf(c, h.db, "user.disable", "禁用用户 id=%d", id)
+	auditf(c, h.db, "user.disable", "禁用用户 %s", auditRef(h.svc.Username(id), id))
 	c.JSON(http.StatusOK, gin.H{"ok": true})
 }
 
@@ -203,7 +208,7 @@ func (h *UserHandler) Enable(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	auditf(c, h.db, "user.enable", "启用用户 id=%d", id)
+	auditf(c, h.db, "user.enable", "启用用户 %s", auditRef(h.svc.Username(id), id))
 	c.JSON(http.StatusOK, gin.H{"ok": true})
 }
 
@@ -226,7 +231,7 @@ func (h *UserHandler) ResetToken(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	auditf(c, h.db, "user.reset_token", "为用户 id=%d 生成重置令牌（%s 过期）", id, expires.Format("2006-01-02 15:04:05"))
+	auditf(c, h.db, "user.reset_token", "为用户 %s 生成重置令牌（%s 过期）", auditRef(h.svc.Username(id), id), expires.Format("2006-01-02 15:04:05"))
 	c.JSON(http.StatusOK, gin.H{"token": token, "expires_at": expires.Format("2006-01-02 15:04:05")})
 }
 
@@ -249,7 +254,7 @@ func (h *UserHandler) ForceEnable2FA(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	auditf(c, h.db, "user.2fa_force_enable", "强制开启用户 id=%d 的双因子认证", id)
+	auditf(c, h.db, "user.2fa_force_enable", "强制开启 %s 的双因子认证", auditRef(h.svc.Username(id), id))
 	c.JSON(http.StatusOK, gin.H{"secret": secret, "otpauth_url": uri, "recovery_codes": codes})
 }
 
@@ -271,6 +276,6 @@ func (h *UserHandler) ForceDisable2FA(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	auditf(c, h.db, "user.2fa_force_disable", "强制关闭用户 id=%d 的双因子认证", id)
+	auditf(c, h.db, "user.2fa_force_disable", "强制关闭 %s 的双因子认证", auditRef(h.svc.Username(id), id))
 	c.JSON(http.StatusOK, gin.H{"ok": true})
 }

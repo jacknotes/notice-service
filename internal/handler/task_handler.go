@@ -80,7 +80,8 @@ func (h *TaskHandler) Update(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	auditf(c, h.db, "task.update", "更新任务 id=%d", id)
+	name, _ := h.svc.Name(id)
+	auditf(c, h.db, "task.update", "更新任务 %s", auditRef(name, id))
 	c.JSON(http.StatusOK, in)
 }
 
@@ -93,11 +94,12 @@ func (h *TaskHandler) Update(c *gin.Context) {
 // @Router /api/tasks/{id} [delete]
 func (h *TaskHandler) Delete(c *gin.Context) {
 	id, _ := strconv.ParseInt(c.Param("id"), 10, 64)
+	name, _ := h.svc.Name(id) // 删除前取名称
 	if err := h.svc.Delete(c.GetInt64("uid"), id); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	auditf(c, h.db, "task.delete", "删除任务 id=%d", id)
+	auditf(c, h.db, "task.delete", "删除任务 %s", auditRef(name, id))
 	c.JSON(http.StatusOK, gin.H{"ok": true})
 }
 
@@ -117,11 +119,15 @@ func (h *TaskHandler) BatchDelete(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "参数错误"})
 		return
 	}
+	names := make([]string, len(req.IDs))
+	for i, tid := range req.IDs {
+		names[i], _ = h.svc.Name(tid)
+	}
 	if err := h.svc.BatchDelete(req.IDs); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	auditf(c, h.db, "task.batch_delete", "批量删除任务 ids=%v", req.IDs)
+	auditf(c, h.db, "task.batch_delete", "批量删除任务 %s", auditRefs(names, req.IDs))
 	c.JSON(http.StatusOK, gin.H{"ok": true})
 }
 
@@ -146,7 +152,8 @@ func (h *TaskHandler) Toggle(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	auditf(c, h.db, "task.toggle", "任务 id=%d enabled=%v", id, req.Enabled)
+	name, _ := h.svc.Name(id)
+	auditf(c, h.db, "task.toggle", "任务 %s enabled=%v", auditRef(name, id), req.Enabled)
 	c.JSON(http.StatusOK, gin.H{"ok": true})
 }
 
@@ -191,7 +198,8 @@ func (h *TaskHandler) SendNow(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	auditf(c, h.db, "task.send_now", "立即发送任务 id=%d job=%d", id, jobID)
+	name, _ := h.svc.Name(id)
+	auditf(c, h.db, "task.send_now", "立即发送 %s job=%d", auditRef(name, id), jobID)
 	c.JSON(http.StatusAccepted, gin.H{"ok": true, "job_id": jobID})
 }
 
@@ -214,7 +222,9 @@ func (h *TaskHandler) RetryLog(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	auditf(c, h.db, "log.retry", "重试日志 id=%d job=%d", id, jobID)
+	// 日志本身无名，用其所属任务名作为可读标识
+	taskName := h.svc.TaskNameByLogID(id)
+	auditf(c, h.db, "log.retry", "重试 %s job=%d", auditRef(taskName, id), jobID)
 	c.JSON(http.StatusAccepted, gin.H{"ok": true, "job_id": jobID})
 }
 

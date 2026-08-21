@@ -17,6 +17,15 @@ func NewTemplateService(db *sql.DB) *TemplateService {
 	return &TemplateService{repo: repository.NewTemplateRepo(db)}
 }
 
+// Name 返回模板 ID 对应的名称（用于审计详情可读性；不存在返回错误）。
+func (s *TemplateService) Name(id int64) (string, error) {
+	t, err := s.repo.GetByID(id)
+	if err != nil {
+		return "", err
+	}
+	return t.Name, nil
+}
+
 // List 返回全部未删除模板（所有用户共享的数据集）；userID 参数仅为兼容保留，不再过滤。
 func (s *TemplateService) List(userID int64) ([]*model.Template, error) {
 	list, err := s.repo.List()
