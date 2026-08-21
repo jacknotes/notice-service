@@ -119,6 +119,11 @@ func main() {
 	// 优雅退出时删除本实例心跳，避免遗留僵尸节点。
 	hbRepo := repository.NewHeartbeatRepo(db)
 	host, _ := os.Hostname()
+	// 启动即清理同主机同端口的历史心跳（仅保留当前实例）。本地反复重启/被强杀
+	// 时旧实例行会残留，造成「节点列表显示多个、实际只跑一个」的假象。
+	if err := hbRepo.PurgeSameAddr(host, cfg.Port, cfg.InstanceID); err != nil {
+		log.Printf("heartbeat: purge stale instances: %v", err)
+	}
 	startedAt := time.Now()
 	hbCtx, hbCancel := context.WithCancel(context.Background())
 	var hbWG sync.WaitGroup

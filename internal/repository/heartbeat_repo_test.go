@@ -69,3 +69,55 @@ func TestHeartbeatUpsertListRemove(t *testing.T) {
 		t.Fatalf("after remove want only inst-b, got %+v", list)
 	}
 }
+
+func TestHeartbeatPurgeSameAddr(t *testing.T) {
+	db := openTestDB(t)
+	repo := NewHeartbeatRepo(db)
+
+	if _, err := db.Exec("DELETE FROM instance_heartbeats"); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { db.Exec("DELETE FROM instance_heartbeats") })
+
+	// 同一 host:port 上的 3 个历史实例（模拟本地反复重启遗留的僵尸节点）
+	for _, id := range []string{"old-1", "old-2", "current"} {
+		if err := repo.Upsert(&Instance{
+			InstanceID: id, Host: "node1", Port: "8080", Version: "dev",
+			StartedAt: time.Now().Add(-time.Hour), LastSeenAt: time.Now().Add(-time.Minute),
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// 另一个端口上的实例不应被清除
+	if err := repo.Upsert(&Instance{
+		InstanceID: "other-port", Host: "node1", Port: "8081", Version: "dev",
+		StartedAt: time.Now().Add(-time.Hour), LastSeenAt: time.Now(),
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := repo.PurgeSameAddr("node1", "8080", "current"); err != nil {
+		t.Fatal(err)
+	}
+
+	list, err := repo.List(15 * time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	byID := map[string]*Instance{}
+	for _, h := range list {
+		byID[h.InstanceID] = h
+	}
+	if len(byID) != 2 {
+		t.Fatalf("want 2 rows (current + other-port), got %d: %+v", len(byID), list)
+	}
+	if byID["current"] == nil {
+		t.Fatalf("current instance should be kept: %+v", list)
+	}
+	if byID["old-1"] != nil || byID["old-2"] != nil {
+		t.Fatalf("stale same-addr instances should be purged: %+v", list)
+	}
+	if byID["other-port"] == nil {
+		t.Fatalf("instance on different port should be kept: %+v", list)
+	}
+}

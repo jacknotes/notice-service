@@ -66,3 +66,16 @@ func (r *HeartbeatRepo) Remove(instanceID string) error {
 	_, err := r.db.Exec("DELETE FROM instance_heartbeats WHERE instance_id=?", instanceID)
 	return err
 }
+
+// PurgeSameAddr 启动时清理同主机同端口的历史心跳，仅保留当前实例行。
+// 同一 host:port 在同一时刻只能被一个进程占用，因此其余行必然来自
+// 已退出（未优雅关闭）的旧实例——本地反复重启会在节点列表里累积僵尸节点。
+func (r *HeartbeatRepo) PurgeSameAddr(host, port, keepID string) error {
+	if r.db == nil {
+		return nil
+	}
+	_, err := r.db.Exec(
+		"DELETE FROM instance_heartbeats WHERE host=? AND port=? AND instance_id<>?",
+		host, port, keepID)
+	return err
+}
