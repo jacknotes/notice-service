@@ -3,6 +3,8 @@ import client from './client'
 export interface AuthUser {
   id: number
   username: string
+  display_name?: string
+  email?: string
   role: string
   totp_enabled?: boolean
 }

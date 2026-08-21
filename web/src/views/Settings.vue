@@ -11,12 +11,18 @@
       <div class="profile-head">
         <span class="avatar mono">{{ avatarLetter }}</span>
         <div>
-          <h3>{{ auth.user?.username || 'operator' }}</h3>
+          <h3>{{ displayName || 'operator' }}</h3>
           <span class="role-tag mono">{{ (auth.user?.role || 'admin').toUpperCase() }}</span>
         </div>
       </div>
 
       <el-descriptions :column="1" border class="desc" align="center" label-align="center">
+        <el-descriptions-item label="显示名">
+          <span class="mono desc-value">{{ auth.user?.display_name?.trim() || '—' }}</span>
+        </el-descriptions-item>
+        <el-descriptions-item label="邮箱">
+          <span class="mono desc-value">{{ auth.user?.email?.trim() || '—' }}</span>
+        </el-descriptions-item>
         <el-descriptions-item label="用户名">
           <span class="mono desc-value">{{ auth.user?.username || '—' }}</span>
         </el-descriptions-item>
@@ -218,8 +224,12 @@ import { useAuthStore } from '@/stores/auth'
 const router = useRouter()
 const auth = useAuthStore()
 
+// 显示名：优先 display_name，未设置时回退到用户名。
+const displayName = computed<string>(
+  () => auth.user?.display_name?.trim() || auth.user?.username || ''
+)
 const avatarLetter = computed<string>(
-  () => (auth.user?.username || 'N').slice(0, 1).toUpperCase()
+  () => (displayName.value || 'N').slice(0, 1).toUpperCase()
 )
 
 /* ── 双因子认证（TOTP） ────────────────────────────────────────────── */
@@ -236,12 +246,20 @@ const disableVisible = ref(false)
 const disableCode = ref('')
 const disabling = ref(false)
 
-// 从 /auth/me 拉取最新 2FA 状态（localStorage 中的 user 可能过期）
+// 从 /auth/me 拉取最新资料（显示名/邮箱/角色/2FA 状态），并同步回
+// auth store 与 localStorage（localStorage 中的 user 可能过期或资料已更新）。
 async function refresh2FA() {
   try {
     const me = await authApi.me()
     totpEnabled.value = !!me.totp_enabled
-    if (auth.user) auth.user.totp_enabled = !!me.totp_enabled
+    if (auth.user) {
+      auth.user.username = me.username
+      auth.user.display_name = me.display_name
+      auth.user.email = me.email
+      auth.user.role = me.role
+      auth.user.totp_enabled = !!me.totp_enabled
+      localStorage.setItem('user', JSON.stringify(auth.user))
+    }
   } catch {
     /* 忽略：会话过期由拦截器处理 */
   }

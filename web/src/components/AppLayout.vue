@@ -55,7 +55,7 @@
           <el-dropdown trigger="click" @command="onCommand">
             <div class="user-chip">
               <span class="avatar mono">{{ avatarLetter }}</span>
-              <span class="user-name">{{ auth.user?.username || 'operator' }}</span>
+              <span class="user-name">{{ displayName || 'operator' }}</span>
               <el-icon class="chev"><ArrowDown /></el-icon>
             </div>
             <template #dropdown>
@@ -197,8 +197,12 @@ const visibleNavItems = computed(() =>
 const pageTitle = computed<string>(
   () => (route.meta.title as string) || '信号中枢'
 )
+// 显示名：优先 display_name，未设置时回退到用户名。
+const displayName = computed<string>(
+  () => auth.user?.display_name?.trim() || auth.user?.username || ''
+)
 const avatarLetter = computed<string>(
-  () => (auth.user?.username || 'N').slice(0, 1).toUpperCase()
+  () => (displayName.value || 'N').slice(0, 1).toUpperCase()
 )
 
 /* ── 信号在线：多后端节点健康（点击查看节点列表） ───────────────────── */
