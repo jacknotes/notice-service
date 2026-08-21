@@ -21,7 +21,8 @@ import (
 // Options 路由可选项（生产环境由 main 传入，测试用默认值）。
 type Options struct {
 	// TrustedProxies 反向代理 CIDR 列表；只有来自这些地址的 X-Forwarded-For /
-	// X-Real-IP 头才被信任（Webhook IP 白名单依赖）。空 = 不信任任何代理头。
+	// X-Real-IP 头才被信任（Webhook IP 白名单与操作审计来源 IP 依赖）。
+	// 默认值见 config：环回 + Docker 默认网桥网段 172.16.0.0/12。空 = 不信任任何代理头。
 	TrustedProxies []string
 	// SwaggerEnabled 是否暴露 /swagger API 文档。
 	SwaggerEnabled bool
@@ -48,7 +49,8 @@ func NewRouter(db *sql.DB, authSvc *service.AuthService, cipher *crypto.Cipher, 
 	r.Use(securityHeaders()) // 全局安全响应头（覆盖 SPA 页面与全部 API）
 	r.Use(accessLogger())
 
-	// 可信代理：控制 X-Forwarded-For / X-Real-IP 的信任范围（默认不信任远端）。
+	// 可信代理：控制 X-Forwarded-For / X-Real-IP 的信任范围（默认信任环回 +
+	// Docker 默认网桥网段，见 config 的 TrustedProxies 默认值）。
 	if err := r.SetTrustedProxies(o.TrustedProxies); err != nil {
 		log.Printf("router: invalid trusted proxies %v: %v", o.TrustedProxies, err)
 	}

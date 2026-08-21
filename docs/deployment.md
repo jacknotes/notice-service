@@ -204,9 +204,12 @@ nginx -t && nginx -s reload   # 先校验再重载（优雅，不断连接）
 
 ### 关于 TRUSTED_PROXIES
 
-Nginx 会把真实客户端 IP 通过 `X-Real-IP` / `X-Forwarded-For` 带给应用（Webhook 的 IP 白名单依赖它）。应用侧用 `TRUSTED_PROXIES` 声明可信代理来源：
+Nginx 会把真实客户端 IP 通过 `X-Real-IP` / `X-Forwarded-For` 带给应用（Webhook 的 IP 白名单与操作审计的来源 IP 都依赖它）。应用侧用 `TRUSTED_PROXIES` 声明可信代理来源：
 
-- **宿主机 Nginx → 本机端口**（默认形态）：保持默认 `TRUSTED_PROXIES=127.0.0.1,::1` 即可
+- **宿主机 Nginx → docker-compose 容器**（默认形态）：保持默认 `TRUSTED_PROXIES=127.0.0.1,::1,172.16.0.0/12` 即可。
+  ⚠️ 容器形态下应用看到的连接源是 Docker 网桥网关（如 `172.18.0.1`）**而不是** `127.0.0.1`——
+  若只信任环回，`X-Real-IP` / `X-Forwarded-For` 会被忽略，审计与日志里来源 IP 会记成网桥网关
+  （如 `172.18.0.1`）。默认的 `172.16.0.0/12` 覆盖 172.17~172.31 所有默认网桥网段。
 - **Nginx 在其它节点 / 容器网络**：改成反代所在网段，如 `10.0.0.0/8`
 
 > 安全提示：不要把服务直接暴露公网而不经过可信反代——否则任何人可伪造 `X-Forwarded-For` 绕过 IP 白名单。

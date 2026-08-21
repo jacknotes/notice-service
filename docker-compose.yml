@@ -6,7 +6,8 @@
 #   2. 下面的 ${VAR:?err} 语法：关键变量缺失时 docker compose 会直接报错退出，
 #      避免以弱默认密钥裸跑。
 #   3. 若 Nginx 反代不在本机（如独立节点），请设置 TRUSTED_PROXIES 为反代所在
-#      CIDR（默认信任 127.0.0.1 / ::1，对应「宿主机 Nginx → 本机端口」形态）。
+#      CIDR（默认信任 127.0.0.1 / ::1 + Docker 默认网桥网段 172.16.0.0/12，
+#      对应「宿主机 Nginx → 本机端口」与「容器内由宿主机 Nginx 反代」两种形态）。
 services:
   notice-service-1:
     build:
@@ -27,7 +28,7 @@ services:
       - ENCRYPT_KEY=${ENCRYPT_KEY:?请在 .env 中设置 ENCRYPT_KEY（两实例一致）}
       - ADMIN_USER=${ADMIN_USER:-admin}
       - ADMIN_PASS=${ADMIN_PASS:?请在 .env 中设置 ADMIN_PASS}
-      - TRUSTED_PROXIES=${TRUSTED_PROXIES:-127.0.0.1,::1}
+      - TRUSTED_PROXIES=${TRUSTED_PROXIES:-127.0.0.1,::1,172.16.0.0/12}
       - GIN_MODE=release
     depends_on:
       mysql:
@@ -52,7 +53,7 @@ services:
       - ENCRYPT_KEY=${ENCRYPT_KEY:?请在 .env 中设置 ENCRYPT_KEY（两实例一致）}
       - ADMIN_USER=${ADMIN_USER:-admin}
       - ADMIN_PASS=${ADMIN_PASS:?请在 .env 中设置 ADMIN_PASS}
-      - TRUSTED_PROXIES=${TRUSTED_PROXIES:-127.0.0.1,::1}
+      - TRUSTED_PROXIES=${TRUSTED_PROXIES:-127.0.0.1,::1,172.16.0.0/12}
       - GIN_MODE=release
     depends_on:
       mysql:

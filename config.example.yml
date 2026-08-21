@@ -30,8 +30,9 @@ queue:
 log_retention_days: 90
 audit_retention_days: 180
 
-# 反向代理可信 CIDR（逗号分隔）；Webhook IP 白名单依赖它
-trusted_proxies: "127.0.0.1,::1"
+# 反向代理可信 CIDR（逗号分隔）；Webhook IP 白名单依赖它。
+# 默认信任环回 + Docker 默认网桥网段（容器由宿主机 Nginx 反代时连接源是网桥网关）。
+trusted_proxies: "127.0.0.1,::1,172.16.0.0/12"
 
 # 是否暴露 /swagger API 文档
 swagger_enabled: true

@@ -61,7 +61,7 @@
             <template #dropdown>
               <el-dropdown-menu>
                 <el-dropdown-item disabled>
-                  <span class="role-tag">{{ auth.user?.role || 'admin' }}</span>
+                  <span class="role-tag">{{ roleLabel }}</span>
                 </el-dropdown-item>
                 <el-dropdown-item command="swagger">
                   <el-icon><Document /></el-icon>API 文档
@@ -204,6 +204,12 @@ const displayName = computed<string>(
 const avatarLetter = computed<string>(
   () => (displayName.value || 'N').slice(0, 1).toUpperCase()
 )
+// 角色显示文案：与「用户管理 / 个人设置」保持一致（admin → 管理员，其余 → 普通用户）。
+const roleLabel = computed<string>(() => {
+  const role = auth.user?.role
+  if (!role) return '—'
+  return role === 'admin' ? '管理员' : '普通用户'
+})
 
 /* ── 信号在线：多后端节点健康（点击查看节点列表） ───────────────────── */
 interface BackendNode {

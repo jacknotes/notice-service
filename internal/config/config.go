@@ -38,7 +38,9 @@ type Config struct {
 
 	// TrustedProxies 反向代理 CIDR 列表（逗号分隔）。只有来自这些代理的
 	// X-Forwarded-For / X-Real-IP 头才被信任（Webhook IP 白名单依赖）。
-	// 默认信任环回地址：宿主 Nginx 反代本服务的默认形态。
+	// 默认信任环回地址 + Docker 默认网桥网段（172.16.0.0/12，覆盖 172.17~172.31
+	// 各默认网桥）：docker-compose 容器由宿主机 Nginx 反代时，应用看到的连接源是
+	// 网桥网关（如 172.18.0.1）而非 127.0.0.1，必须放行才能取到真实客户端 IP。
 	TrustedProxies []string
 	// SwaggerEnabled 是否暴露 /swagger API 文档。
 	SwaggerEnabled bool
@@ -142,7 +144,7 @@ func loadFromPath(path string) *Config {
 		LogRetentionDays:      firstInt("LOG_RETENTION_DAYS", f.LogRetentionDays, 90),
 		QueueJobRetentionDays: firstInt("QUEUE_JOB_RETENTION_DAYS", f.Queue.JobRetentionDays, 30),
 		AuditRetentionDays:    firstInt("AUDIT_RETENTION_DAYS", f.AuditRetentionDays, 180),
-		TrustedProxies:        parseCSV(firstNonEmpty(os.Getenv("TRUSTED_PROXIES"), f.TrustedProxies, "127.0.0.1,::1")),
+		TrustedProxies:        parseCSV(firstNonEmpty(os.Getenv("TRUSTED_PROXIES"), f.TrustedProxies, "127.0.0.1,::1,172.16.0.0/12")),
 		SwaggerEnabled:        firstBool("SWAGGER_ENABLED", f.SwaggerEnabled, true),
 	}
 }

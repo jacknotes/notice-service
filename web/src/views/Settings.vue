@@ -12,7 +12,7 @@
         <span class="avatar mono">{{ avatarLetter }}</span>
         <div>
           <h3>{{ displayName || 'operator' }}</h3>
-          <span class="role-tag mono">{{ (auth.user?.role || 'admin').toUpperCase() }}</span>
+          <span class="role-tag">{{ roleLabel }}</span>
         </div>
       </div>
 
@@ -72,7 +72,7 @@
         </div>
         <div class="info-row">
           <span class="info-label">角色</span>
-          <span class="info-value mono">{{ auth.user?.role || '—' }}</span>
+          <span class="info-value">{{ roleLabel }}</span>
         </div>
         <div class="info-row">
           <span class="info-label">用户 ID</span>
@@ -276,6 +276,14 @@ const displayName = computed<string>(
 const avatarLetter = computed<string>(
   () => (displayName.value || 'N').slice(0, 1).toUpperCase()
 )
+
+// 角色显示文案：与「用户管理」保持一致（admin → 管理员，其余 → 普通用户），
+// 避免个人设置显示英文 admin/user 造成两处不一致。
+const roleLabel = computed<string>(() => {
+  const role = auth.user?.role
+  if (!role) return '—'
+  return role === 'admin' ? '管理员' : '普通用户'
+})
 
 /* ── 行内编辑显示名/邮箱（保存复用 PUT /auth/profile） ────────────── */
 const editingField = ref<'display_name' | 'email' | null>(null)

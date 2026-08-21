@@ -127,10 +127,11 @@ MYSQL_IMAGE=docker.m.daocloud.io/library/mysql:5.7
 ### 反向代理与 IP 白名单
 
 Webhook 的 IP 白名单依赖 `X-Real-IP` / `X-Forwarded-For` 头，但这些头**只有来自可信反向代理才是可信的**。
-服务通过 `TRUSTED_PROXIES`（默认 `127.0.0.1,::1`）声明可信代理来源：
+服务通过 `TRUSTED_PROXIES`（默认 `127.0.0.1,::1,172.16.0.0/12`）声明可信代理来源：
 
-- 典型部署「宿主 Nginx → 本机端口」：保持默认即可（Nginx 从 127.0.0.1 连入）。
-- Nginx 在其它节点 / 容器网络内：把 `TRUSTED_PROXIES` 设为反代所在网段，如 `10.0.0.0/8`。
+- 典型部署「宿主 Nginx → docker-compose 容器」：保持默认即可。容器形态下应用看到的连接源是
+  Docker 网桥网关（如 `172.18.0.1`）而非 `127.0.0.1`，默认的 `172.16.0.0/12` 覆盖所有默认网桥网段。
+- Nginx 在其它节点：把 `TRUSTED_PROXIES` 设为反代所在网段，如 `10.0.0.0/8`。
 - 不要直接把服务暴露公网却不设反向代理——此时任何人可伪造 `X-Forwarded-For` 绕过 IP 白名单。
 
 ## 环境变量
@@ -153,7 +154,7 @@ Webhook 的 IP 白名单依赖 `X-Real-IP` / `X-Forwarded-For` 头，但这些�
 | `LOG_RETENTION_DAYS` | 90 | 发送日志保留天数 |
 | `QUEUE_JOB_RETENTION_DAYS` | 30 | 已完成 job 保留天数 |
 | `AUDIT_RETENTION_DAYS` | 180 | 审计日志保留天数（超出自动清理） |
-| `TRUSTED_PROXIES` | 127.0.0.1,::1 | 可信反向代理 CIDR（逗号分隔），控制 X-Forwarded-For / X-Real-IP 是否可信 |
+| `TRUSTED_PROXIES` | 127.0.0.1,::1,172.16.0.0/12 | 可信反向代理 CIDR（逗号分隔），控制 X-Forwarded-For / X-Real-IP 是否可信 |
 | `SWAGGER_ENABLED` | true | 是否暴露 `/swagger` API 文档 |
 
 ## 密码重置
@@ -241,3 +242,10 @@ Dockerfile  docker-compose.yml  .env.example
 - **服务器部署指南**：`docs/deployment.md`（从空服务器 clone 代码 → 构建 → 运行 → Nginx 反代 → 升级 → 排错，含国内镜像与常见坑）
 - 设计文档：`docs/superpowers/specs/2026-07-17-notification-service-design.md`
 - 实现计划：`docs/superpowers/plans/2026-08-18-notice-service-implementation.md`
+
+## 许可证
+
+本项目基于 [MIT License](LICENSE) 开源。
+
+> 你可以自由使用、修改、分发与商用本项目，仅需在副本中保留版权声明与许可声明。
+> 本项目按「现状」提供，不附带任何明示或默示担保（详见 LICENSE 全文）。
