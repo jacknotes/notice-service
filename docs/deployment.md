@@ -240,6 +240,8 @@ docker-compose down -v           # 停止并清空数据（危险，慎用）
 # 离线重置任意用户密码（不启动/不影响运行中的服务；需能连数据库）
 docker compose exec <service> ./notice-service reset-password --username admin
 #   按提示交互输入新密码（需 ≥12 位，含大小写字母、数字、特殊字符）
+#   注意：内置 admin 账号（username=admin）的密码不可在 Web「用户管理」重置，
+#         只能通过上述离线 reset-password 命令恢复；其它用户角色/密码均可正常调整。
 ```
 
 ---
@@ -253,6 +255,7 @@ docker compose exec <service> ./notice-service reset-password --username admin
 | `docker compose` 提示 `'compose' is not a docker command` | 只装了独立二进制，没装插件 | 改用 `docker-compose` 命令 |
 | 登录报「用户名或密码错误」 | 密码不是 admin123，是 `.env` 的 `ADMIN_PASS`；或密码被改过 | 用 `.env` 里的密码；被改过就重置 |
 | 登录提示「失败次数过多」 | 连续输错 5 次触发 15 分钟限流 | 等 15 分钟或重启容器 |
+| 「用户管理」无法修改内置 admin 账号的角色 / 密码 | 内置 admin 账号（username=admin）受保护：角色不可改、密码不可由管理员重置 | 其它管理员/普通用户的角色与密码均可正常调整；内置 admin 密码用离线 `reset-password` 恢复 |
 | `/api/health` 返回 503 | 数据库不可达 | 检查 mysql 容器与 `DB_*` 配置 |
 | 配置了 nginx 但不生效 | `nginx.conf` 没 include conf.d | `nginx -T` 确认，加 include 后 `nginx -t && nginx -s reload` |
 | 渠道「解密失败」/ 列表拿不到配置 | `ENCRYPT_KEY` 与加密时不一致（多实例不一致 / 数据迁移未重加密） | 保证各实例 `ENCRYPT_KEY` 一致；迁移数据见「11」 |
