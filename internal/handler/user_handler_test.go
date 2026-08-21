@@ -96,10 +96,10 @@ func TestUserManagementAPI(t *testing.T) {
 		t.Fatalf("non-admin delete = %d, want 403", w3c.Code)
 	}
 
-	// admin 删除另一个 admin → 400（不能删除管理员账号）
+	// 内置 admin 可删除另一个 admin → 200
 	wd := authReq(t, r, adminTok, "DELETE", "/api/users/"+num(admin2ID), "")
-	if wd.Code != 400 {
-		t.Fatalf("admin deleting admin = %d, want 400 body=%s", wd.Code, wd.Body.String())
+	if wd.Code != 200 {
+		t.Fatalf("builtin admin deleting admin = %d, want 200 body=%s", wd.Code, wd.Body.String())
 	}
 
 	// admin 删除普通用户 → 200
@@ -327,5 +327,84 @@ func TestUserUpdateAuditDetail(t *testing.T) {
 	}
 	if !strings.Contains(d, "role=admin") || !strings.Contains(d, "display_name=新名字") || !strings.Contains(d, "email=a@b.com") {
 		t.Fatalf("audit detail should contain readable values, got: %s", d)
+	}
+}
+
+// TestUserDeletePermissionsAPI 删除权限矩阵：内置 admin 可删其它管理员与普通用户；
+// 普通管理员只能删普通用户；内置 admin 不可被任何人删除。
+func TestUserDeletePermissionsAPI(t *testing.T) {
+	r := testRouter(t)
+	adminTok := login(t, r) // 内置 admin
+	op := mustJSON(t, authReq(t, r, adminTok, "POST", "/api/users", `{"username":"delop","password":"TestPass123!","role":"admin"}`))
+	opID := int64(op["id"].(float64))
+	t.Cleanup(func() { testDB(t).Exec("DELETE FROM users WHERE id=?", opID) })
+	tgt := mustJSON(t, authReq(t, r, adminTok, "POST", "/api/users", `{"username":"deltgt","password":"TestPass123!","role":"admin"}`))
+	tgtID := int64(tgt["id"].(float64))
+	t.Cleanup(func() { testDB(t).Exec("DELETE FROM users WHERE id=?", tgtID) })
+	n := mustJSON(t, authReq(t, r, adminTok, "POST", "/api/users", `{"username":"deln","password":"TestPass123!","role":"user"}`))
+	nID := int64(n["id"].(float64))
+	t.Cleanup(func() { testDB(t).Exec("DELETE FROM users WHERE id=?", nID) })
+	opTok := loginAs(t, r, "delop", "TestPass123!")
+
+	adminID := int64(mustJSON(t, authReq(t, r, adminTok, "GET", "/api/auth/me", ""))["id"].(float64))
+
+	// 普通管理员删除另一管理员 → 400
+	if w := authReq(t, r, opTok, "DELETE", "/api/users/"+num(tgtID), ""); w.Code != 400 || !strings.Contains(w.Body.String(), "普通管理员不能删除管理员账号") {
+		t.Fatalf("normal admin deleting admin = %d body=%s", w.Code, w.Body.String())
+	}
+	// 普通管理员删除内置 admin → 400
+	if w := authReq(t, r, opTok, "DELETE", "/api/users/"+num(adminID), ""); w.Code != 400 {
+		t.Fatalf("normal admin deleting builtin admin = %d body=%s", w.Code, w.Body.String())
+	}
+	// 普通管理员删除普通用户 → 200
+	if w := authReq(t, r, opTok, "DELETE", "/api/users/"+num(nID), ""); w.Code != 200 {
+		t.Fatalf("normal admin deleting normal user = %d body=%s", w.Code, w.Body.String())
+	}
+	// 内置 admin 删除另一管理员 → 200
+	if w := authReq(t, r, adminTok, "DELETE", "/api/users/"+num(tgtID), ""); w.Code != 200 {
+		t.Fatalf("builtin admin deleting admin = %d body=%s", w.Code, w.Body.String())
+	}
+	// 内置 admin 删除自己 → 400
+	if w := authReq(t, r, adminTok, "DELETE", "/api/users/"+num(adminID), ""); w.Code != 400 {
+		t.Fatalf("builtin admin deleting self = %d body=%s", w.Code, w.Body.String())
+	}
+}
+
+// TestUserDisableEnableAPI 禁用/启用：禁用后已签发令牌立即失效、无法登录；
+// 启用后可重新登录；非 admin 无权限。
+func TestUserDisableEnableAPI(t *testing.T) {
+	r := testRouter(t)
+	adminTok := login(t, r)
+	n := mustJSON(t, authReq(t, r, adminTok, "POST", "/api/users", `{"username":"de_user","password":"TestPass123!","role":"user"}`))
+	nID := int64(n["id"].(float64))
+	t.Cleanup(func() { testDB(t).Exec("DELETE FROM users WHERE id=?", nID) })
+	userTok := loginAs(t, r, "de_user", "TestPass123!")
+
+	// 禁用前可访问
+	if w := authReq(t, r, userTok, "GET", "/api/tasks", ""); w.Code != 200 {
+		t.Fatalf("user access before disable = %d", w.Code)
+	}
+	// 禁用 → 200
+	if w := authReq(t, r, adminTok, "POST", "/api/users/"+num(nID)+"/disable", ""); w.Code != 200 {
+		t.Fatalf("disable = %d body=%s", w.Code, w.Body.String())
+	}
+	// 已签发令牌立即失效 → 401
+	if w := authReq(t, r, userTok, "GET", "/api/tasks", ""); w.Code != 401 {
+		t.Fatalf("disabled user token = %d, want 401", w.Code)
+	}
+	// 禁用后无法登录
+	if _, err := loginAsNoFail(t, r, "de_user", "TestPass123!"); err == nil {
+		t.Fatal("disabled user should not login")
+	}
+	// 启用 → 200
+	if w := authReq(t, r, adminTok, "POST", "/api/users/"+num(nID)+"/enable", ""); w.Code != 200 {
+		t.Fatalf("enable = %d body=%s", w.Code, w.Body.String())
+	}
+	// 启用后可重新登录
+	_ = loginAs(t, r, "de_user", "TestPass123!")
+	// 非 admin 调用禁用接口 → 403
+	userTok2 := loginAs(t, r, "de_user", "TestPass123!")
+	if w := authReq(t, r, userTok2, "POST", "/api/users/"+num(nID)+"/disable", ""); w.Code != 403 {
+		t.Fatalf("non-admin disable = %d, want 403", w.Code)
 	}
 }

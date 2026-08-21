@@ -228,6 +228,8 @@ const ACTION_LABELS: Record<string, string> = {
   'user.delete': '删除用户',
   'user.batch_delete': '批量删用户',
   'user.reset_token': '生成重置令牌',
+  'user.disable': '禁用用户',
+  'user.enable': '启用用户',
   'user.2fa_force_enable': '强制开启2FA',
   'user.2fa_force_disable': '强制关闭2FA',
 }

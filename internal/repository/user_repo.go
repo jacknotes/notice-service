@@ -32,18 +32,18 @@ func (r *UserRepo) Create(u *model.User) error {
 	return nil
 }
 
-// userCols 用户常用列（含 2FA 字段）。
-const userCols = "id, username, display_name, email, password_hash, role, created_at, updated_at, totp_secret, totp_enabled, totp_recovery_codes"
+// userCols 用户常用列（含 2FA 字段与启用状态）。
+const userCols = "id, username, display_name, email, password_hash, role, enabled, created_at, updated_at, totp_secret, totp_enabled, totp_recovery_codes"
 
 func scanUser(row interface{ Scan(...any) error }) (*model.User, error) {
 	u := &model.User{}
 	var secret, recovery sql.NullString
-	var enabled bool
-	if err := row.Scan(&u.ID, &u.Username, &u.DisplayName, &u.Email, &u.PasswordHash, &u.Role, &u.CreatedAt, &u.UpdatedAt, &secret, &enabled, &recovery); err != nil {
+	var totpEnabled bool
+	if err := row.Scan(&u.ID, &u.Username, &u.DisplayName, &u.Email, &u.PasswordHash, &u.Role, &u.Enabled, &u.CreatedAt, &u.UpdatedAt, &secret, &totpEnabled, &recovery); err != nil {
 		return nil, err
 	}
 	u.TOTPSecret = secret.String
-	u.TOTPEnabled = enabled
+	u.TOTPEnabled = totpEnabled
 	u.TOTPRecoveryJSON = recovery.String
 	return u, nil
 }
@@ -115,6 +115,12 @@ func (r *UserRepo) List() ([]*model.User, error) {
 
 func (r *UserRepo) Delete(id int64) error {
 	_, err := r.db.Exec("UPDATE users SET deleted_at = NOW() WHERE id = ? AND deleted_at IS NULL", id)
+	return err
+}
+
+// SetEnabled 启用/禁用用户：禁用后登录与已签发令牌立即失效（数据保留，可重新启用）。
+func (r *UserRepo) SetEnabled(id int64, enabled bool) error {
+	_, err := r.db.Exec("UPDATE users SET enabled=? WHERE id=? AND deleted_at IS NULL", enabled, id)
 	return err
 }
 

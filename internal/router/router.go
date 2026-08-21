@@ -140,6 +140,8 @@ func NewRouter(db *sql.DB, authSvc *service.AuthService, cipher *crypto.Cipher, 
 			admin.POST("/users/batch-delete", userH.BatchDelete)
 			admin.POST("/users/:id/2fa-enable", userH.ForceEnable2FA)   // 强制开启双因子认证
 			admin.POST("/users/:id/2fa-disable", userH.ForceDisable2FA) // 强制关闭双因子认证
+			admin.POST("/users/:id/disable", userH.Disable)             // 禁用用户（登录/令牌立即失效，可重新启用）
+			admin.POST("/users/:id/enable", userH.Enable)               // 启用用户
 
 			admin.GET("/audit", auditH.List) // 操作审计日志
 		}

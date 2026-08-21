@@ -77,13 +77,21 @@
           </template>
         </el-table-column>
 
+        <el-table-column label="状态" width="86" align="center" sortable="custom" prop="enabled">
+          <template #default="{ row }">
+            <el-tag :type="row.enabled === false ? 'danger' : 'success'" effect="light" size="small">
+              {{ row.enabled === false ? '已禁用' : '正常' }}
+            </el-tag>
+          </template>
+        </el-table-column>
+
         <el-table-column label="创建时间" min-width="170" sortable="custom" prop="created_at">
           <template #default="{ row }">
             <span class="mono time-cell">{{ row.created_at || '—' }}</span>
           </template>
         </el-table-column>
 
-        <el-table-column label="操作" width="250" align="center" fixed="right">
+        <el-table-column label="操作" width="300" align="center" fixed="right">
           <template #default="{ row }">
             <el-tooltip
               :disabled="row.id !== auth.user?.id"
@@ -117,6 +125,22 @@
                 </el-button>
               </span>
             </el-tooltip>
+            <el-tooltip
+              :disabled="canToggleEnabled(row)"
+              :content="toggleEnabledHint(row)"
+            >
+              <span>
+                <el-button
+                  link
+                  :type="row.enabled === false ? 'success' : 'warning'"
+                  size="small"
+                  :disabled="!canToggleEnabled(row)"
+                  @click="toggleEnabled(row)"
+                >
+                  {{ row.enabled === false ? '启用' : '禁用' }}
+                </el-button>
+              </span>
+            </el-tooltip>
             <el-dropdown trigger="click" @command="(cmd: string) => on2FACommand(cmd, row)">
               <el-button link type="primary" size="small">
                 2FA<el-icon class="el-icon--right"><ArrowDown /></el-icon>
@@ -132,7 +156,7 @@
             </el-dropdown>
             <el-tooltip
               :disabled="canDelete(row)"
-              :content="row.id === auth.user?.id ? '不能删除当前登录账号' : '管理员账号不可删除'"
+              :content="deleteHint(row)"
             >
               <span>
                 <el-button
@@ -353,6 +377,7 @@ interface UserRow {
   display_name?: string
   email?: string
   role: 'admin' | 'user'
+  enabled?: boolean
   totp_enabled?: boolean
   created_at?: string
   updated_at?: string
@@ -372,9 +397,49 @@ function onSelectionChange(rows: UserRow[]) {
   selectedRows.value = rows
 }
 
-// 管理员账号、以及当前登录账号本身不可勾选（不能批量删除）
+// 可勾选（批量删除）的行 = 当前操作者可删除的行
 function isSelectableRow(row: UserRow) {
-  return row.role !== 'admin' && row.id !== auth.user?.id
+  return canDelete(row)
+}
+
+// 当前操作者是否为内置 admin（username=admin）账号
+const isBuiltinAdmin = () => auth.user?.username === 'admin'
+
+// 删除权限：不能删自己；内置 admin 账号任何人不可删；
+// 管理员账号只有内置 admin 能删；普通用户任何管理员可删。
+function canDelete(row: UserRow) {
+  if (row.id === auth.user?.id) return false
+  if (row.username === 'admin') return false
+  if (row.role === 'admin') return isBuiltinAdmin()
+  return true
+}
+
+// 禁用/启用权限：与删除一致（不能动自己 / 内置 admin / 普通管理员不能动管理员账号）
+function canToggleEnabled(row: UserRow) {
+  if (row.id === auth.user?.id) return false
+  if (row.username === 'admin') return false
+  if (row.role === 'admin') return isBuiltinAdmin()
+  return true
+}
+
+function deleteHint(row: UserRow) {
+  if (row.id === auth.user?.id) return '不能删除当前登录账号'
+  if (row.username === 'admin') return '内置 admin 账号不可删除'
+  if (row.role === 'admin' && !isBuiltinAdmin()) return '仅内置 admin 可删除管理员账号'
+  return ''
+}
+
+function toggleEnabledHint(row: UserRow) {
+  if (row.id === auth.user?.id) return '不能禁用/启用当前登录账号'
+  if (row.username === 'admin') return '内置 admin 账号不可禁用'
+  if (row.role === 'admin' && !isBuiltinAdmin()) return '仅内置 admin 可禁用/启用管理员账号'
+  return ''
+}
+
+// 内置 admin 账号（username='admin'，bootstrap 默认管理员）：
+// 角色不可改、密码不可由管理员重置（恢复走离线 CLI）。
+function isProtectedAdmin(row: UserRow | null) {
+  return row?.username === 'admin'
 }
 
 const dialogVisible = ref(false)
@@ -466,17 +531,6 @@ function roleTagStyle(role: string) {
     borderColor: 'rgba(56, 189, 248, 0.4)',
     backgroundColor: 'rgba(56, 189, 248, 0.14)',
   }
-}
-
-// 管理员账号、以及当前登录账号本身不可删除
-function canDelete(row: UserRow) {
-  return row.role !== 'admin' && row.id !== auth.user?.id
-}
-
-// 内置 admin 账号（username='admin'，bootstrap 默认管理员）：
-// 角色不可改、密码不可由管理员重置（恢复走离线 CLI）。
-function isProtectedAdmin(row: UserRow | null) {
-  return row?.username === 'admin'
 }
 
 function errMsg(e: any, fallback: string) {
@@ -652,6 +706,30 @@ async function copyResetToken() {
     ElMessage.success('令牌已复制')
   } catch {
     ElMessage.warning('复制失败，请手动选择复制')
+  }
+}
+
+/* ── 禁用 / 启用 ─────────────────────────────────────────────────── */
+async function toggleEnabled(row: UserRow) {
+  const disabling = row.enabled !== false
+  try {
+    await ElMessageBox.confirm(
+      disabling
+        ? `确定禁用用户「${row.username}」吗？\n禁用后其登录与已签发令牌立即失效，数据保留，可随时重新启用。`
+        : `确定启用用户「${row.username}」吗？`,
+      disabling ? '禁用用户' : '启用用户',
+      { confirmButtonText: disabling ? '禁用' : '启用', cancelButtonText: '取消', type: 'warning' }
+    )
+  } catch {
+    return
+  }
+  try {
+    if (disabling) await userApi.disable(row.id)
+    else await userApi.enable(row.id)
+    ElMessage.success(disabling ? '已禁用' : '已启用')
+    await load()
+  } catch (e: any) {
+    ElMessage.error(errMsg(e, '操作失败'))
   }
 }
 

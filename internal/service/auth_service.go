@@ -110,9 +110,11 @@ func (s *AuthService) VerifyToken(token string) (*AuthClaims, error) {
 
 // UserActive 返回用户是否仍有效（未删除/未禁用）。被禁用（软删除）的用户
 // 其已签发 JWT 应立即失效，而不是等到令牌自然过期。
+// UserActive 判断用户是否可用（未删除且未禁用）。被禁用/删除的用户其已签发
+// 令牌立即失效（Auth 中间件每次请求回查）。
 func (s *AuthService) UserActive(userID int64) bool {
-	_, err := s.users.GetByID(userID)
-	return err == nil
+	u, err := s.users.GetByID(userID)
+	return err == nil && u.Enabled
 }
 
 // GetUsername 返回用户名（用户不存在/已删除时返回空串）。用于审计与发送日志
@@ -193,6 +195,10 @@ func (s *AuthService) Login(username, password string) (*LoginResult, error) {
 	}
 	if err != nil {
 		return nil, err
+	}
+	// 禁用账号：明确拒绝（不纳入登录失败限流，也无需提示具体密码）
+	if !u.Enabled {
+		return nil, errors.New("账号已被禁用")
 	}
 	if bcrypt.CompareHashAndPassword([]byte(u.PasswordHash), []byte(password)) != nil {
 		s.limiter.recordFailure(username)

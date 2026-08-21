@@ -7,6 +7,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"notice-service/internal/model"
 	"notice-service/internal/service"
 )
 
@@ -17,6 +18,11 @@ type UserHandler struct {
 
 func NewUserHandler(db *sql.DB) *UserHandler {
 	return &UserHandler{svc: service.NewUserService(db), db: db}
+}
+
+// operatorFromCtx 从请求上下文构造操作者，用于权限判定（内置 admin / 普通管理员）。
+func operatorFromCtx(c *gin.Context) *model.User {
+	return &model.User{ID: c.GetInt64("uid"), Username: c.GetString("username"), Role: c.GetString("role")}
 }
 
 // List 列出所有用户（仅 admin）。
@@ -121,7 +127,7 @@ func (h *UserHandler) Delete(c *gin.Context) {
 		return
 	}
 	id, _ := strconv.ParseInt(c.Param("id"), 10, 64)
-	if err := h.svc.Delete(c.GetString("role"), c.GetInt64("uid"), id); err != nil {
+	if err := h.svc.Delete(operatorFromCtx(c), id); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
@@ -149,11 +155,55 @@ func (h *UserHandler) BatchDelete(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "参数错误"})
 		return
 	}
-	if err := h.svc.BatchDelete(c.GetInt64("uid"), c.GetString("role"), req.IDs); err != nil {
+	if err := h.svc.BatchDelete(operatorFromCtx(c), req.IDs); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 	auditf(c, h.db, "user.batch_delete", "批量删除用户 ids=%v", req.IDs)
+	c.JSON(http.StatusOK, gin.H{"ok": true})
+}
+
+// Disable 禁用用户（仅 admin）：登录与已签发令牌立即失效，数据保留可重新启用。
+// Disable 禁用用户
+// @Summary 禁用用户（仅管理员）
+// @Tags 用户
+// @Security BearerAuth
+// @Param id path int true "用户 ID"
+// @Success 200 {object} map[string]interface{}
+// @Router /api/users/{id}/disable [post]
+func (h *UserHandler) Disable(c *gin.Context) {
+	if c.GetString("role") != "admin" {
+		c.JSON(http.StatusForbidden, gin.H{"error": "无权操作"})
+		return
+	}
+	id, _ := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err := h.svc.DisableUser(operatorFromCtx(c), id); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	auditf(c, h.db, "user.disable", "禁用用户 id=%d", id)
+	c.JSON(http.StatusOK, gin.H{"ok": true})
+}
+
+// Enable 重新启用用户（仅 admin）。
+// Enable 启用用户
+// @Summary 启用用户（仅管理员）
+// @Tags 用户
+// @Security BearerAuth
+// @Param id path int true "用户 ID"
+// @Success 200 {object} map[string]interface{}
+// @Router /api/users/{id}/enable [post]
+func (h *UserHandler) Enable(c *gin.Context) {
+	if c.GetString("role") != "admin" {
+		c.JSON(http.StatusForbidden, gin.H{"error": "无权操作"})
+		return
+	}
+	id, _ := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err := h.svc.EnableUser(operatorFromCtx(c), id); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	auditf(c, h.db, "user.enable", "启用用户 id=%d", id)
 	c.JSON(http.StatusOK, gin.H{"ok": true})
 }
 

@@ -1,7 +1,7 @@
 <template>
-  <div class="layout">
+  <div class="layout" :style="{ '--sbw': collapsed ? '64px' : '220px' }">
     <!-- ── Desktop sidebar ─────────────────────────────────────────── -->
-    <aside class="sidebar">
+    <aside class="sidebar" :class="{ 'is-collapsed': collapsed }">
       <div class="brand">
         <span class="brand-mark">✦</span>
         <span class="brand-name grad-text">Notice</span>
@@ -16,7 +16,7 @@
         <span>{{ signalLabel }}</span>
       </button>
 
-      <el-menu router :default-active="route.path" class="side-menu">
+      <el-menu router :default-active="route.path" class="side-menu" :collapse="collapsed" :collapse-transition="false">
         <el-menu-item v-for="item in visibleNavItems" :key="item.path" :index="item.path">
           <el-icon><component :is="item.icon" /></el-icon>
           <span>{{ item.label }}</span>
@@ -31,9 +31,19 @@
     <!-- ── Main column ─────────────────────────────────────────────── -->
     <div class="main">
       <header class="topbar">
-        <div class="page-title">
-          <h1>{{ pageTitle }}</h1>
-          <span class="topbar-path mono">/{{ route.path.replace('/', '') }}</span>
+        <div class="topbar-left">
+          <button
+            class="collapse-btn"
+            :class="{ 'is-collapsed': collapsed }"
+            :aria-label="collapsed ? '展开侧边栏' : '收起侧边栏'"
+            @click="toggleCollapsed"
+          >
+            <el-icon :size="17"><component :is="collapsed ? Expand : Fold" /></el-icon>
+          </button>
+          <div class="page-title">
+            <h1>{{ pageTitle }}</h1>
+            <span class="topbar-path mono">/{{ route.path.replace('/', '') }}</span>
+          </div>
         </div>
 
         <div class="topbar-right">
@@ -162,7 +172,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessageBox } from 'element-plus'
 import {
   Odometer, Connection, Document, AlarmClock, MessageBox,
-  Setting, SwitchButton, User, ArrowDown, Sunny, Moon, List,
+  Setting, SwitchButton, User, ArrowDown, Sunny, Moon, List, Fold, Expand,
 } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 import { theme, toggleTheme } from '@/composables/useTheme'
@@ -171,6 +181,13 @@ import { systemApi } from '@/api'
 const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
+
+// 侧边栏收缩/展开（桌面端），状态持久化到 localStorage
+const collapsed = ref<boolean>(localStorage.getItem('notice.sidebar.collapsed') === '1')
+function toggleCollapsed() {
+  collapsed.value = !collapsed.value
+  localStorage.setItem('notice.sidebar.collapsed', collapsed.value ? '1' : '0')
+}
 
 interface NavItem {
   path: string
@@ -431,13 +448,66 @@ async function onLogout() {
   font-size: 10px;
 }
 
+/* ── 侧边栏折叠态：收窄为图标栏 ─────────────────────────────────────── */
+.sidebar {
+  transition: width var(--dur-fast) var(--ease-out);
+}
+.sidebar.is-collapsed {
+  padding-left: 8px;
+  padding-right: 8px;
+}
+.sidebar.is-collapsed .brand {
+  justify-content: center;
+  padding-left: 0;
+  padding-right: 0;
+}
+.sidebar.is-collapsed .brand-name,
+.sidebar.is-collapsed .status-pill span,
+.sidebar.is-collapsed .ver {
+  display: none;
+}
+.sidebar.is-collapsed .status-pill {
+  justify-content: center;
+  padding: 5px 10px;
+}
+.sidebar.is-collapsed .side-menu :deep(.el-menu-item) {
+  padding-left: 20px !important; /* 与 el-menu 折叠态的图标居中一致 */
+}
+
 /* ── Main column ─────────────────────────────────────────────────── */
 .main {
   flex: 1;
   margin-left: var(--sbw);
+  transition: margin-left var(--dur-fast) var(--ease-out);
+  min-width: 0;
   display: flex;
   flex-direction: column;
-  min-width: 0;
+}
+
+.topbar-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.collapse-btn {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: color var(--dur-fast) var(--ease-out),
+              border-color var(--dur-fast) var(--ease-out),
+              box-shadow var(--dur-fast) var(--ease-out);
+}
+.collapse-btn:hover {
+  color: var(--indigo-400);
+  border-color: var(--border-accent);
+  box-shadow: var(--shadow-glow);
 }
 
 .topbar {
@@ -540,6 +610,7 @@ async function onLogout() {
   .layout { flex-direction: column; }
   .sidebar { display: none; }
   .main { margin-left: 0; }
+  .collapse-btn { display: none; } /* 移动端使用底部导航，无需折叠按钮 */
   .topbar { padding: 0 var(--space-4); }
   .bottom-nav {
     position: fixed;

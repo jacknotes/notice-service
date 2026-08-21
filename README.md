@@ -13,7 +13,7 @@
 - **操作审计**：管理员操作审计日志（含来源 IP 与模块分类），Web 端「操作审计」页可按模块/操作/关键词/日期筛选 + 分页查看（关键词可匹配用户名 / 来源 IP / 详情）
 - **仪表盘**：今日发送量、成功率、近 7/30 天发送趋势；发送日志含触发方式 / 触发人 / 触发 IP
 - **多实例可观测**：各后端实例心跳上报，「信号在线」侧边栏显示健康节点数，点击可查看各节点状态（地址/版本/启动时间/最后心跳）
-- **前端**：Vue3 + Element Plus 深色主题（"Signal Relay" 设计），PC/移动端响应式；列表支持排序与分页，渠道/模板/任务支持「复制」，模板/任务编辑实时预览，用户管理支持显示名/邮箱、角色调整与管理员强制 2FA
+- **前端**：Vue3 + Element Plus 深色主题（"Signal Relay" 设计），PC/移动端响应式；侧边栏可收缩/展开（状态记忆）；列表支持排序与分页，渠道/模板/任务支持「复制」，模板/任务编辑实时预览，用户管理支持显示名/邮箱、角色调整、禁用/启用与管理员强制 2FA
 - **部署**：Docker 多阶段构建，单实例镜像约 30-50MB
 
 ## 技术栈
@@ -159,13 +159,18 @@ Webhook 的 IP 白名单依赖 `X-Real-IP` / `X-Forwarded-For` 头，但这些�
 
 ## 用户与角色管理
 
-「用户管理」（仅管理员可见可操作）支持创建/编辑/删除用户、设置角色、重置密码与强制 2FA。
+「用户管理」（仅管理员可见可操作）支持创建/编辑/删除用户、设置角色、重置密码、禁用/启用与强制 2FA。
 
 - **角色**：管理员 / 普通用户，可随时调整——普通用户可提升为管理员，管理员也可降级回普通用户
   （但至少保留 1 个管理员，防止系统锁死）。
 - **内置 admin 账号**（username=`admin`，首启自动创建）：**角色不可修改、密码不可由管理员重置**
-  （包括「重置密码」令牌接口）；其密码仅能通过离线 `reset-password` CLI 恢复（见「密码重置」）。
-- **其它限制**：不能删除管理员账号；不能编辑/删除当前登录账号（个人密码请走「个人设置 → 修改密码」）。
+  （包括「重置密码」令牌接口），也不可被禁用或删除；其密码仅能通过离线 `reset-password` CLI 恢复（见「密码重置」）。
+- **删除 / 禁用 / 启用**：
+  - 内置 `admin` 账号可删除、禁用、启用其它管理员与普通用户；
+  - 普通管理员只能删除、禁用、启用**普通用户**，不能操作任何管理员账号；
+  - 禁用后该用户登录与已签发令牌立即失效，数据保留，可随时重新启用；
+  - 任何人不能删除/禁用当前登录账号。
+- **其它限制**：不能编辑当前登录账号（个人密码请走「个人设置 → 修改密码」）。
 
 ## 密码重置
 
@@ -198,9 +203,11 @@ Webhook 的 IP 白名单依赖 `X-Real-IP` / `X-Forwarded-For` 头，但这些�
 渠道  GET/POST /api/channels  PUT/DELETE /api/channels/:id  POST /api/channels/:id/test
 模板  GET/POST /api/templates  PUT/DELETE /api/templates/:id  POST /api/templates/:id/preview
 用户  GET/POST /api/users  PUT/DELETE /api/users/:id  POST /api/users/:id/reset-token
+      POST /api/users/:id/disable  禁用用户（登录与令牌立即失效，可重新启用）
+      POST /api/users/:id/enable   启用用户
       POST /api/users/:id/2fa-enable  管理员强制开启双因子认证（返回密钥+备用码）
       POST /api/users/:id/2fa-disable 管理员强制关闭双因子认证
-      （内置 admin 账号的角色/密码受保护：改其角色或密码、为其生成重置令牌均返回 400）
+      （内置 admin 账号的角色/密码/删除/禁用受保护；普通管理员不可操作管理员账号）
 任务  GET/POST /api/tasks  PUT/DELETE /api/tasks/:id  POST /api/tasks/:id/toggle
       POST /api/tasks/preview   任务发送预览（渲染标题/正文/接收地址）
       GET /api/tasks/:id/logs

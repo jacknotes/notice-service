@@ -3,6 +3,7 @@ package handler_test
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 )
 
@@ -167,10 +168,18 @@ func TestBatchDeleteUsers(t *testing.T) {
 		t.Fatalf("non-admin batch delete users = %d, want 403 body=%s", w3.Code, w3.Body.String())
 	}
 
-	// 包含管理员 → 400（不能删除管理员账号）
+	// 普通管理员批量删除含管理员 → 400（普通管理员不能删除管理员账号）
+	op2 := mustJSON(t, authReq(t, r, adminTok, "POST", "/api/users", `{"username":"bd_op2","password":"TestPass123!","role":"admin"}`))
+	op2ID := int64(op2["id"].(float64))
+	t.Cleanup(func() { testDB(t).Exec("DELETE FROM users WHERE id=?", op2ID) })
+	op2Tok := loginAs(t, r, "bd_op2", "TestPass123!")
 	idsWithAdmin, _ := json.Marshal(append([]int64{ids[0]}, admin2ID))
-	if w := authReq(t, r, adminTok, "POST", "/api/users/batch-delete", `{"ids":`+string(idsWithAdmin)+`}`); w.Code != 400 {
-		t.Fatalf("batch with admin = %d, want 400 body=%s", w.Code, w.Body.String())
+	if w := authReq(t, r, op2Tok, "POST", "/api/users/batch-delete", `{"ids":`+string(idsWithAdmin)+`}`); w.Code != 400 || !strings.Contains(w.Body.String(), "普通管理员不能删除管理员账号") {
+		t.Fatalf("normal admin batch with admin = %d, want 400 body=%s", w.Code, w.Body.String())
+	}
+	// 内置 admin 可批量删除管理员 → 200
+	if w := authReq(t, r, adminTok, "POST", "/api/users/batch-delete", `{"ids":[`+num(admin2ID)+`]}`); w.Code != 200 {
+		t.Fatalf("builtin admin batch delete admin = %d, want 200 body=%s", w.Code, w.Body.String())
 	}
 	// 包含自己 → 400（不能删除当前登录账号）
 	me := mustJSON(t, authReq(t, r, adminTok, "GET", "/api/auth/me", ""))

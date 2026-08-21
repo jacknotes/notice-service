@@ -103,6 +103,8 @@ export const userApi = {
   remove: (id: number) => client.delete(`/users/${id}`).then((r) => r.data),
   batchRemove: (ids: number[]) => client.post('/users/batch-delete', { ids }).then((r) => r.data),
   resetToken: (id: number) => client.post(`/users/${id}/reset-token`).then((r) => r.data),
+  disable: (id: number) => client.post(`/users/${id}/disable`).then((r) => r.data),
+  enable: (id: number) => client.post(`/users/${id}/enable`).then((r) => r.data),
   forceEnable2FA: (id: number): Promise<{ secret: string; otpauth_url: string; recovery_codes: string[] }> =>
     client.post(`/users/${id}/2fa-enable`).then((r) => r.data),
   forceDisable2FA: (id: number) => client.post(`/users/${id}/2fa-disable`).then((r) => r.data),

@@ -99,43 +99,93 @@ func (s *UserService) Create(username, displayName, email, password, role string
 	return u, nil
 }
 
-// Delete 删除用户。规则：非 admin 无权操作；不能删除管理员；不能删除自己。
-func (s *UserService) Delete(operatorRole string, operatorID, targetID int64) error {
-	if operatorRole != "admin" {
+// Delete 删除用户。规则：仅管理员可操作；不能删除自己；内置 admin 账号
+// （username=admin）不可被任何人删除；普通管理员只能删除普通用户；
+// 内置 admin 可删除其它管理员账号。
+func (s *UserService) Delete(operator *model.User, targetID int64) error {
+	if operator.Role != "admin" {
 		return errors.New("无权操作")
+	}
+	if targetID == operator.ID {
+		return errors.New("不能删除当前登录账号")
 	}
 	target, err := s.users.GetByID(targetID)
 	if err != nil {
 		return err
 	}
-	if target.ID == operatorID {
-		return errors.New("不能删除当前登录账号")
+	if isDefaultAdmin(target) {
+		return errors.New("不能删除内置 admin 账号")
 	}
-	if target.Role == "admin" {
-		return errors.New("不能删除管理员账号")
+	if target.Role == "admin" && !isDefaultAdmin(operator) {
+		return errors.New("普通管理员不能删除管理员账号")
 	}
 	return s.users.Delete(targetID)
 }
 
-// BatchDelete 批量删除用户。规则同 Delete：非 admin 无权操作；
-// 若任一目标为管理员或当前登录账号则整体拒绝。
-func (s *UserService) BatchDelete(operatorID int64, operatorRole string, ids []int64) error {
-	if operatorRole != "admin" {
+// BatchDelete 批量删除用户。规则同 Delete：仅管理员；任一目标为自己、内置
+// admin、或「普通管理员删除管理员」时整体拒绝。
+func (s *UserService) BatchDelete(operator *model.User, ids []int64) error {
+	if operator.Role != "admin" {
 		return errors.New("无权操作")
 	}
 	for _, id := range ids {
-		if id == operatorID {
+		if id == operator.ID {
 			return errors.New("不能删除当前登录账号")
 		}
 		target, err := s.users.GetByID(id)
 		if err != nil {
 			return err
 		}
-		if target.Role == "admin" {
-			return errors.New("不能删除管理员账号")
+		if isDefaultAdmin(target) {
+			return errors.New("不能删除内置 admin 账号")
+		}
+		if target.Role == "admin" && !isDefaultAdmin(operator) {
+			return errors.New("普通管理员不能删除管理员账号")
 		}
 	}
 	return s.users.BatchDelete(ids) // 校验通过后单条 SQL 批量软删除
+}
+
+// DisableUser 禁用用户：登录与已签发令牌立即失效（数据保留，可重新启用）。
+// 规则同删除：仅管理员；不能禁用自己；内置 admin 账号不可禁用；
+// 普通管理员只能禁用普通用户；内置 admin 可禁用其它管理员。
+func (s *UserService) DisableUser(operator *model.User, targetID int64) error {
+	if operator.Role != "admin" {
+		return errors.New("无权操作")
+	}
+	if targetID == operator.ID {
+		return errors.New("不能禁用当前登录账号")
+	}
+	target, err := s.users.GetByID(targetID)
+	if err != nil {
+		return err
+	}
+	if isDefaultAdmin(target) {
+		return errors.New("不能禁用内置 admin 账号")
+	}
+	if target.Role == "admin" && !isDefaultAdmin(operator) {
+		return errors.New("普通管理员不能禁用管理员账号")
+	}
+	return s.users.SetEnabled(targetID, false)
+}
+
+// EnableUser 重新启用用户。规则：仅管理员；内置 admin 账号无需启用；
+// 普通管理员不能操作管理员账号（仅内置 admin 可启用其它管理员）。
+func (s *UserService) EnableUser(operator *model.User, targetID int64) error {
+	if operator.Role != "admin" {
+		return errors.New("无权操作")
+	}
+	target, err := s.users.GetByID(targetID)
+	if err != nil {
+		return err
+	}
+	if isDefaultAdmin(target) {
+		return errors.New("内置 admin 账号无需启用")
+	}
+	if target.Role == "admin" && !isDefaultAdmin(operator) {
+		return errors.New("普通管理员不能操作管理员账号")
+	}
+	return s.users.SetEnabled(targetID, true)
 }
 
 // Update 修改用户角色/密码/显示名/邮箱。operatorRole 为操作者角色；仅 admin 可操作。
