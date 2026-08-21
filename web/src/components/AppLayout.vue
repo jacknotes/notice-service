@@ -470,13 +470,14 @@ async function onLogout() {
   justify-content: center;
   padding: 5px 10px;
 }
-/* 折叠态：菜单项改为图标居中（flex），避免 el-menu 内建 collapse 与自定义
-   padding 冲突导致的图标偏移/不居中对齐 */
+/* 折叠态：菜单项改为图标居中（flex）。必须把左右 padding 都清零——
+   element-plus 菜单项默认 padding-right 为 var(--el-menu-base-level-padding)（20px），
+   只清 padding-left 会造成内容区不对称、图标偏离中心 */
 .sidebar.is-collapsed .side-menu :deep(.el-menu-item) {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding-left: 0 !important;
+  padding: 0 !important;
   margin-left: 0;
   margin-right: 0;
 }
