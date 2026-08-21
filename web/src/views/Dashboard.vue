@@ -17,30 +17,32 @@
     />
 
     <div class="filters">
-      <div class="date-quick">
-        <el-button
-          v-for="p in quickPresets"
-          :key="p.key"
-          size="small"
-          :type="quickPreset === p.key ? 'primary' : 'default'"
-          plain
-          @click="applyPreset(p)"
-        >
-          {{ p.label }}
-        </el-button>
+      <div class="filter-item date-filter">
+        <span class="filter-label">日期</span>
+        <div class="date-quick">
+          <el-button
+            v-for="p in quickPresets"
+            :key="p.key"
+            size="small"
+            :type="quickPreset === p.key ? 'primary' : 'default'"
+            plain
+            @click="applyPreset(p)"
+          >
+            {{ p.label }}
+          </el-button>
+        </div>
+        <el-date-picker
+          v-model="dateRange"
+          type="daterange"
+          range-separator="至"
+          start-placeholder="开始日期"
+          end-placeholder="结束日期"
+          value-format="YYYY-MM-DD"
+          :clearable="true"
+          style="width: 240px"
+          @change="onDateRangeChange"
+        />
       </div>
-      <el-date-picker
-        v-model="dateRange"
-        type="daterange"
-        range-separator="至"
-        start-placeholder="开始日期"
-        end-placeholder="结束日期"
-        value-format="YYYY-MM-DD"
-        :clearable="false"
-        style="width: 240px"
-        @change="onDateRangeChange"
-      />
-      <span class="range-hint mono">{{ dateRange ? `${dateRange[0]} ~ ${dateRange[1]}` : '' }}</span>
     </div>
 
     <div v-loading="loading" class="stat-grid">
@@ -312,13 +314,24 @@ onBeforeUnmount(() => {
   flex-wrap: wrap;
   margin-bottom: var(--space-5);
 }
+.filter-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  row-gap: var(--space-2);
+}
+.filter-label {
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  white-space: nowrap;
+}
 .date-quick {
   display: flex;
   gap: 6px;
 }
-.range-hint {
-  color: var(--text-faint);
-  font-size: 11px;
+.date-quick .el-button {
+  margin: 0;
 }
 
 .stat-grid {

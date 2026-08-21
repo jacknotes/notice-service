@@ -10,9 +10,10 @@
 - **分布式高可用**：多实例部署时基于 MySQL 租约锁保证 Cron 任务不重复执行，单实例宕机自动接管
 - **可靠性**：异步持久化发送队列（Webhook 立即返回 202），失败自动重试 3 次（5s→30s→60s），多副本原子认领不重复 + 崩溃自动接管，完整发送日志与保留期自动清理
 - **安全**：JWT 无状态认证、bcrypt 密码、渠道敏感配置 AES-256-GCM 加密、**双因子认证（TOTP + 一次性备用码）**、登录失败限流
-- **操作审计**：管理员操作审计日志（登录/登出、用户/渠道/模板/任务增删改等），Web 端「操作审计」页可筛选/分页查看
+- **操作审计**：管理员操作审计日志（含来源 IP 与模块分类），Web 端「操作审计」页可按模块/操作/关键词/日期筛选 + 分页查看
 - **仪表盘**：今日发送量、成功率、近 7/30 天发送趋势；发送日志含触发方式 / 触发人 / 触发 IP
-- **前端**：Vue3 + Element Plus 深色主题（"Signal Relay" 设计），PC/移动端响应式；列表支持排序与分页，渠道/模板/任务支持「复制」，模板/任务编辑实时预览
+- **多实例可观测**：各后端实例心跳上报，「信号在线」侧边栏显示健康节点数，点击可查看各节点状态（地址/版本/启动时间/最后心跳）
+- **前端**：Vue3 + Element Plus 深色主题（"Signal Relay" 设计），PC/移动端响应式；列表支持排序与分页，渠道/模板/任务支持「复制」，模板/任务编辑实时预览，用户管理支持显示名/邮箱与管理员强制 2FA
 - **部署**：Docker 多阶段构建，单实例镜像约 30-50MB
 
 ## 技术栈
@@ -185,12 +186,16 @@ Webhook 的 IP 白名单依赖 `X-Real-IP` / `X-Forwarded-For` 头，但这些�
       POST /api/auth/forgot-password   一次性令牌自助重置密码
 渠道  GET/POST /api/channels  PUT/DELETE /api/channels/:id  POST /api/channels/:id/test
 模板  GET/POST /api/templates  PUT/DELETE /api/templates/:id  POST /api/templates/:id/preview
+用户  GET/POST /api/users  PUT/DELETE /api/users/:id  POST /api/users/:id/reset-token
+      POST /api/users/:id/2fa-enable  管理员强制开启双因子认证（返回密钥+备用码）
+      POST /api/users/:id/2fa-disable 管理员强制关闭双因子认证
 任务  GET/POST /api/tasks  PUT/DELETE /api/tasks/:id  POST /api/tasks/:id/toggle
       POST /api/tasks/preview   任务发送预览（渲染标题/正文/接收地址）
       GET /api/tasks/:id/logs
 日志  GET /api/logs   分页/筛选 + 排序（sort_by/sort_order，含触发方式/人/IP）
       POST /api/logs/:id/retry  重试失败日志
-审计  GET /api/audit   操作审计日志（仅管理员，分页/筛选）
+审计  GET /api/audit   操作审计日志（仅管理员，模块/操作/关键词/日期筛选 + 分页）
+系统  GET /api/instances  后端节点健康列表（多实例「信号在线」）
 外部  POST /api/webhook/:api_key   （无需登录，可选 IP 白名单；异步入队，返回 202）
 仪表盘 GET /api/dashboard/stats   GET /api/dashboard/trend   GET /api/dashboard/top-tasks   GET /api/dashboard/channel-stats
 ```
@@ -208,6 +213,15 @@ curl -X POST https://your-host/api/webhook/<api_key> \
 登录「个人设置 → 双因子认证」扫码（或手动输入密钥）绑定认证器 App（Google/Microsoft Authenticator、1Password 等），
 同时会生成 8 个一次性备用码（仅显示一次，请妥善保存，手机丢失时用于登录）。开启后登录流程变为两步：
 密码验证通过后，再输入认证器动态码（或备用码）换取登录令牌。关闭 2FA 时需再次校验动态码/备用码。
+
+管理员可在「用户管理 → 2FA」对任意用户**强制开启**（重新生成密钥与备用码，弹窗展示二维码/密钥/备用码，
+线下转交该用户绑定）或**强制关闭**（用户丢失手机与备用码时的恢复路径）。
+
+### 多实例健康（信号在线）
+
+多实例部署时，每个后端实例每 5 秒向 `instance_heartbeats` 表上报心跳。侧边栏「信号在线」显示
+健康节点数（全部健康=绿、部分离线=琥珀、全部离线=红），点击弹出节点列表（节点 ID/地址/版本/
+启动时间/最后心跳/健康状态）；超过 15 秒未上报的节点判定为离线。实例优雅退出时会移除自身心跳。
 
 ## 项目结构
 

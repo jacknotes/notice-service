@@ -3,9 +3,11 @@ package handler_test
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"notice-service/internal/channel"
 )
@@ -262,4 +264,191 @@ func TestLogsSortBackend(t *testing.T) {
 	}
 }
 
+// TestAuditModuleAndIP 验证审计日志记录模块分类与来源 IP。
+func TestAuditModuleAndIP(t *testing.T) {
+	channel.Register(&fakeOKChan{})
+	r := testRouter(t)
+	// 手动登录并带来源 IP（httptest 默认 RemoteAddr=192.0.2.1，配合可信代理判定）
+	req, _ := http.NewRequest("POST", "/api/auth/login", bytes.NewBufferString(`{"username":"admin","password":"admin123"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Real-IP", "10.9.9.9")
+	req.RemoteAddr = "192.0.2.1:1234"
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	var lr struct {
+		Token string `json:"token"`
+	}
+	_ = json.Unmarshal(w.Body.Bytes(), &lr)
+	tok := lr.Token
+	if tok == "" {
+		t.Fatalf("login failed: %d %s", w.Code, w.Body.String())
+	}
+
+	// login.success 审计应记录 module=auth、ip=10.9.9.9
+	wa := authReq(t, r, tok, "GET", "/api/audit?action=login.success&page_size=5", "")
+	if wa.Code != 200 {
+		t.Fatalf("audit list = %d", wa.Code)
+	}
+	var resp struct {
+		Items []map[string]interface{} `json:"items"`
+	}
+	_ = json.Unmarshal(wa.Body.Bytes(), &resp)
+	if len(resp.Items) == 0 {
+		t.Fatal("expected login.success audit rows")
+	}
+	item := resp.Items[0]
+	if item["module"] != "auth" {
+		t.Fatalf("module = %v, want auth", item["module"])
+	}
+	if item["ip"] == nil || item["ip"] == "" || item["ip"] != "10.9.9.9" {
+		t.Fatalf("ip should be 10.9.9.9, got %v", item["ip"])
+	}
+
+	// 创建渠道 → module=channel；按 module 过滤生效
+	wc := authReq(t, r, tok, "POST", "/api/channels", `{"type":"fake-ok","name":"模块渠道","config":{},"enabled":true}`)
+	if wc.Code != 200 {
+		t.Fatalf("create channel = %d", wc.Code)
+	}
+	w2 := authReq(t, r, tok, "GET", "/api/audit?module=channel&page_size=5", "")
+	var resp2 struct {
+		Total int                      `json:"total"`
+		Items []map[string]interface{} `json:"items"`
+	}
+	_ = json.Unmarshal(w2.Body.Bytes(), &resp2)
+	if resp2.Total < 1 {
+		t.Fatal("module=channel filter should return rows")
+	}
+	if resp2.Items[0]["module"] != "channel" {
+		t.Fatalf("first filtered module = %v", resp2.Items[0]["module"])
+	}
+}
+
+// TestUserCreateProfileEndpoint 验证创建用户支持显示名/邮箱，且列表返回。
+func TestUserCreateProfileEndpoint(t *testing.T) {
+	channel.Register(&fakeOKChan{})
+	r := testRouter(t)
+	tok := login(t, r)
+
+	w := authReq(t, r, tok, "POST", "/api/users",
+		`{"username":"profile_user_`+uniqueSuffix()+`","display_name":"王五","email":"wang@example.com","password":"TestPass123!","role":"user"}`)
+	if w.Code != 200 {
+		t.Fatalf("create user = %d body=%s", w.Code, w.Body.String())
+	}
+	created := mustJSON(t, w)
+	if created["display_name"] != "王五" || created["email"] != "wang@example.com" {
+		t.Fatalf("profile not stored: %+v", created)
+	}
+	t.Cleanup(func() {
+		db := testDB(t)
+		db.Exec("DELETE FROM users WHERE id=?", int64(created["id"].(float64)))
+	})
+
+	// 列表返回 profile 字段
+	wl := authReq(t, r, tok, "GET", "/api/users", "")
+	var list []map[string]interface{}
+	_ = json.Unmarshal(wl.Body.Bytes(), &list)
+	found := false
+	for _, u := range list {
+		if int64(u["id"].(float64)) == int64(created["id"].(float64)) {
+			if u["display_name"] != "王五" || u["email"] != "wang@example.com" {
+				t.Fatalf("list profile mismatch: %+v", u)
+			}
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("created user not in list")
+	}
+}
+
+// TestForce2FAEndpoints 验证管理员强制开启/关闭他人 2FA 接口。
+func TestForce2FAEndpoints(t *testing.T) {
+	channel.Register(&fakeOKChan{})
+	r := testRouter(t)
+	tok := login(t, r)
+
+	// 建一个普通用户
+	w := authReq(t, r, tok, "POST", "/api/users",
+		`{"username":"force2fa_`+uniqueSuffix()+`","display_name":"","email":"","password":"TestPass123!","role":"user"}`)
+	if w.Code != 200 {
+		t.Fatalf("create user = %d", w.Code)
+	}
+	u := mustJSON(t, w)
+	uid := int64(u["id"].(float64))
+	t.Cleanup(func() {
+		db := testDB(t)
+		db.Exec("DELETE FROM users WHERE id=?", uid)
+	})
+
+	// 强制开启：返回密钥 + 8 个备用码
+	we := authReq(t, r, tok, "POST", "/api/users/"+num(uid)+"/2fa-enable", "")
+	if we.Code != 200 {
+		t.Fatalf("force enable = %d body=%s", we.Code, we.Body.String())
+	}
+	res := mustJSON(t, we)
+	if res["secret"] == nil || res["secret"] == "" || len(res["recovery_codes"].([]interface{})) != 8 {
+		t.Fatalf("force enable response missing secret/codes: %+v", res)
+	}
+	// 用户已被启用 2FA
+	db := testDB(t)
+	var enabled bool
+	if err := db.QueryRow("SELECT totp_enabled FROM users WHERE id=?", uid).Scan(&enabled); err != nil {
+		t.Fatal(err)
+	}
+	if !enabled {
+		t.Fatal("user should have 2FA enabled after force enable")
+	}
+
+	// 强制关闭：2FA 失效
+	wd := authReq(t, r, tok, "POST", "/api/users/"+num(uid)+"/2fa-disable", "")
+	if wd.Code != 200 {
+		t.Fatalf("force disable = %d", wd.Code)
+	}
+	if err := db.QueryRow("SELECT totp_enabled FROM users WHERE id=?", uid).Scan(&enabled); err != nil {
+		t.Fatal(err)
+	}
+	if enabled {
+		t.Fatal("user 2FA should be disabled after force disable")
+	}
+}
+
+// TestInstancesEndpoint 验证后端节点健康接口。
+func TestInstancesEndpoint(t *testing.T) {
+	channel.Register(&fakeOKChan{})
+	r := testRouter(t)
+	tok := login(t, r)
+
+	// 直接插一条「刚刚上报」的心跳
+	db := testDB(t)
+	if _, err := db.Exec("DELETE FROM instance_heartbeats"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(
+		"INSERT INTO instance_heartbeats (instance_id, host, port, version, started_at, last_seen_at) VALUES (?,?,?,?,NOW(),NOW())",
+		"inst-test", "node1", "8080", "dev"); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { db.Exec("DELETE FROM instance_heartbeats") })
+
+	w := authReq(t, r, tok, "GET", "/api/instances", "")
+	if w.Code != 200 {
+		t.Fatalf("instances = %d body=%s", w.Code, w.Body.String())
+	}
+	var resp struct {
+		Instances []map[string]interface{} `json:"instances"`
+		Healthy   int                      `json:"healthy"`
+		Total     int                      `json:"total"`
+	}
+	_ = json.Unmarshal(w.Body.Bytes(), &resp)
+	if resp.Total < 1 || resp.Healthy < 1 {
+		t.Fatalf("expected >=1 healthy instance, got total=%d healthy=%d", resp.Total, resp.Healthy)
+	}
+	if resp.Instances[0]["healthy"] != true {
+		t.Fatalf("inserted instance should be healthy: %+v", resp.Instances[0])
+	}
+}
+
 // 引用 bytes，避免未使用导入（bytes 在 webhook_test.go 已使用，这里显式确认）
+func uniqueSuffix() string {
+	return fmt.Sprintf("%d", time.Now().UnixNano())
+}

@@ -54,20 +54,22 @@ func (h *UserHandler) Create(c *gin.Context) {
 		return
 	}
 	var req struct {
-		Username string `json:"username"`
-		Password string `json:"password"`
-		Role     string `json:"role"`
+		Username    string `json:"username"`
+		DisplayName string `json:"display_name"`
+		Email       string `json:"email"`
+		Password    string `json:"password"`
+		Role        string `json:"role"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "参数错误"})
 		return
 	}
-	u, err := h.svc.Create(req.Username, req.Password, req.Role)
+	u, err := h.svc.Create(req.Username, req.DisplayName, req.Email, req.Password, req.Role)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	auditf(c, h.db, "user.create", "创建用户 %s (role=%s)", u.Username, u.Role)
+	auditf(c, h.db, "user.create", "创建用户 %s (显示名=%s 邮箱=%s role=%s)", u.Username, u.DisplayName, u.Email, u.Role)
 	c.JSON(http.StatusOK, u)
 }
 
@@ -88,18 +90,20 @@ func (h *UserHandler) Update(c *gin.Context) {
 	}
 	id, _ := strconv.ParseInt(c.Param("id"), 10, 64)
 	var req struct {
-		Role     *string `json:"role"`
-		Password *string `json:"password"`
+		Role        *string `json:"role"`
+		Password    *string `json:"password"`
+		DisplayName *string `json:"display_name"`
+		Email       *string `json:"email"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "参数错误"})
 		return
 	}
-	if err := h.svc.Update(c.GetInt64("uid"), c.GetString("role"), id, req.Role, req.Password); err != nil {
+	if err := h.svc.Update(c.GetInt64("uid"), c.GetString("role"), id, req.Role, req.Password, req.DisplayName, req.Email); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	auditf(c, h.db, "user.update", "更新用户 id=%d (role=%v)", id, req.Role)
+	auditf(c, h.db, "user.update", "更新用户 id=%d (role=%v display_name=%v email=%v)", id, req.Role, req.DisplayName, req.Email)
 	c.JSON(http.StatusOK, gin.H{"ok": true})
 }
 
@@ -174,4 +178,49 @@ func (h *UserHandler) ResetToken(c *gin.Context) {
 	}
 	auditf(c, h.db, "user.reset_token", "为用户 id=%d 生成重置令牌（%s 过期）", id, expires.Format("2006-01-02 15:04:05"))
 	c.JSON(http.StatusOK, gin.H{"token": token, "expires_at": expires.Format("2006-01-02 15:04:05")})
+}
+
+// ForceEnable2FA 管理员为用户强制开启双因子认证，返回密钥与备用码由管理员线下转交。
+// ForceEnable2FA 强制开启双因子认证
+// @Summary 管理员为用户强制开启双因子认证（仅管理员）
+// @Tags 用户
+// @Security BearerAuth
+// @Param id path int true "用户 ID"
+// @Success 200 {object} map[string]interface{}
+// @Router /api/users/{id}/2fa-enable [post]
+func (h *UserHandler) ForceEnable2FA(c *gin.Context) {
+	if c.GetString("role") != "admin" {
+		c.JSON(http.StatusForbidden, gin.H{"error": "无权操作"})
+		return
+	}
+	id, _ := strconv.ParseInt(c.Param("id"), 10, 64)
+	secret, uri, codes, err := h.svc.ForceEnable2FA(id)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	auditf(c, h.db, "user.2fa_force_enable", "强制开启用户 id=%d 的双因子认证", id)
+	c.JSON(http.StatusOK, gin.H{"secret": secret, "otpauth_url": uri, "recovery_codes": codes})
+}
+
+// ForceDisable2FA 管理员为用户强制关闭双因子认证（用户丢失手机/备用码时的恢复路径）。
+// ForceDisable2FA 强制关闭双因子认证
+// @Summary 管理员为用户强制关闭双因子认证（仅管理员）
+// @Tags 用户
+// @Security BearerAuth
+// @Param id path int true "用户 ID"
+// @Success 200 {object} map[string]interface{}
+// @Router /api/users/{id}/2fa-disable [post]
+func (h *UserHandler) ForceDisable2FA(c *gin.Context) {
+	if c.GetString("role") != "admin" {
+		c.JSON(http.StatusForbidden, gin.H{"error": "无权操作"})
+		return
+	}
+	id, _ := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err := h.svc.ForceDisable2FA(id); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	auditf(c, h.db, "user.2fa_force_disable", "强制关闭用户 id=%d 的双因子认证", id)
+	c.JSON(http.StatusOK, gin.H{"ok": true})
 }

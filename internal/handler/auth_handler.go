@@ -38,16 +38,16 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	}
 	res, err := h.Svc.Login(req.Username, req.Password)
 	if err != nil {
-		auditActor(h.db, 0, req.Username, "login.failed", "登录失败")
+		auditActor(h.db, 0, req.Username, c.ClientIP(), "login.failed", "登录失败")
 		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
 		return
 	}
 	if res.Requires2FA {
-		auditActor(h.db, res.User.ID, res.User.Username, "login.step1", "密码验证通过，等待双因子验证")
+		auditActor(h.db, res.User.ID, res.User.Username, c.ClientIP(), "login.step1", "密码验证通过，等待双因子验证")
 		c.JSON(http.StatusOK, gin.H{"requires_2fa": true, "pending_token": res.PendingToken, "user": res.User})
 		return
 	}
-	auditActor(h.db, res.User.ID, res.User.Username, "login.success", "登录成功")
+	auditActor(h.db, res.User.ID, res.User.Username, c.ClientIP(), "login.success", "登录成功")
 	c.JSON(http.StatusOK, gin.H{"token": res.Token, "user": res.User})
 }
 
@@ -136,7 +136,7 @@ func (h *AuthHandler) Verify2FA(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
 		return
 	}
-	auditActor(h.db, user.ID, user.Username, "login.success", "双因子验证通过，登录成功")
+	auditActor(h.db, user.ID, user.Username, c.ClientIP(), "login.success", "双因子验证通过，登录成功")
 	c.JSON(http.StatusOK, gin.H{"token": token, "user": user})
 }
 

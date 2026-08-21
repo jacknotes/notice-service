@@ -92,22 +92,45 @@ export const logApi = {
 
 export const userApi = {
   list: () => client.get('/users').then((r) => r.data),
-  create: (d: { username: string; password: string; role: string }) => client.post('/users', d).then((r) => r.data),
-  update: (id: number, d: { role?: string; password?: string }) => client.put(`/users/${id}`, d).then((r) => r.data),
+  create: (d: { username: string; display_name?: string; email?: string; password: string; role: string }) =>
+    client.post('/users', d).then((r) => r.data),
+  update: (id: number, d: { role?: string; password?: string; display_name?: string; email?: string }) =>
+    client.put(`/users/${id}`, d).then((r) => r.data),
   remove: (id: number) => client.delete(`/users/${id}`).then((r) => r.data),
   batchRemove: (ids: number[]) => client.post('/users/batch-delete', { ids }).then((r) => r.data),
   resetToken: (id: number) => client.post(`/users/${id}/reset-token`).then((r) => r.data),
+  forceEnable2FA: (id: number): Promise<{ secret: string; otpauth_url: string; recovery_codes: string[] }> =>
+    client.post(`/users/${id}/2fa-enable`).then((r) => r.data),
+  forceDisable2FA: (id: number) => client.post(`/users/${id}/2fa-disable`).then((r) => r.data),
 }
 
 export const auditApi = {
   list: (params: {
     keyword?: string
     action?: string
+    module?: string
     from?: string
     to?: string
     page?: number
     page_size?: number
   }) => client.get('/audit', { params }).then((r) => r.data),
+}
+
+// systemApi 系统级信息（多后端节点健康等）。
+export const systemApi = {
+  instances: (): Promise<{
+    instances: {
+      instance_id: string
+      host: string
+      port: string
+      version: string
+      started_at: string
+      last_seen_at: string
+      healthy: boolean
+    }[]
+    healthy: number
+    total: number
+  }> => client.get('/instances').then((r) => r.data),
 }
 
 export const dashboardApi = {

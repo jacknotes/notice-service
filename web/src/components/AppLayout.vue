@@ -7,10 +7,14 @@
         <span class="brand-name grad-text">Notice</span>
       </div>
 
-      <div class="status-pill" :class="{ 'is-offline': signal === 'offline' }">
-        <span class="dot-live" :class="{ 'is-offline': signal === 'offline' }"></span>
-        <span>{{ signal === 'online' ? '信号在线' : '信号离线' }}</span>
-      </div>
+      <button
+        class="status-pill"
+        :class="{ 'is-offline': signal === 'offline', 'is-partial': signal === 'partial' }"
+        @click="nodesVisible = true"
+      >
+        <span class="dot-live" :class="{ 'is-offline': signal === 'offline', 'is-partial': signal === 'partial' }"></span>
+        <span>{{ signalLabel }}</span>
+      </button>
 
       <el-menu router :default-active="route.path" class="side-menu">
         <el-menu-item v-for="item in visibleNavItems" :key="item.path" :index="item.path">
@@ -79,6 +83,62 @@
       </main>
     </div>
 
+    <!-- ── 后端节点健康弹窗（多实例信号在线） ─────────────────────── -->
+    <el-dialog
+      v-model="nodesVisible"
+      title="后端节点状态"
+      width="680px"
+      top="8vh"
+      :close-on-click-modal="true"
+    >
+      <p class="nodes-hint">各后端实例周期上报心跳，超过 {{ NODE_TIMEOUT_SEC }} 秒未上报视为离线。</p>
+      <div v-loading="nodesLoading" class="nodes-table">
+        <el-table :data="nodes" style="width: 100%" empty-text="暂无节点信息">
+          <el-table-column label="节点 ID" min-width="180">
+            <template #default="{ row }">
+              <span class="mono node-id">{{ shortID(row.instance_id) }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="地址" min-width="150">
+            <template #default="{ row }">
+              <span class="mono node-addr">{{ row.host }}:{{ row.port }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="版本" width="90">
+            <template #default="{ row }">
+              <span class="mono node-ver">{{ row.version || '—' }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="启动时间" min-width="160">
+            <template #default="{ row }">
+              <span class="mono node-time">{{ fmtTime(row.started_at) }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="最后心跳" min-width="160">
+            <template #default="{ row }">
+              <span class="mono node-time">{{ fmtTime(row.last_seen_at) }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="状态" width="90" align="center">
+            <template #default="{ row }">
+              <el-tag :type="row.healthy ? 'success' : 'danger'" effect="light" size="small">
+                {{ row.healthy ? '健康' : '离线' }}
+              </el-tag>
+            </template>
+          </el-table-column>
+        </el-table>
+      </div>
+      <template #footer>
+        <div class="nodes-footer">
+          <span class="nodes-sum mono">健康 {{ healthyCount }} / 共 {{ nodes.length }} 节点 · 超时 {{ NODE_TIMEOUT_SEC }}s 判离线</span>
+          <div>
+            <el-button size="small" :loading="nodesLoading" @click="loadNodes">刷新</el-button>
+            <el-button size="small" @click="nodesVisible = false">关闭</el-button>
+          </div>
+        </div>
+      </template>
+    </el-dialog>
+
     <!-- ── Mobile bottom nav ───────────────────────────────────────── -->
     <nav class="bottom-nav">
       <button
@@ -106,7 +166,7 @@ import {
 } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 import { theme, toggleTheme } from '@/composables/useTheme'
-import client from '@/api/client'
+import { systemApi } from '@/api'
 
 const route = useRoute()
 const router = useRouter()
@@ -141,23 +201,66 @@ const avatarLetter = computed<string>(
   () => (auth.user?.username || 'N').slice(0, 1).toUpperCase()
 )
 
-/* ── 信号在线状态：轮询 /api/health，真实反映后端在线与否 ───────────── */
-const signal = ref<'online' | 'offline'>('online')
-const SIGNAL_POLL_MS = 10000
+/* ── 信号在线：多后端节点健康（点击查看节点列表） ───────────────────── */
+interface BackendNode {
+  instance_id: string
+  host: string
+  port: string
+  version: string
+  started_at: string
+  last_seen_at: string
+  healthy: boolean
+}
 
-async function checkSignal() {
+const signal = ref<'online' | 'partial' | 'offline'>('online')
+const nodes = ref<BackendNode[]>([])
+const healthyCount = ref(0)
+const nodesLoading = ref(false)
+const nodesVisible = ref(false)
+const SIGNAL_POLL_MS = 10000
+const NODE_TIMEOUT_SEC = 15 // 与后端 heartbeatHealthyWindow 一致
+
+const signalLabel = computed(() => {
+  if (signal.value === 'online') return `信号在线 · ${healthyCount.value} 节点`
+  if (signal.value === 'partial') return `部分离线 · ${healthyCount.value}/${nodes.value.length}`
+  return '信号离线'
+})
+
+async function loadNodes() {
+  nodesLoading.value = true
   try {
-    await client.get('/health', { timeout: 5000 })
-    signal.value = 'online'
+    const data = await systemApi.instances()
+    nodes.value = data?.instances || []
+    healthyCount.value = data?.healthy || 0
+    const total = data?.total || 0
+    if (healthyCount.value === 0) signal.value = 'offline'
+    else if (healthyCount.value < total) signal.value = 'partial'
+    else signal.value = 'online'
   } catch {
+    // 后端不可达：无法确认节点，按离线处理
     signal.value = 'offline'
+  } finally {
+    nodesLoading.value = false
   }
+}
+
+function shortID(id: string) {
+  if (!id) return '—'
+  return id.length > 8 ? id.slice(0, 8) + '…' : id
+}
+
+function fmtTime(iso?: string) {
+  if (!iso) return '—'
+  const d = new Date(iso)
+  if (isNaN(d.getTime()) || d.getFullYear() <= 1) return '—'
+  const p = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`
 }
 
 let signalTimer: ReturnType<typeof setInterval> | null = null
 onMounted(() => {
-  checkSignal()
-  signalTimer = setInterval(checkSignal, SIGNAL_POLL_MS)
+  loadNodes()
+  signalTimer = setInterval(loadNodes, SIGNAL_POLL_MS)
 })
 onBeforeUnmount(() => {
   if (signalTimer) clearInterval(signalTimer)
@@ -237,12 +340,59 @@ async function onLogout() {
   font-size: var(--text-xs);
   font-weight: 600;
   letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: border-color var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out);
+}
+.status-pill:hover {
+  border-color: var(--border-accent);
+  box-shadow: var(--shadow-glow);
 }
 /* 离线：红色主题 */
 .status-pill.is-offline {
   border-color: rgba(248, 113, 113, 0.3);
   background: rgba(248, 113, 113, 0.1);
   color: #f87171;
+}
+/* 部分离线：琥珀色主题 */
+.status-pill.is-partial {
+  border-color: rgba(251, 191, 36, 0.35);
+  background: rgba(251, 191, 36, 0.1);
+  color: #fbbf24;
+}
+
+/* ── 节点健康弹窗 ──────────────────────────────────────────────────── */
+.nodes-hint {
+  margin: 0 0 var(--space-3);
+  color: var(--text-faint);
+  font-size: var(--text-xs);
+}
+.nodes-table {
+  margin-bottom: var(--space-3);
+}
+.node-id {
+  color: var(--indigo-400);
+  font-size: var(--text-xs);
+}
+.node-addr {
+  color: var(--text-primary);
+  font-size: var(--text-xs);
+}
+.node-ver {
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+}
+.node-time {
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+}
+.nodes-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.nodes-sum {
+  color: var(--text-faint);
+  font-size: 11px;
 }
 
 .side-menu {

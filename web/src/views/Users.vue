@@ -40,7 +40,7 @@
           </template>
         </el-table-column>
 
-        <el-table-column prop="username" label="用户名" min-width="220" sortable="custom">
+        <el-table-column prop="username" label="用户名" min-width="170" sortable="custom">
           <template #default="{ row }">
             <el-tooltip :content="row.username" placement="top" :show-after="320">
               <span class="user-name">{{ row.username }}</span>
@@ -49,10 +49,30 @@
           </template>
         </el-table-column>
 
-        <el-table-column prop="role" label="角色" width="140" align="center" sortable="custom">
+        <el-table-column label="显示名" min-width="130" sortable="custom" prop="display_name">
+          <template #default="{ row }">
+            <span class="profile-cell">{{ row.display_name || '—' }}</span>
+          </template>
+        </el-table-column>
+
+        <el-table-column label="邮箱" min-width="180" show-overflow-tooltip sortable="custom" prop="email">
+          <template #default="{ row }">
+            <span class="mono profile-cell">{{ row.email || '—' }}</span>
+          </template>
+        </el-table-column>
+
+        <el-table-column prop="role" label="角色" width="110" align="center" sortable="custom">
           <template #default="{ row }">
             <el-tag :style="roleTagStyle(row.role)" effect="plain" size="small">
               {{ row.role === 'admin' ? '管理员' : '普通用户' }}
+            </el-tag>
+          </template>
+        </el-table-column>
+
+        <el-table-column label="2FA" width="86" align="center" sortable="custom" prop="totp_enabled">
+          <template #default="{ row }">
+            <el-tag :type="row.totp_enabled ? 'success' : 'info'" effect="light" size="small">
+              {{ row.totp_enabled ? '已开启' : '未开启' }}
             </el-tag>
           </template>
         </el-table-column>
@@ -63,7 +83,7 @@
           </template>
         </el-table-column>
 
-        <el-table-column label="操作" width="210" align="center" fixed="right">
+        <el-table-column label="操作" width="250" align="center" fixed="right">
           <template #default="{ row }">
             <el-tooltip
               :disabled="row.id !== auth.user?.id"
@@ -84,6 +104,19 @@
             <el-button link type="warning" size="small" @click="generateResetToken(row)">
               重置密码
             </el-button>
+            <el-dropdown trigger="click" @command="(cmd: string) => on2FACommand(cmd, row)">
+              <el-button link type="primary" size="small">
+                2FA<el-icon class="el-icon--right"><ArrowDown /></el-icon>
+              </el-button>
+              <template #dropdown>
+                <el-dropdown-menu>
+                  <el-dropdown-item command="enable">强制开启双因子认证</el-dropdown-item>
+                  <el-dropdown-item command="disable" :disabled="!row.totp_enabled">
+                    强制关闭双因子认证
+                  </el-dropdown-item>
+                </el-dropdown-menu>
+              </template>
+            </el-dropdown>
             <el-tooltip
               :disabled="canDelete(row)"
               :content="row.id === auth.user?.id ? '不能删除当前登录账号' : '管理员账号不可删除'"
@@ -156,6 +189,14 @@
           <el-input v-model="form.username" placeholder="登录用户名" />
         </el-form-item>
 
+        <el-form-item label="显示名" prop="display_name">
+          <el-input v-model="form.display_name" placeholder="显示名/昵称（可选）" />
+        </el-form-item>
+
+        <el-form-item label="邮箱" prop="email">
+          <el-input v-model="form.email" placeholder="联系邮箱（可选）" />
+        </el-form-item>
+
         <el-form-item label="密码" prop="password">
           <el-input
             v-model="form.password"
@@ -195,6 +236,14 @@
           <el-input :model-value="editingUser?.username || ''" disabled />
         </el-form-item>
 
+        <el-form-item label="显示名" prop="display_name">
+          <el-input v-model="editForm.display_name" placeholder="显示名/昵称" />
+        </el-form-item>
+
+        <el-form-item label="邮箱" prop="email">
+          <el-input v-model="editForm.email" placeholder="联系邮箱" />
+        </el-form-item>
+
         <el-form-item label="角色" prop="role">
           <el-select
             v-model="editForm.role"
@@ -225,6 +274,53 @@
         </div>
       </template>
     </el-dialog>
+
+    <!-- ── 管理员强制开启 2FA：生成密钥与备用码，线下转交用户 ──────────── -->
+    <el-dialog
+      v-model="force2FAVisible"
+      title="强制开启双因子认证"
+      width="540px"
+      top="6vh"
+      :close-on-click-modal="false"
+    >
+      <p class="token-hint">
+        已为用户 <b class="token-user">{{ force2FAUser }}</b> 强制开启双因子认证，
+        同时重新生成其 TOTP 密钥与一次性备用码（覆盖此前配置）。
+        请将以下信息<b>线下转交</b>该用户完成绑定。
+      </p>
+      <div v-if="force2FAData" class="force-body">
+        <div class="force-block">
+          <span class="force-label">扫码绑定</span>
+          <div class="qr-box">
+            <img v-if="force2FAQr" :src="force2FAQr" alt="2FA 二维码" />
+          </div>
+        </div>
+        <div class="force-block">
+          <span class="force-label">密钥</span>
+          <div class="secret-box">
+            <code class="mono secret-value">{{ force2FAData.secret }}</code>
+            <el-button size="small" :icon="CopyDocument" @click="copyText(force2FAData.secret)">
+              复制
+            </el-button>
+          </div>
+        </div>
+        <div class="force-block">
+          <span class="force-label">一次性备用码（仅本次显示）</span>
+          <div class="codes-box">
+            <code v-for="c in force2FAData.recovery_codes" :key="c" class="mono code-item">{{ c }}</code>
+          </div>
+          <el-button size="small" :icon="CopyDocument" @click="copyText(force2FAData.recovery_codes.join('\n'))">
+            复制全部备用码
+          </el-button>
+        </div>
+      </div>
+      <template #footer>
+        <div class="dialog-footer">
+          <span class="footer-grow"></span>
+          <el-button @click="force2FAVisible = false">关闭</el-button>
+        </div>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -232,7 +328,8 @@
 import { onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { FormInstance, FormRules, TableInstance } from 'element-plus'
-import { Plus, Delete, CopyDocument } from '@element-plus/icons-vue'
+import { Plus, Delete, CopyDocument, ArrowDown } from '@element-plus/icons-vue'
+import QRCode from 'qrcode'
 import { userApi } from '@/api'
 import { useAuthStore } from '@/stores/auth'
 import { useTablePaging } from '@/composables/useTablePaging'
@@ -240,7 +337,10 @@ import { useTablePaging } from '@/composables/useTablePaging'
 interface UserRow {
   id: number
   username: string
+  display_name?: string
+  email?: string
   role: 'admin' | 'user'
+  totp_enabled?: boolean
   created_at?: string
   updated_at?: string
 }
@@ -268,8 +368,10 @@ const dialogVisible = ref(false)
 const saving = ref(false)
 const formRef = ref<FormInstance>()
 
-const form = reactive<{ username: string; password: string; role: 'admin' | 'user' }>({
+const form = reactive<{ username: string; display_name: string; email: string; password: string; role: 'admin' | 'user' }>({
   username: '',
+  display_name: '',
+  email: '',
   password: '',
   role: 'user',
 })
@@ -277,6 +379,20 @@ const form = reactive<{ username: string; password: string; role: 'admin' | 'use
 // 密码强度：至少 12 位，且含大写、小写、数字、特殊字符（与后端一致）
 const PASSWORD_RE = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{12,}$/
 const PASSWORD_MSG = '密码至少 12 位，且需包含大小写字母、数字、特殊字符'
+// 邮箱格式（与后端一致；为空视为合法）
+const EMAIL_RE = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/
+
+function emailRule() {
+  return [
+    {
+      validator: (_rule: unknown, value: string, callback: (e?: Error) => void) => {
+        if (value && !EMAIL_RE.test(value)) callback(new Error('邮箱格式不正确'))
+        else callback()
+      },
+      trigger: 'blur',
+    },
+  ]
+}
 
 function passwordValid(pw: string) {
   return PASSWORD_RE.test(pw)
@@ -298,6 +414,7 @@ function passwordRule(required: boolean) {
 
 const rules: FormRules = {
   username: [{ required: true, message: '请输入用户名', trigger: 'blur' }],
+  email: emailRule(),
   password: passwordRule(true),
   role: [{ required: true, message: '请选择角色', trigger: 'change' }],
 }
@@ -308,12 +425,15 @@ const editSaving = ref(false)
 const editFormRef = ref<FormInstance>()
 const editingUser = ref<UserRow | null>(null)
 
-const editForm = reactive<{ role: 'admin' | 'user'; password: string }>({
+const editForm = reactive<{ display_name: string; email: string; role: 'admin' | 'user'; password: string }>({
+  display_name: '',
+  email: '',
   role: 'user',
   password: '',
 })
 
 const editRules: FormRules = {
+  email: emailRule(),
   role: [{ required: true, message: '请选择角色', trigger: 'change' }],
   // 密码可选：留空表示不修改；填写时需符合强度规则
   password: passwordRule(false),
@@ -357,8 +477,11 @@ async function load() {
 
 function openCreate() {
   form.username = ''
+  form.display_name = ''
+  form.email = ''
   form.password = ''
   form.role = 'user'
+  formRef.value?.clearValidate()
   dialogVisible.value = true
 }
 
@@ -371,6 +494,8 @@ async function saveUser() {
   try {
     await userApi.create({
       username: form.username.trim(),
+      display_name: form.display_name.trim(),
+      email: form.email.trim(),
       password: form.password,
       role: form.role,
     })
@@ -387,6 +512,8 @@ async function saveUser() {
 /* ── Edit ───────────────────────────────────────────────────────────── */
 function openEdit(row: UserRow) {
   editingUser.value = row
+  editForm.display_name = row.display_name || ''
+  editForm.email = row.email || ''
   editForm.role = row.role
   editForm.password = ''
   editFormRef.value?.clearValidate()
@@ -401,9 +528,11 @@ async function saveEdit() {
   if (!row) return
 
   // 只提交发生变更的字段：管理员角色不可改，密码留空不修改
-  const d: { role?: string; password?: string } = {}
+  const d: { role?: string; password?: string; display_name?: string; email?: string } = {}
   if (row.role !== 'admin' && editForm.role !== row.role) d.role = editForm.role
   if (editForm.password) d.password = editForm.password
+  if (editForm.display_name.trim() !== (row.display_name || '')) d.display_name = editForm.display_name.trim()
+  if (editForm.email.trim() !== (row.email || '')) d.email = editForm.email.trim()
 
   editSaving.value = true
   try {
@@ -415,6 +544,67 @@ async function saveEdit() {
     ElMessage.error(errMsg(e, '更新失败'))
   } finally {
     editSaving.value = false
+  }
+}
+
+/* ── 管理员强制 2FA ────────────────────────────────────────────────── */
+const force2FAVisible = ref(false)
+const force2FAUser = ref('')
+const force2FAData = ref<{ secret: string; otpauth_url: string; recovery_codes: string[] } | null>(null)
+const force2FAQr = ref('')
+
+function on2FACommand(cmd: string, row: UserRow) {
+  if (cmd === 'enable') forceEnable2FA(row)
+  else if (cmd === 'disable') forceDisable2FA(row)
+}
+
+async function forceEnable2FA(row: UserRow) {
+  try {
+    await ElMessageBox.confirm(
+      `强制开启用户「${row.username}」的双因子认证？\n将重新生成其 TOTP 密钥与备用码（覆盖此前配置），请把凭据线下转交该用户。`,
+      '强制开启双因子认证',
+      { confirmButtonText: '强制开启', cancelButtonText: '取消', type: 'warning' }
+    )
+  } catch {
+    return
+  }
+  try {
+    const data = await userApi.forceEnable2FA(row.id)
+    force2FAData.value = data
+    force2FAUser.value = row.username
+    force2FAQr.value = await QRCode.toDataURL(data.otpauth_url, { width: 180, margin: 1 })
+    force2FAVisible.value = true
+    await load()
+  } catch (e: any) {
+    ElMessage.error(errMsg(e, '强制开启失败'))
+  }
+}
+
+async function forceDisable2FA(row: UserRow) {
+  try {
+    await ElMessageBox.confirm(
+      `强制关闭用户「${row.username}」的双因子认证？\n该用户将不再要求动态码验证（用户丢失手机/备用码时使用此恢复路径）。`,
+      '强制关闭双因子认证',
+      { confirmButtonText: '强制关闭', cancelButtonText: '取消', type: 'warning' }
+    )
+  } catch {
+    return
+  }
+  try {
+    await userApi.forceDisable2FA(row.id)
+    ElMessage.success(`已强制关闭「${row.username}」的双因子认证`)
+    await load()
+  } catch (e: any) {
+    ElMessage.error(errMsg(e, '强制关闭失败'))
+  }
+}
+
+async function copyText(text: string) {
+  try {
+    await navigator.clipboard.writeText(text)
+    ElMessage.success('已复制')
+  } catch {
+    ElMessage.warning('复制失败，请手动选择复制')
   }
 }
 
@@ -527,6 +717,10 @@ onMounted(load)
   color: var(--text-secondary);
   font-size: var(--text-xs);
 }
+.profile-cell {
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+}
 
 .edit-hint {
   margin-top: 4px;
@@ -567,6 +761,70 @@ onMounted(load)
   margin-top: var(--space-3);
   color: var(--text-faint);
   font-size: 11px;
+}
+
+/* ── 强制开启 2FA 弹窗 ─────────────────────────────────────────────── */
+.force-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  margin-top: var(--space-3);
+}
+.force-block {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.force-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: var(--text-faint);
+}
+.qr-box {
+  align-self: flex-start;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: #fff;
+}
+.qr-box img {
+  width: 180px;
+  height: 180px;
+  display: block;
+}
+.secret-box {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: rgba(11, 17, 32, 0.72);
+}
+.secret-value {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--violet-400);
+  font-size: var(--text-sm);
+}
+.codes-box {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 6px;
+}
+.code-item {
+  padding: 6px 10px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-xs);
+  background: rgba(148, 163, 184, 0.06);
+  color: var(--sky-400);
+  font-size: var(--text-xs);
+  letter-spacing: 0.06em;
+  text-align: center;
 }
 
 .dialog-footer {

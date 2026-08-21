@@ -22,6 +22,18 @@
       </div>
 
       <div class="filter-item">
+        <span class="filter-label">模块</span>
+        <el-select v-model="moduleFilter" clearable placeholder="全部模块" style="width: 140px" @change="applyKeyword">
+          <el-option
+            v-for="m in moduleOptions"
+            :key="m.value"
+            :label="m.label"
+            :value="m.value"
+          />
+        </el-select>
+      </div>
+
+      <div class="filter-item">
         <span class="filter-label">操作</span>
         <el-select v-model="actionFilter" clearable placeholder="全部操作" style="width: 180px" @change="applyKeyword">
           <el-option
@@ -81,17 +93,28 @@
           </template>
         </el-table-column>
 
-        <el-table-column label="用户" min-width="140">
+        <el-table-column label="用户" min-width="130">
           <template #default="{ row }">
             <span class="user-cell">{{ row.username || '—' }}</span>
           </template>
         </el-table-column>
 
-        <el-table-column label="操作" width="180">
+        <el-table-column label="来源 IP" min-width="120">
           <template #default="{ row }">
-            <el-tag :style="actionTagStyle(row.action)" effect="plain" size="small">
-              {{ actionLabel(row.action) }}
-            </el-tag>
+            <span class="mono time-cell">{{ row.ip || '—' }}</span>
+          </template>
+        </el-table-column>
+
+        <el-table-column label="操作" width="200">
+          <template #default="{ row }">
+            <div class="action-cell">
+              <el-tag :style="moduleTagStyle(row.module)" effect="plain" size="small" class="module-tag">
+                {{ moduleLabel(row.module) }}
+              </el-tag>
+              <el-tag :style="actionTagStyle(row.action)" effect="plain" size="small">
+                {{ actionLabel(row.action) }}
+              </el-tag>
+            </div>
             <span class="mono action-raw">{{ row.action }}</span>
           </template>
         </el-table-column>
@@ -128,7 +151,9 @@ interface AuditRow {
   id: number
   user_id: number
   username: string
+  ip: string
   action: string
+  module: string
   detail: string
   created_at: string
 }
@@ -141,8 +166,37 @@ const pageSize = ref(20)
 
 const keyword = ref('')
 const actionFilter = ref('')
+const moduleFilter = ref('')
 
 const RETENTION_DAYS = 180 // 与后端 AUDIT_RETENTION_DAYS 默认一致
+
+/* ── 模块分类（后端按 action 前缀推导） ─────────────────────────────── */
+const MODULE_LABELS: Record<string, string> = {
+  auth: '认证',
+  channel: '渠道',
+  template: '模板',
+  task: '任务',
+  log: '日志',
+  user: '用户',
+  other: '其他',
+}
+const moduleOptions = Object.entries(MODULE_LABELS).map(([value, label]) => ({ value, label }))
+
+function moduleLabel(module: string) {
+  return MODULE_LABELS[module] || module || '—'
+}
+
+function moduleTagStyle(module: string) {
+  const c =
+    module === 'auth' ? '#8b5cf6'
+    : module === 'channel' ? '#818cf8'
+    : module === 'template' ? '#38bdf8'
+    : module === 'task' ? '#f59e0b'
+    : module === 'log' ? '#34d399'
+    : module === 'user' ? '#f472b6'
+    : '#94a3b8'
+  return { color: c, borderColor: `${c}55`, backgroundColor: `${c}1a` }
+}
 
 /* ── 操作类型选项（后端 action 值 → 中文） ──────────────────────────── */
 const ACTION_LABELS: Record<string, string> = {
@@ -174,6 +228,8 @@ const ACTION_LABELS: Record<string, string> = {
   'user.delete': '删除用户',
   'user.batch_delete': '批量删用户',
   'user.reset_token': '生成重置令牌',
+  'user.2fa_force_enable': '强制开启2FA',
+  'user.2fa_force_disable': '强制关闭2FA',
 }
 
 const actionOptions = Object.entries(ACTION_LABELS).map(([value, label]) => ({ value, label }))
@@ -243,11 +299,12 @@ async function load() {
   loading.value = true
   try {
     const params: {
-      keyword?: string; action?: string; from?: string; to?: string
+      keyword?: string; action?: string; module?: string; from?: string; to?: string
       page: number; page_size: number
     } = { page: page.value, page_size: pageSize.value }
     if (keyword.value.trim()) params.keyword = keyword.value.trim()
     if (actionFilter.value) params.action = actionFilter.value
+    if (moduleFilter.value) params.module = moduleFilter.value
     if (dateRange.value) {
       params.from = dateRange.value[0]
       params.to = dateRange.value[1]
@@ -338,8 +395,17 @@ onMounted(load)
   font-size: var(--text-sm);
   font-weight: 500;
 }
+.action-cell {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.module-tag {
+  color: var(--text-secondary) !important;
+}
 .action-raw {
-  margin-left: 6px;
+  margin-left: 2px;
   color: var(--text-faint);
   font-size: var(--text-xs);
 }

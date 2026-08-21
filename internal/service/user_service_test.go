@@ -15,7 +15,7 @@ func TestUserServiceCreate(t *testing.T) {
 	db := testDB(t)
 	svc := NewUserService(db)
 
-	u, err := svc.Create(uniqueName("usvc"), "TestPass123!", "user")
+	u, err := svc.Create(uniqueName("usvc"), "", "", "TestPass123!", "user")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -31,24 +31,24 @@ func TestUserServiceCreate(t *testing.T) {
 	t.Cleanup(func() { db.Exec("DELETE FROM users WHERE id=?", u.ID) })
 
 	// 重复用户名 → 用户名已存在
-	_, err = svc.Create(u.Username, "TestPass123!", "user")
+	_, err = svc.Create(u.Username, "", "", "TestPass123!", "user")
 	if err == nil || !strings.Contains(err.Error(), "用户名已存在") {
 		t.Fatalf("duplicate username should fail with 用户名已存在, got %v", err)
 	}
 
 	// 空用户名 / 空密码 / 密码过短 → 校验失败
-	if _, err := svc.Create("", "TestPass123!", "user"); err == nil {
+	if _, err := svc.Create("", "", "", "TestPass123!", "user"); err == nil {
 		t.Fatal("empty username should fail")
 	}
-	if _, err := svc.Create(uniqueName("usvc"), "", "user"); err == nil {
+	if _, err := svc.Create(uniqueName("usvc"), "", "", "", "user"); err == nil {
 		t.Fatal("empty password should fail")
 	}
-	if _, err := svc.Create(uniqueName("usvc"), "12345", "user"); err == nil {
+	if _, err := svc.Create(uniqueName("usvc"), "", "", "12345", "user"); err == nil {
 		t.Fatal("password shorter than 6 should fail")
 	}
 
 	// 非法角色 → 校验失败
-	if _, err := svc.Create(uniqueName("usvc"), "TestPass123!", "superadmin"); err == nil {
+	if _, err := svc.Create(uniqueName("usvc"), "", "", "TestPass123!", "superadmin"); err == nil {
 		t.Fatal("invalid role should fail")
 	}
 }
@@ -58,15 +58,15 @@ func TestUserServiceDelete(t *testing.T) {
 	svc := NewUserService(db)
 
 	// 准备：一个 admin 操作者、一个 admin 目标、一个普通用户
-	adminOp, err := svc.Create(uniqueName("adminop"), "TestPass123!", "admin")
+	adminOp, err := svc.Create(uniqueName("adminop"), "", "", "TestPass123!", "admin")
 	if err != nil {
 		t.Fatal(err)
 	}
-	adminTarget, err := svc.Create(uniqueName("admintgt"), "TestPass123!", "admin")
+	adminTarget, err := svc.Create(uniqueName("admintgt"), "", "", "TestPass123!", "admin")
 	if err != nil {
 		t.Fatal(err)
 	}
-	normal, err := svc.Create(uniqueName("normal"), "TestPass123!", "user")
+	normal, err := svc.Create(uniqueName("normal"), "", "", "TestPass123!", "user")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -102,11 +102,11 @@ func TestUserServiceList(t *testing.T) {
 	db := testDB(t)
 	svc := NewUserService(db)
 
-	u1, err := svc.Create(uniqueName("list1"), "TestPass123!", "user")
+	u1, err := svc.Create(uniqueName("list1"), "", "", "TestPass123!", "user")
 	if err != nil {
 		t.Fatal(err)
 	}
-	u2, err := svc.Create(uniqueName("list2"), "TestPass123!", "admin")
+	u2, err := svc.Create(uniqueName("list2"), "", "", "TestPass123!", "admin")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -130,32 +130,32 @@ func TestUserServiceUpdate(t *testing.T) {
 	svc := NewUserService(db)
 	auth := NewAuthService(db, "secret", "admin", "admin123")
 
-	adminOp, err := svc.Create(uniqueName("updop"), "TestPass123!", "admin")
+	adminOp, err := svc.Create(uniqueName("updop"), "", "", "TestPass123!", "admin")
 	if err != nil {
 		t.Fatal(err)
 	}
-	adminTgt, err := svc.Create(uniqueName("updtgt"), "TestPass123!", "admin")
+	adminTgt, err := svc.Create(uniqueName("updtgt"), "", "", "TestPass123!", "admin")
 	if err != nil {
 		t.Fatal(err)
 	}
-	normal, err := svc.Create(uniqueName("updnorm"), "TestPass123!", "user")
+	normal, err := svc.Create(uniqueName("updnorm"), "", "", "TestPass123!", "user")
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { db.Exec("DELETE FROM users WHERE id IN (?, ?, ?)", adminOp.ID, adminTgt.ID, normal.ID) })
 
 	// 非 admin 操作者无权操作
-	if err := svc.Update(normal.ID, "user", normal.ID, nil, nil); err == nil || !strings.Contains(err.Error(), "无权操作") {
+	if err := svc.Update(normal.ID, "user", normal.ID, nil, nil, nil, nil); err == nil || !strings.Contains(err.Error(), "无权操作") {
 		t.Fatalf("non-admin update should fail with 无权操作, got %v", err)
 	}
 
 	// 不能修改当前登录账号
-	if err := svc.Update(adminOp.ID, "admin", adminOp.ID, strPtr("user"), nil); err == nil || !strings.Contains(err.Error(), "不能修改当前登录账号") {
+	if err := svc.Update(adminOp.ID, "admin", adminOp.ID, strPtr("user"), nil, nil, nil); err == nil || !strings.Contains(err.Error(), "不能修改当前登录账号") {
 		t.Fatalf("self update should fail, got %v", err)
 	}
 
 	// 降级管理员：还有其它管理员（adminOp）时允许
-	if err := svc.Update(adminOp.ID, "admin", adminTgt.ID, strPtr("user"), nil); err != nil {
+	if err := svc.Update(adminOp.ID, "admin", adminTgt.ID, strPtr("user"), nil, nil, nil); err != nil {
 		t.Fatalf("demoting admin with another admin remaining should succeed, got %v", err)
 	}
 	gotTgt, err := svc.users.GetByID(adminTgt.ID)
@@ -167,17 +167,17 @@ func TestUserServiceUpdate(t *testing.T) {
 	}
 
 	// 非法角色 → 拒绝
-	if err := svc.Update(adminOp.ID, "admin", normal.ID, strPtr("superadmin"), nil); err == nil || !strings.Contains(err.Error(), "角色必须是 admin 或 user") {
+	if err := svc.Update(adminOp.ID, "admin", normal.ID, strPtr("superadmin"), nil, nil, nil); err == nil || !strings.Contains(err.Error(), "角色必须是 admin 或 user") {
 		t.Fatalf("invalid role should fail, got %v", err)
 	}
 
 	// 目标不存在 → 用户不存在
-	if err := svc.Update(adminOp.ID, "admin", 99999999, strPtr("user"), nil); err == nil || !strings.Contains(err.Error(), "用户不存在") {
+	if err := svc.Update(adminOp.ID, "admin", 99999999, strPtr("user"), nil, nil, nil); err == nil || !strings.Contains(err.Error(), "用户不存在") {
 		t.Fatalf("missing target should fail, got %v", err)
 	}
 
 	// 修改普通用户角色成功：user → admin
-	if err := svc.Update(adminOp.ID, "admin", normal.ID, strPtr("admin"), nil); err != nil {
+	if err := svc.Update(adminOp.ID, "admin", normal.ID, strPtr("admin"), nil, nil, nil); err != nil {
 		t.Fatalf("promote normal user to admin: %v", err)
 	}
 	got, err := svc.users.GetByID(normal.ID)
@@ -188,12 +188,12 @@ func TestUserServiceUpdate(t *testing.T) {
 		t.Fatalf("role = %q, want admin", got.Role)
 	}
 	// 提升为管理员后，仍有其它管理员（adminOp）时可降级
-	if err := svc.Update(adminOp.ID, "admin", normal.ID, strPtr("user"), nil); err != nil {
+	if err := svc.Update(adminOp.ID, "admin", normal.ID, strPtr("user"), nil, nil, nil); err != nil {
 		t.Fatalf("demoting promoted admin should succeed, got %v", err)
 	}
 
 	// 重置密码成功 → 新密码可登录、旧密码失效
-	if err := svc.Update(adminOp.ID, "admin", normal.ID, nil, strPtr("Newpass456!x")); err != nil {
+	if err := svc.Update(adminOp.ID, "admin", normal.ID, nil, strPtr("Newpass456!x"), nil, nil); err != nil {
 		t.Fatalf("reset password: %v", err)
 	}
 	if _, err := auth.Login(normal.Username, "TestPass123!"); err == nil {
@@ -204,7 +204,7 @@ func TestUserServiceUpdate(t *testing.T) {
 	}
 
 	// 密码过短 → 拒绝
-	if err := svc.Update(adminOp.ID, "admin", normal.ID, nil, strPtr("123")); err == nil || !strings.Contains(err.Error(), "密码至少 12 位") {
+	if err := svc.Update(adminOp.ID, "admin", normal.ID, nil, strPtr("123"), nil, nil); err == nil || !strings.Contains(err.Error(), "密码至少 12 位") {
 		t.Fatalf("short password should fail, got %v", err)
 	}
 }
@@ -213,19 +213,19 @@ func TestUserServiceBatchDelete(t *testing.T) {
 	db := testDB(t)
 	svc := NewUserService(db)
 
-	adminOp, err := svc.Create(uniqueName("bdop"), "TestPass123!", "admin")
+	adminOp, err := svc.Create(uniqueName("bdop"), "", "", "TestPass123!", "admin")
 	if err != nil {
 		t.Fatal(err)
 	}
-	adminTgt, err := svc.Create(uniqueName("bdtgt"), "TestPass123!", "admin")
+	adminTgt, err := svc.Create(uniqueName("bdtgt"), "", "", "TestPass123!", "admin")
 	if err != nil {
 		t.Fatal(err)
 	}
-	n1, err := svc.Create(uniqueName("bdn1"), "TestPass123!", "user")
+	n1, err := svc.Create(uniqueName("bdn1"), "", "", "TestPass123!", "user")
 	if err != nil {
 		t.Fatal(err)
 	}
-	n2, err := svc.Create(uniqueName("bdn2"), "TestPass123!", "user")
+	n2, err := svc.Create(uniqueName("bdn2"), "", "", "TestPass123!", "user")
 	if err != nil {
 		t.Fatal(err)
 	}

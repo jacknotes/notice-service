@@ -1,0 +1,71 @@
+package repository
+
+import (
+	"testing"
+	"time"
+)
+
+func TestHeartbeatUpsertListRemove(t *testing.T) {
+	db := openTestDB(t)
+	repo := NewHeartbeatRepo(db)
+
+	// 清理历史心跳，保证测试封闭
+	if _, err := db.Exec("DELETE FROM instance_heartbeats"); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { db.Exec("DELETE FROM instance_heartbeats") })
+
+	// 实例 A：刚刚上报（健康）
+	if err := repo.Upsert(&Instance{
+		InstanceID: "inst-a", Host: "node1", Port: "8080", Version: "dev",
+		StartedAt: time.Now().Add(-time.Hour), LastSeenAt: time.Now(),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	// 实例 B：10 分钟前上报（超过健康窗口 → 离线）
+	if err := repo.Upsert(&Instance{
+		InstanceID: "inst-b", Host: "node2", Port: "8081", Version: "1.2.3",
+		StartedAt: time.Now().Add(-2 * time.Hour), LastSeenAt: time.Now().Add(-10 * time.Minute),
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	list, err := repo.List(15 * time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(list) != 2 {
+		t.Fatalf("want 2 instances, got %d", len(list))
+	}
+	byID := map[string]*Instance{}
+	for _, h := range list {
+		byID[h.InstanceID] = h
+	}
+	if a := byID["inst-a"]; a == nil || !a.Healthy || a.Host != "node1" || a.Port != "8080" {
+		t.Fatalf("inst-a should be healthy: %+v", a)
+	}
+	if b := byID["inst-b"]; b == nil || b.Healthy {
+		t.Fatalf("inst-b should be unhealthy: %+v", b)
+	}
+
+	// 覆盖 upsert（幂等）：刷新 inst-a 后仍只有 2 行
+	if err := repo.Upsert(&Instance{
+		InstanceID: "inst-a", Host: "node1-new", Port: "8080", Version: "dev",
+		StartedAt: time.Now().Add(-time.Hour), LastSeenAt: time.Now(),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	list, _ = repo.List(15 * time.Second)
+	if len(list) != 2 {
+		t.Fatalf("upsert should not duplicate: got %d", len(list))
+	}
+
+	// Remove：删除后只剩 1 行
+	if err := repo.Remove("inst-a"); err != nil {
+		t.Fatal(err)
+	}
+	list, _ = repo.List(15 * time.Second)
+	if len(list) != 1 || list[0].InstanceID != "inst-b" {
+		t.Fatalf("after remove want only inst-b, got %+v", list)
+	}
+}

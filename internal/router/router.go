@@ -67,6 +67,7 @@ func NewRouter(db *sql.DB, authSvc *service.AuthService, cipher *crypto.Cipher, 
 	dashH := handler.NewDashboardHandler(db)
 	userH := handler.NewUserHandler(db)
 	auditH := handler.NewAuditHandler(db)
+	sysH := handler.NewSystemHandler(db)
 
 	r.GET("/api/health", handler.Health(db))
 	if o.SwaggerEnabled {
@@ -103,6 +104,8 @@ func NewRouter(db *sql.DB, authSvc *service.AuthService, cipher *crypto.Cipher, 
 		auth.GET("/dashboard/top-tasks", dashH.TopTasks)
 		auth.GET("/dashboard/channel-stats", dashH.ChannelStats)
 
+		auth.GET("/instances", sysH.Instances) // 后端节点健康列表（信号在线）
+
 		// 写操作与用户管理：仅管理员
 		admin := auth.Group("")
 		admin.Use(middleware.AdminOnly())
@@ -132,6 +135,8 @@ func NewRouter(db *sql.DB, authSvc *service.AuthService, cipher *crypto.Cipher, 
 			admin.DELETE("/users/:id", userH.Delete)
 			admin.POST("/users/:id/reset-token", userH.ResetToken) // 生成一次性重置令牌
 			admin.POST("/users/batch-delete", userH.BatchDelete)
+			admin.POST("/users/:id/2fa-enable", userH.ForceEnable2FA)   // 强制开启双因子认证
+			admin.POST("/users/:id/2fa-disable", userH.ForceDisable2FA) // 强制关闭双因子认证
 
 			admin.GET("/audit", auditH.List) // 操作审计日志
 		}

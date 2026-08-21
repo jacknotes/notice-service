@@ -18,6 +18,7 @@ import (
 	"os"
 	"os/signal"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -33,6 +34,12 @@ import (
 
 	_ "notice-service/docs/swagger" // 注册 Swagger 文档（swag init 生成）
 )
+
+// buildVersion 构建版本标识（可用 -ldflags "-X main.buildVersion=..." 覆盖）。
+var buildVersion = "dev"
+
+// heartbeatInterval 实例心跳上报间隔（「信号在线」多节点健康）。
+const heartbeatInterval = 5 * time.Second
 
 func main() {
 	cfg := config.Load()
@@ -107,6 +114,40 @@ func main() {
 	for _, t := range tasks {
 		sched.RegisterTask(t.ID, t.CronExpr)
 	}
+
+	// 实例心跳：周期上报自身节点信息，供「信号在线」查看多后端健康；
+	// 优雅退出时删除本实例心跳，避免遗留僵尸节点。
+	hbRepo := repository.NewHeartbeatRepo(db)
+	host, _ := os.Hostname()
+	startedAt := time.Now()
+	hbCtx, hbCancel := context.WithCancel(context.Background())
+	var hbWG sync.WaitGroup
+	hbWG.Add(1)
+	go func() {
+		defer hbWG.Done()
+		tick := func() {
+			_ = hbRepo.Upsert(&repository.Instance{
+				InstanceID: cfg.InstanceID, Host: host, Port: cfg.Port, Version: buildVersion,
+				StartedAt: startedAt, LastSeenAt: time.Now(),
+			})
+		}
+		tick() // 启动立即上报一次
+		ticker := time.NewTicker(heartbeatInterval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-hbCtx.Done():
+				_ = hbRepo.Remove(cfg.InstanceID)
+				return
+			case <-ticker.C:
+				tick()
+			}
+		}
+	}()
+	defer func() {
+		hbCancel()
+		hbWG.Wait()
+	}()
 
 	engine := router.NewRouter(db, authSvc, ciph, sched, queue, router.Options{
 		TrustedProxies: cfg.TrustedProxies,

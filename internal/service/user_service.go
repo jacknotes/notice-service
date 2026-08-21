@@ -4,7 +4,9 @@ import (
 	"crypto/rand"
 	"database/sql"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
+	"regexp"
 	"strings"
 	"time"
 
@@ -13,10 +15,14 @@ import (
 
 	"notice-service/internal/model"
 	"notice-service/internal/repository"
+	"notice-service/internal/totp"
 )
 
 // resetTokenTTL 一次性重置令牌有效期。
 const resetTokenTTL = 15 * time.Minute
+
+// emailRe 简单邮箱格式校验（非严格 RFC，够用即可）。
+var emailRe = regexp.MustCompile(`^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$`)
 
 type UserService struct {
 	users *repository.UserRepo
@@ -50,9 +56,11 @@ func (s *UserService) List() ([]*model.User, error) {
 	return s.users.List()
 }
 
-// Create 创建用户：校验用户名/密码强度/角色，bcrypt 加密后入库。
-func (s *UserService) Create(username, password, role string) (*model.User, error) {
+// Create 创建用户：校验用户名/显示名/邮箱/密码强度/角色，bcrypt 加密后入库。
+func (s *UserService) Create(username, displayName, email, password, role string) (*model.User, error) {
 	username = strings.TrimSpace(username)
+	displayName = strings.TrimSpace(displayName)
+	email = strings.TrimSpace(email)
 	if username == "" {
 		return nil, errors.New("用户名不能为空")
 	}
@@ -62,11 +70,14 @@ func (s *UserService) Create(username, password, role string) (*model.User, erro
 	if role != "admin" && role != "user" {
 		return nil, errors.New("角色必须是 admin 或 user")
 	}
+	if email != "" && !emailRe.MatchString(email) {
+		return nil, errors.New("邮箱格式不正确")
+	}
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
 		return nil, err
 	}
-	u := &model.User{Username: username, PasswordHash: string(hash), Role: role}
+	u := &model.User{Username: username, DisplayName: displayName, Email: email, PasswordHash: string(hash), Role: role}
 	if err := s.users.Create(u); err != nil {
 		var me *mysql.MySQLError
 		if errors.As(err, &me) && me.Number == 1062 {
@@ -116,9 +127,9 @@ func (s *UserService) BatchDelete(operatorID int64, operatorRole string, ids []i
 	return s.users.BatchDelete(ids) // 校验通过后单条 SQL 批量软删除
 }
 
-// Update 修改用户角色或重置密码。operatorRole 为操作者角色；仅 admin 可操作。
+// Update 修改用户角色/密码/显示名/邮箱。operatorRole 为操作者角色；仅 admin 可操作。
 // 规则：管理员角色可降级，但至少保留一个管理员；不能修改当前登录账号（个人密码请走个人设置）。
-func (s *UserService) Update(operatorID int64, operatorRole string, targetID int64, role, newPass *string) error {
+func (s *UserService) Update(operatorID int64, operatorRole string, targetID int64, role, newPass *string, displayName, email *string) error {
 	if operatorRole != "admin" {
 		return errors.New("无权操作")
 	}
@@ -162,6 +173,55 @@ func (s *UserService) Update(operatorID int64, operatorRole string, targetID int
 		}
 		nextHash = string(hash)
 	}
-	u := &model.User{ID: targetID, Role: nextRole, PasswordHash: nextHash}
+	nextDisplayName := target.DisplayName
+	if displayName != nil {
+		nextDisplayName = strings.TrimSpace(*displayName)
+	}
+	nextEmail := target.Email
+	if email != nil {
+		nextEmail = strings.TrimSpace(*email)
+	}
+	if nextEmail != "" && !emailRe.MatchString(nextEmail) {
+		return errors.New("邮箱格式不正确")
+	}
+	u := &model.User{ID: targetID, Role: nextRole, PasswordHash: nextHash,
+		DisplayName: nextDisplayName, Email: nextEmail}
 	return s.users.Update(u)
+}
+
+/* ── 管理员强制 2FA ────────────────────────────────────────────────── */
+
+// ForceEnable2FA 管理员为用户强制开启双因子认证：重新生成 TOTP 密钥与
+// 一次性备用码并直接启用（覆盖该用户此前的 2FA 配置）。返回明文密钥/
+// otpauth URL/备用码，由管理员线下转交用户完成绑定。
+func (s *UserService) ForceEnable2FA(userID int64) (secret, otpauthURL string, codes []string, err error) {
+	u, err := s.users.GetByID(userID)
+	if err != nil {
+		return "", "", nil, errors.New("用户不存在")
+	}
+	secret, err = totp.GenerateSecret()
+	if err != nil {
+		return "", "", nil, err
+	}
+	codes, err = totp.GenerateRecoveryCodes(8)
+	if err != nil {
+		return "", "", nil, err
+	}
+	hashed := totp.HashRecoveryCodes(codes)
+	b, _ := json.Marshal(hashed)
+	if err := s.users.SetTOTP(userID, secret, string(b)); err != nil {
+		return "", "", nil, err
+	}
+	if err := s.users.EnableTOTP(userID); err != nil {
+		return "", "", nil, err
+	}
+	return secret, totp.OTPAuthURI("Notice Service", u.Username, secret), codes, nil
+}
+
+// ForceDisable2FA 管理员为用户强制关闭双因子认证（用户丢失手机/备用码时的恢复路径）。
+func (s *UserService) ForceDisable2FA(userID int64) error {
+	if _, err := s.users.GetByID(userID); err != nil {
+		return errors.New("用户不存在")
+	}
+	return s.users.DisableTOTP(userID)
 }

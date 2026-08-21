@@ -427,6 +427,19 @@ paths:
       summary: 区间内每日发送趋势
       tags:
       - 仪表盘
+  /api/instances:
+    get:
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 后端节点健康列表（多实例信号在线）
+      tags:
+      - 系统
   /api/logs:
     get:
       parameters:
@@ -879,6 +892,44 @@ paths:
       security:
       - BearerAuth: []
       summary: 更新用户角色/密码（仅管理员）
+      tags:
+      - 用户
+  /api/users/{id}/2fa-disable:
+    post:
+      parameters:
+      - description: 用户 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 管理员为用户强制关闭双因子认证（仅管理员）
+      tags:
+      - 用户
+  /api/users/{id}/2fa-enable:
+    post:
+      parameters:
+      - description: 用户 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 管理员为用户强制开启双因子认证（仅管理员）
       tags:
       - 用户
   /api/users/{id}/reset-token:

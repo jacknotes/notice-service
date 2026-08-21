@@ -19,8 +19,8 @@ var ErrNotFound = errors.New("not found")
 
 func (r *UserRepo) Create(u *model.User) error {
 	res, err := r.db.Exec(
-		"INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)",
-		u.Username, u.PasswordHash, u.Role)
+		"INSERT INTO users (username, display_name, email, password_hash, role) VALUES (?, ?, ?, ?, ?)",
+		u.Username, u.DisplayName, u.Email, u.PasswordHash, u.Role)
 	if err != nil {
 		return err
 	}
@@ -33,13 +33,13 @@ func (r *UserRepo) Create(u *model.User) error {
 }
 
 // userCols 用户常用列（含 2FA 字段）。
-const userCols = "id, username, password_hash, role, created_at, updated_at, totp_secret, totp_enabled, totp_recovery_codes"
+const userCols = "id, username, display_name, email, password_hash, role, created_at, updated_at, totp_secret, totp_enabled, totp_recovery_codes"
 
 func scanUser(row interface{ Scan(...any) error }) (*model.User, error) {
 	u := &model.User{}
 	var secret, recovery sql.NullString
 	var enabled bool
-	if err := row.Scan(&u.ID, &u.Username, &u.PasswordHash, &u.Role, &u.CreatedAt, &u.UpdatedAt, &secret, &enabled, &recovery); err != nil {
+	if err := row.Scan(&u.ID, &u.Username, &u.DisplayName, &u.Email, &u.PasswordHash, &u.Role, &u.CreatedAt, &u.UpdatedAt, &secret, &enabled, &recovery); err != nil {
 		return nil, err
 	}
 	u.TOTPSecret = secret.String
@@ -79,9 +79,11 @@ func (r *UserRepo) UpdatePassword(userID int64, hash string) error {
 	return err
 }
 
-// Update 更新用户的角色与密码哈希（两字段均写当前值，保证幂等）。
+// Update 更新用户的角色、密码、显示名与邮箱（两字段均写当前值，保证幂等）。
 func (r *UserRepo) Update(u *model.User) error {
-	_, err := r.db.Exec("UPDATE users SET role=?, password_hash=? WHERE id=?", u.Role, u.PasswordHash, u.ID)
+	_, err := r.db.Exec(
+		"UPDATE users SET role=?, password_hash=?, display_name=?, email=? WHERE id=?",
+		u.Role, u.PasswordHash, u.DisplayName, u.Email, u.ID)
 	return err
 }
 

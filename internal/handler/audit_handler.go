@@ -43,6 +43,9 @@ func (h *AuditHandler) List(c *gin.Context) {
 	if v := c.Query("action"); v != "" {
 		f.Action = v
 	}
+	if v := c.Query("module"); v != "" {
+		f.Module = v
+	}
 	if v := c.Query("from"); v != "" {
 		if t, err := time.Parse("2006-01-02", v); err == nil {
 			f.From = t

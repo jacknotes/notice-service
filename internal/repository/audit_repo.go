@@ -10,7 +10,9 @@ type AuditLog struct {
 	ID        int64     `json:"id"`
 	UserID    int64     `json:"user_id"`
 	Username  string    `json:"username"`
+	IP        string    `json:"ip"`
 	Action    string    `json:"action"`
+	Module    string    `json:"module"`
 	Detail    string    `json:"detail"`
 	CreatedAt time.Time `json:"created_at"`
 }
@@ -29,8 +31,8 @@ func (r *AuditRepo) Create(e *AuditLog) error {
 		uid = e.UserID
 	}
 	_, err := r.db.Exec(
-		"INSERT INTO audit_logs (user_id, username, action, detail, created_at) VALUES (?,?,?,?,?)",
-		uid, e.Username, e.Action, e.Detail, time.Now())
+		"INSERT INTO audit_logs (user_id, username, ip, action, module, detail, created_at) VALUES (?,?,?,?,?,?,?)",
+		uid, e.Username, e.IP, e.Action, e.Module, e.Detail, time.Now())
 	return err
 }
 
@@ -58,6 +60,7 @@ func (r *AuditRepo) CleanupOlderThan(days int) (int64, error) {
 type AuditFilter struct {
 	Keyword  string // 匹配 username / detail
 	Action   string // 精确匹配 action
+	Module   string // 精确匹配 module
 	From, To time.Time
 	Page     int
 	PageSize int
@@ -75,6 +78,10 @@ func (r *AuditRepo) Query(f AuditFilter) (total int, logs []*AuditLog, err error
 	if f.Action != "" {
 		where += " AND action=?"
 		args = append(args, f.Action)
+	}
+	if f.Module != "" {
+		where += " AND module=?"
+		args = append(args, f.Module)
 	}
 	if !f.From.IsZero() {
 		where += " AND created_at >= ?"
@@ -97,7 +104,7 @@ func (r *AuditRepo) Query(f AuditFilter) (total int, logs []*AuditLog, err error
 	}
 	queryArgs := append(append([]interface{}{}, args...), limit, offset)
 	rows, err := r.db.Query(
-		"SELECT id, user_id, username, action, detail, created_at FROM audit_logs "+where+" ORDER BY id DESC LIMIT ? OFFSET ?",
+		"SELECT id, user_id, username, ip, action, module, detail, created_at FROM audit_logs "+where+" ORDER BY id DESC LIMIT ? OFFSET ?",
 		queryArgs...)
 	if err != nil {
 		return 0, nil, err
@@ -106,7 +113,7 @@ func (r *AuditRepo) Query(f AuditFilter) (total int, logs []*AuditLog, err error
 	for rows.Next() {
 		e := &AuditLog{}
 		var uid sql.NullInt64
-		if err := rows.Scan(&e.ID, &uid, &e.Username, &e.Action, &e.Detail, &e.CreatedAt); err != nil {
+		if err := rows.Scan(&e.ID, &uid, &e.Username, &e.IP, &e.Action, &e.Module, &e.Detail, &e.CreatedAt); err != nil {
 			return 0, nil, err
 		}
 		e.UserID = uid.Int64
