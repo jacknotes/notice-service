@@ -209,6 +209,64 @@ func TestUserServiceUpdate(t *testing.T) {
 	}
 }
 
+// TestUserServiceDefaultAdminProtected 内置 admin 账号（username='admin'）保护：
+// 角色不可由管理员更改、密码不可由管理员重置（Update 与重置令牌两条路径均拒绝）。
+func TestUserServiceDefaultAdminProtected(t *testing.T) {
+	db := testDB(t)
+	svc := NewUserService(db)
+	auth := NewAuthService(db, "secret-secret-secret", "admin", "admin123")
+	if err := auth.BootstrapAdmin(); err != nil {
+		t.Fatal(err)
+	}
+	adminUser, err := svc.users.GetByUsername("admin")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// 另一管理员作为操作者
+	op, err := svc.Create(uniqueName("protop"), "", "", "TestPass123!", "admin")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { db.Exec("DELETE FROM users WHERE id IN (?, ?)", adminUser.ID, op.ID) })
+
+	// 内置 admin 角色不可改
+	if err := svc.Update(op.ID, "admin", adminUser.ID, strPtr("user"), nil, nil, nil); err == nil || !strings.Contains(err.Error(), "内置 admin 账号的角色") {
+		t.Fatalf("changing builtin admin role should fail, got %v", err)
+	}
+	// 内置 admin 密码不可重置（Update 路径）
+	if err := svc.Update(op.ID, "admin", adminUser.ID, nil, strPtr("Newpass456!x"), nil, nil); err == nil || !strings.Contains(err.Error(), "内置 admin 账号的密码") {
+		t.Fatalf("resetting builtin admin password via update should fail, got %v", err)
+	}
+	// 内置 admin 不可生成重置令牌
+	if _, _, err := svc.GenerateResetToken(adminUser.ID); err == nil || !strings.Contains(err.Error(), "内置 admin 账号的密码") {
+		t.Fatalf("generating reset token for builtin admin should fail, got %v", err)
+	}
+	// 角色保持 admin、原密码仍可登录
+	got, err := svc.users.GetByID(adminUser.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Role != "admin" {
+		t.Fatalf("builtin admin role changed to %q", got.Role)
+	}
+	if _, err := auth.Login("admin", "admin123"); err != nil {
+		t.Fatalf("builtin admin should still log in with original password: %v", err)
+	}
+
+	// 对照：普通用户提升为管理员后可再降级（核心 bug 修复点）
+	normal, err := svc.Create(uniqueName("protusr"), "", "", "TestPass123!", "user")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { db.Exec("DELETE FROM users WHERE id=?", normal.ID) })
+	if err := svc.Update(op.ID, "admin", normal.ID, strPtr("admin"), nil, nil, nil); err != nil {
+		t.Fatalf("promote normal user to admin: %v", err)
+	}
+	if err := svc.Update(op.ID, "admin", normal.ID, strPtr("user"), nil, nil, nil); err != nil {
+		t.Fatalf("demote promoted admin back to user should succeed, got %v", err)
+	}
+}
+
 func TestUserServiceBatchDelete(t *testing.T) {
 	db := testDB(t)
 	svc := NewUserService(db)

@@ -7,6 +7,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/gin-gonic/gin"
@@ -222,5 +223,68 @@ func TestDisabledUserTokenInvalidated(t *testing.T) {
 	// 被禁用用户也无法重新登录
 	if _, err := loginAsNoFail(t, r, "alice_ds", "TestPass123!"); err == nil {
 		t.Fatal("disabled user should not be able to login again")
+	}
+}
+
+// TestUserUpdateDefaultAdminProtectedAPI 内置 admin 账号（username='admin'）保护：
+// 其它管理员不可改其角色、不可重置其密码、不可为其生成重置令牌；且普通用户
+// 提升为管理员后仍可降级（核心 bug 修复点）。
+func TestUserUpdateDefaultAdminProtectedAPI(t *testing.T) {
+	r := testRouter(t)
+	_ = login(t, r) // 内置 admin 登录
+
+	// 创建另一个管理员作为操作者
+	adminTok := login(t, r)
+	wop := authReq(t, r, adminTok, "POST", "/api/users", `{"username":"op_protect","password":"TestPass123!","role":"admin"}`)
+	if wop.Code != 200 {
+		t.Fatalf("create operator admin = %d body=%s", wop.Code, wop.Body.String())
+	}
+	opID := int64(mustJSON(t, wop)["id"].(float64))
+	t.Cleanup(func() { testDB(t).Exec("DELETE FROM users WHERE id=?", opID) })
+	opTok := loginAs(t, r, "op_protect", "TestPass123!")
+
+	// 找到内置 admin 的 id
+	adminID := int64(0)
+	wl := authReq(t, r, adminTok, "GET", "/api/users", "")
+	var list []map[string]interface{}
+	if err := json.Unmarshal(wl.Body.Bytes(), &list); err != nil {
+		t.Fatal(err)
+	}
+	for _, u := range list {
+		if u["username"].(string) == "admin" {
+			adminID = int64(u["id"].(float64))
+		}
+	}
+	if adminID == 0 {
+		t.Fatal("builtin admin not found in user list")
+	}
+
+	// 其它管理员不能改内置 admin 角色
+	if w := authReq(t, r, opTok, "PUT", "/api/users/"+num(adminID), `{"role":"user"}`); w.Code != 400 || !strings.Contains(w.Body.String(), "内置 admin 账号的角色") {
+		t.Fatalf("change builtin admin role = %d body=%s", w.Code, w.Body.String())
+	}
+	// 不能重置内置 admin 密码
+	if w := authReq(t, r, opTok, "PUT", "/api/users/"+num(adminID), `{"password":"Newpass456!x"}`); w.Code != 400 || !strings.Contains(w.Body.String(), "内置 admin 账号的密码") {
+		t.Fatalf("reset builtin admin password = %d body=%s", w.Code, w.Body.String())
+	}
+	// 不能为内置 admin 生成重置令牌
+	if w := authReq(t, r, opTok, "POST", "/api/users/"+num(adminID)+"/reset-token", ""); w.Code != 400 || !strings.Contains(w.Body.String(), "内置 admin 账号的密码") {
+		t.Fatalf("reset token for builtin admin = %d body=%s", w.Code, w.Body.String())
+	}
+	// 内置 admin 原密码仍可登录
+	_ = login(t, r)
+
+	// 对照：普通用户提升为管理员后仍可降级
+	wu := authReq(t, r, opTok, "POST", "/api/users", `{"username":"n_cycle","password":"TestPass123!","role":"user"}`)
+	if wu.Code != 200 {
+		t.Fatalf("create normal user = %d body=%s", wu.Code, wu.Body.String())
+	}
+	nID := int64(mustJSON(t, wu)["id"].(float64))
+	t.Cleanup(func() { testDB(t).Exec("DELETE FROM users WHERE id=?", nID) })
+	if w := authReq(t, r, opTok, "PUT", "/api/users/"+num(nID), `{"role":"admin"}`); w.Code != 200 {
+		t.Fatalf("promote normal user = %d body=%s", w.Code, w.Body.String())
+	}
+	if w := authReq(t, r, opTok, "PUT", "/api/users/"+num(nID), `{"role":"user"}`); w.Code != 200 {
+		t.Fatalf("demote promoted admin = %d body=%s", w.Code, w.Body.String())
 	}
 }

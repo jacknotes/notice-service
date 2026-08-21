@@ -101,9 +101,22 @@
                 </el-button>
               </span>
             </el-tooltip>
-            <el-button link type="warning" size="small" @click="generateResetToken(row)">
-              重置密码
-            </el-button>
+            <el-tooltip
+              :disabled="!isProtectedAdmin(row)"
+              content="内置 admin 账号密码不可由管理员重置"
+            >
+              <span>
+                <el-button
+                  link
+                  type="warning"
+                  size="small"
+                  :disabled="isProtectedAdmin(row)"
+                  @click="generateResetToken(row)"
+                >
+                  重置密码
+                </el-button>
+              </span>
+            </el-tooltip>
             <el-dropdown trigger="click" @command="(cmd: string) => on2FACommand(cmd, row)">
               <el-button link type="primary" size="small">
                 2FA<el-icon class="el-icon--right"><ArrowDown /></el-icon>
@@ -248,12 +261,12 @@
           <el-select
             v-model="editForm.role"
             style="width: 100%"
-            :disabled="editingUser?.role === 'admin'"
+            :disabled="isProtectedAdmin(editingUser)"
           >
             <el-option label="管理员" value="admin" />
             <el-option label="普通用户" value="user" />
           </el-select>
-          <div v-if="editingUser?.role === 'admin'" class="edit-hint">管理员角色不可修改</div>
+          <div v-if="isProtectedAdmin(editingUser)" class="edit-hint">内置 admin 账号角色不可修改</div>
         </el-form-item>
 
         <el-form-item label="新密码" prop="password">
@@ -460,6 +473,12 @@ function canDelete(row: UserRow) {
   return row.role !== 'admin' && row.id !== auth.user?.id
 }
 
+// 内置 admin 账号（username='admin'，bootstrap 默认管理员）：
+// 角色不可改、密码不可由管理员重置（恢复走离线 CLI）。
+function isProtectedAdmin(row: UserRow | null) {
+  return row?.username === 'admin'
+}
+
 function errMsg(e: any, fallback: string) {
   return e?.response?.data?.error || e?.message || fallback
 }
@@ -527,9 +546,9 @@ async function saveEdit() {
   const row = editingUser.value
   if (!row) return
 
-  // 只提交发生变更的字段：管理员角色不可改，密码留空不修改
+  // 只提交发生变更的字段：内置 admin 账号角色不可改，密码留空不修改
   const d: { role?: string; password?: string; display_name?: string; email?: string } = {}
-  if (row.role !== 'admin' && editForm.role !== row.role) d.role = editForm.role
+  if (!isProtectedAdmin(row) && editForm.role !== row.role) d.role = editForm.role
   if (editForm.password) d.password = editForm.password
   if (editForm.display_name.trim() !== (row.display_name || '')) d.display_name = editForm.display_name.trim()
   if (editForm.email.trim() !== (row.email || '')) d.email = editForm.email.trim()

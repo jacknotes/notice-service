@@ -24,6 +24,12 @@ const resetTokenTTL = 15 * time.Minute
 // emailRe 简单邮箱格式校验（非严格 RFC，够用即可）。
 var emailRe = regexp.MustCompile(`^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$`)
 
+// isDefaultAdmin 判断是否为内置默认 admin 账号（bootstrap 创建，username='admin'）。
+// 该账号的角色与密码受保护：不可由管理员在用户管理里更改/重置（恢复走离线 CLI）。
+func isDefaultAdmin(u *model.User) bool {
+	return u != nil && u.Username == "admin"
+}
+
 type UserService struct {
 	users *repository.UserRepo
 }
@@ -33,9 +39,14 @@ func NewUserService(db *sql.DB) *UserService {
 }
 
 // GenerateResetToken 生成一次性重置令牌（15 分钟有效），返回给管理员线下转交用户。
+// 内置 admin 账号的密码不可由管理员重置（防止把默认管理员锁死），请走离线 CLI。
 func (s *UserService) GenerateResetToken(userID int64) (string, time.Time, error) {
-	if _, err := s.users.GetByID(userID); err != nil {
+	target, err := s.users.GetByID(userID)
+	if err != nil {
 		return "", time.Time{}, err
+	}
+	if isDefaultAdmin(target) {
+		return "", time.Time{}, errors.New("不能重置内置 admin 账号的密码")
 	}
 	token := randomToken(24)
 	expires := time.Now().Add(resetTokenTTL)
@@ -128,7 +139,9 @@ func (s *UserService) BatchDelete(operatorID int64, operatorRole string, ids []i
 }
 
 // Update 修改用户角色/密码/显示名/邮箱。operatorRole 为操作者角色；仅 admin 可操作。
-// 规则：管理员角色可降级，但至少保留一个管理员；不能修改当前登录账号（个人密码请走个人设置）。
+// 规则：管理员角色可降级（含提升后再降级），但至少保留一个管理员；不能修改当前登录
+// 账号（个人密码请走个人设置）；内置 admin 账号（username='admin'）的角色不可更改、
+// 密码不可由管理员重置。
 func (s *UserService) Update(operatorID int64, operatorRole string, targetID int64, role, newPass *string, displayName, email *string) error {
 	if operatorRole != "admin" {
 		return errors.New("无权操作")
@@ -147,6 +160,9 @@ func (s *UserService) Update(operatorID int64, operatorRole string, targetID int
 		if *role != "admin" && *role != "user" {
 			return errors.New("角色必须是 admin 或 user")
 		}
+		if isDefaultAdmin(target) && *role != "admin" {
+			return errors.New("不能修改内置 admin 账号的角色")
+		}
 		if target.Role == "admin" && *role != "admin" {
 			// 允许降级管理员，但至少要保留一个管理员（防止系统锁死）
 			admins, err := s.users.CountAdmins()
@@ -164,6 +180,9 @@ func (s *UserService) Update(operatorID int64, operatorRole string, targetID int
 	}
 	nextHash := target.PasswordHash
 	if newPass != nil && *newPass != "" {
+		if isDefaultAdmin(target) {
+			return errors.New("不能重置内置 admin 账号的密码")
+		}
 		if err := validatePassword(*newPass); err != nil {
 			return err
 		}
