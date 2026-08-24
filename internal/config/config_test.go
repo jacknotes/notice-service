@@ -272,3 +272,16 @@ func TestEncryptKeyFileAndAutoFlag(t *testing.T) {
 		t.Error("explicit ENCRYPT_KEY -> not auto-generated")
 	}
 }
+
+func TestStaticDirDefault(t *testing.T) {
+	clearEnv(t)
+	cfg := LoadFile(t.TempDir() + "/nope.yml")
+	if cfg.StaticDir != "./web/dist" {
+		t.Errorf("StaticDir default = %q, want ./web/dist", cfg.StaticDir)
+	}
+	t.Setenv("STATIC_DIR", "/srv/static")
+	cfg2 := LoadFile(t.TempDir() + "/nope.yml")
+	if cfg2.StaticDir != "/srv/static" {
+		t.Errorf("STATIC_DIR override = %q", cfg2.StaticDir)
+	}
+}

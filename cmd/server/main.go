@@ -17,6 +17,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"sync"
 	"syscall"
@@ -168,15 +169,20 @@ func main() {
 		TrustedProxies: cfg.TrustedProxies,
 		SwaggerEnabled: cfg.SwaggerEnabled,
 	})
-	engine.Static("/assets", "./web/dist/assets")
-	engine.StaticFile("/", "./web/dist/index.html")
+	staticDir, staticOK := resolveStaticDir(cfg.StaticDir)
+	if staticOK {
+		engine.Static("/assets", filepath.Join(staticDir, "assets"))
+		engine.StaticFile("/", filepath.Join(staticDir, "index.html"))
+	} else {
+		log.Printf("[警告] 未找到静态资源目录（STATIC_DIR=%s，./web/dist，可执行文件同目录均不存在），SPA 页面不可用，API 照常。", cfg.StaticDir)
+	}
 	engine.NoRoute(func(c *gin.Context) {
 		if strings.HasPrefix(c.Request.URL.Path, "/api/") {
 			c.JSON(404, gin.H{"error": "not found"})
 			return
 		}
-		if c.Request.Method == "GET" {
-			c.File("./web/dist/index.html")
+		if staticOK && c.Request.Method == "GET" {
+			c.File(filepath.Join(staticDir, "index.html"))
 			return
 		}
 		c.JSON(404, gin.H{"error": "not found"})
@@ -258,6 +264,27 @@ func checkEncryptKeyPresence(cfg *config.Config, chRepo *repository.ChannelRepo)
 		return fmt.Errorf("检测到 %d 个已加密渠道配置，但未提供 ENCRYPT_KEY 且密钥文件 %s 不存在，历史渠道配置将无法解密；请设置 ENCRYPT_KEY 或恢复密钥文件", n, cfg.EncryptKeyFile)
 	}
 	return nil
+}
+
+// resolveStaticDir 按优先级解析静态资源目录：配置值 → ./web/dist → 可执行文件同目录 web/dist。
+// 返回 (目录, 是否可用)。
+func resolveStaticDir(configured string) (string, bool) {
+	for _, d := range []string{configured, "./web/dist"} {
+		if d != "" && dirExists(d) {
+			return d, true
+		}
+	}
+	if exe, err := os.Executable(); err == nil {
+		if cand := filepath.Join(filepath.Dir(exe), "web", "dist"); dirExists(cand) {
+			return cand, true
+		}
+	}
+	return "", false
+}
+
+func dirExists(p string) bool {
+	st, err := os.Stat(p)
+	return err == nil && st.IsDir()
 }
 
 // padKey 保证 32 字节：过长截断，过短用 SHA-256 摘要补齐。
