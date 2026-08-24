@@ -613,7 +613,15 @@ GOCACHE=$PWD/.dev/go-cache GOMODCACHE=$PWD/.dev/gomodcache GOPATH=/tmp/dsh-gopat
 3b. `internal/router/router.go`：
 - import 加 `"strconv"` 与 `"notice-service/internal/metrics"`。
 - `Options` 增加字段：`MetricsEnabled bool`、`MetricsUser string`、`MetricsPassword string`。
-- `accessLogger` 在写日志前加：`metrics.HTTPRequests.WithLabelValues(strconv.Itoa(c.Writer.Status()), c.Request.Method, path).Inc()`（`path` 为已脱敏路径）。
+- `accessLogger` 在写日志前加（**必须用 `c.FullPath()` 路由模板，而不是原始 URL path**——否则 `/api/webhook/<api_key>` 会把 api_key 泄进指标标签，且 `:id` 类路由造成路径基数爆炸）：
+
+```go
+		// 指标 path 标签用路由模板（c.FullPath()），避免 api_key 泄漏与路径基数爆炸。
+		metrics.HTTPRequests.WithLabelValues(strconv.Itoa(c.Writer.Status()), c.Request.Method, c.FullPath()).Inc()
+```
+
+（`accessLogger` 中现有的 `path` 变量仍用于日志脱敏输出，保留不动。）
+
 - `NewRouter` 内、`/api/health` 之后加：
 
 ```go
