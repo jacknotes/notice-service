@@ -21,15 +21,16 @@ func Auth(svc *service.AuthService) gin.HandlerFunc {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "登录已过期"})
 			return
 		}
-		// 每次请求回查用户状态：被禁用（软删除）的用户其已签发令牌立即失效，
-		// 而不是等到 24h 令牌自然过期（与「停用渠道不再参与投递」同口径）。
-		if !svc.UserActive(claims.UserID) {
+		// 每次请求回查用户当前状态与角色：被禁用（软删除）的用户其已签发令牌立即失效；
+		// 角色也以 DB 为准——提权/降级在下一个请求即生效，而不是等 JWT 自然过期。
+		u, err := svc.User(claims.UserID)
+		if err != nil || !u.Enabled {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "账号已被禁用"})
 			return
 		}
-		c.Set("uid", claims.UserID)
-		c.Set("role", claims.Role)
-		c.Set("username", svc.GetUsername(claims.UserID))
+		c.Set("uid", u.ID)
+		c.Set("role", u.Role)
+		c.Set("username", u.Username)
 		c.Next()
 	}
 }
