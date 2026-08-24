@@ -155,6 +155,8 @@ Webhook 的 IP 白名单依赖 `X-Real-IP` / `X-Forwarded-For` 头，但这些�
 | `QUEUE_JOB_RETENTION_DAYS` | 30 | 已完成 job 保留天数 |
 | `AUDIT_RETENTION_DAYS` | 180 | 审计日志保留天数（超出自动清理） |
 | `TRUSTED_PROXIES` | 127.0.0.1,::1,172.16.0.0/12 | 可信反向代理 CIDR（逗号分隔），控制 X-Forwarded-For / X-Real-IP 是否可信 |
+| `ENCRYPT_KEY_FILE` | .notice-encrypt.key | 渠道加密密钥文件路径（未设 ENCRYPT_KEY 时读取/生成；重启前请确保持久化，否则历史渠道配置无法解密） |
+| `STATIC_DIR` | ./web/dist | 前端静态资源目录（SPA 产物；非固定工作目录启动时请指定） |
 | `SWAGGER_ENABLED` | true | 是否暴露 `/swagger` API 文档 |
 
 ## 用户与角色管理

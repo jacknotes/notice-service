@@ -36,3 +36,6 @@ trusted_proxies: "127.0.0.1,::1,172.16.0.0/12"
 
 # 是否暴露 /swagger API 文档
 swagger_enabled: true
+
+# encrypt_key_file: .notice-encrypt.key   # 渠道加密密钥文件路径（ENCRYPT_KEY 未设时读取/生成）
+# static_dir: ./web/dist                  # 前端静态资源目录
