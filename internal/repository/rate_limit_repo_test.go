@@ -89,6 +89,40 @@ func TestRateLimitLoginLock(t *testing.T) {
 	}
 }
 
+// TestRateLimitLockExpiryResetsCount 锁定到期后计数清零：到期后一次失败不会立即再锁定
+// （与旧内存限流器语义一致，见 spec「限流语义不变」）。
+func TestRateLimitLockExpiryResetsCount(t *testing.T) {
+	db := openTestDB(t)
+	if _, err := db.Exec("DELETE FROM rate_limits"); err != nil {
+		t.Fatal(err)
+	}
+	r := NewRateLimitRepo(db)
+	bucket := "login:exp" + randSuffix()
+	// 构造已到期且计数达到上限的行
+	if _, err := db.Exec(
+		"INSERT INTO rate_limits (bucket, window_start, count, locked_until) VALUES (?, 0, 5, NOW() - INTERVAL 1 MINUTE)", bucket); err != nil {
+		t.Fatal(err)
+	}
+	locked, err := r.LoginLocked(bucket)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if locked {
+		t.Fatal("expired lock should not report locked")
+	}
+	// 到期后一次失败：计数应从 0 回到 1，不再立即锁
+	if err := r.RecordLoginFailure(bucket, 5, 15*time.Minute); err != nil {
+		t.Fatal(err)
+	}
+	locked, err = r.LoginLocked(bucket)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if locked {
+		t.Fatal("after expiry, a single failure should not re-lock")
+	}
+}
+
 // TestRateLimitCleanup 清理超过保留期的旧行。
 func TestRateLimitCleanup(t *testing.T) {
 	db := openTestDB(t)

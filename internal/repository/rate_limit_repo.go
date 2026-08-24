@@ -30,6 +30,8 @@ func (r *RateLimitRepo) Allow(bucket string, window time.Duration, limit int) (b
 }
 
 // LoginLocked 登录是否处于锁定（locked_until 未过期）。
+// 锁定到期（locked_until 已过）时清零计数并解除锁定，与旧内存限流器语义一致：
+// 「5 次/15 分钟，到期计数清零」——到期后一次失败不会立即再次锁定。
 func (r *RateLimitRepo) LoginLocked(bucket string) (bool, error) {
 	var until sql.NullTime
 	err := r.db.QueryRow(
@@ -40,7 +42,21 @@ func (r *RateLimitRepo) LoginLocked(bucket string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	return until.Valid && time.Now().Before(until.Time), nil
+	if !until.Valid {
+		// 未锁定过（只累计过失败次数）。
+		return false, nil
+	}
+	if time.Now().Before(until.Time) {
+		// 仍处于锁定窗口内。
+		return true, nil
+	}
+	// 锁定已到期：清零计数并解除锁定，避免 count 仍 >= maxFails 导致下一次
+	// RecordLoginFailure 立即重新锁定整个窗口（与旧内存限流器 reset-on-expiry 一致）。
+	if _, err := r.db.Exec(
+		`UPDATE rate_limits SET count=0, locked_until=NULL WHERE bucket=? AND window_start=0`, bucket); err != nil {
+		return false, err
+	}
+	return false, nil
 }
 
 // RecordLoginFailure 记录一次连续失败；count 达到 maxFails 时锁定 lockWindow。
