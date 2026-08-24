@@ -224,7 +224,7 @@
 
         <el-form-item v-if="form.trigger_type === 'api'" label="HMAC 签名校验">
           <div class="signature-row">
-            <el-switch v-model="form.require_signature" />
+            <el-switch v-model="form.require_signature" aria-label="需要 HMAC 签名" />
             <span class="signature-label">需要 HMAC 签名</span>
           </div>
           <el-alert
