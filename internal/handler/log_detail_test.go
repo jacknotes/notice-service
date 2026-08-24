@@ -35,7 +35,7 @@ func TestLogDetail(t *testing.T) {
 	taskID := int64(tk["id"].(float64))
 	chID := int64(ch["id"].(float64))
 
-	res, err := db.Exec("INSERT INTO task_logs (task_id, channel_id, subject, content, status, request, response, error_msg, trigger_type, trigger_by, trigger_ip, sent_at) VALUES (?, ?, '主题A', '正文B', 'failed', '{\"address\":\"a@x.com\"}', '', 'boom', 'manual', 'admin', '1.2.3.4', NOW())", taskID, chID)
+	res, err := db.Exec("INSERT INTO task_logs (task_id, channel_id, subject, content, status, request, response, error_msg, trigger_type, trigger_by, trigger_ip, sent_at) VALUES (?, ?, '主题A', '正文B', 'failed', '{\"address\":\"a@x.com\"}', 'resp-ok', 'boom', 'manual', 'admin', '1.2.3.4', NOW())", taskID, chID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -49,6 +49,9 @@ func TestLogDetail(t *testing.T) {
 	d := mustJSON(t, w)
 	if d["subject"] != "主题A" || d["content"] != "正文B" || d["status"] != "failed" {
 		t.Fatalf("detail fields = %+v", d)
+	}
+	if d["request"] != `{"address":"a@x.com"}` || d["response"] != "resp-ok" {
+		t.Fatalf("detail request/response = %+v", d)
 	}
 	if d["trigger_by"] != "admin" || d["trigger_ip"] != "1.2.3.4" {
 		t.Fatalf("trigger info = %+v", d)

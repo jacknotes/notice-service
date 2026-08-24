@@ -3,6 +3,7 @@ package handler
 import (
 	"database/sql"
 	"encoding/csv"
+	"errors"
 	"net/http"
 	"strconv"
 	"time"
@@ -369,8 +370,12 @@ func (h *TaskHandler) LogByID(c *gin.Context) {
 		return
 	}
 	log, err := h.svc.GetLog(id)
-	if err != nil {
+	if errors.Is(err, repository.ErrNotFound) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "日志不存在"})
+		return
+	}
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 	c.JSON(http.StatusOK, log)
