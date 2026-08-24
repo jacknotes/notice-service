@@ -48,6 +48,7 @@ type QueueService struct {
 	taskRepo   *repository.TaskRepo
 	logRepo    *repository.TaskLogRepo
 	auditRepo  *repository.AuditRepo
+	rateLimit  *repository.RateLimitRepo
 	ns         *NotificationService
 	cfg        QueueConfig
 	instanceID string
@@ -63,6 +64,7 @@ func NewQueueService(db *sql.DB, ns *NotificationService, cfg QueueConfig, insta
 		taskRepo:   repository.NewTaskRepo(db),
 		logRepo:    repository.NewTaskLogRepo(db),
 		auditRepo:  repository.NewAuditRepo(db),
+		rateLimit:  repository.NewRateLimitRepo(db),
 		ns:         ns,
 		cfg:        cfg,
 		instanceID: instanceID,
@@ -267,6 +269,11 @@ func (q *QueueService) cleanup() {
 		} else if n > 0 {
 			log.Printf("queue: cleaned %d audit_logs (older than %dd)", n, q.cfg.AuditRetentionDays)
 		}
+	}
+	if n, err := q.rateLimit.Cleanup(24 * time.Hour); err != nil {
+		log.Printf("queue: cleanup rate_limits: %v", err)
+	} else if n > 0 {
+		log.Printf("queue: cleaned %d rate_limits rows", n)
 	}
 }
 

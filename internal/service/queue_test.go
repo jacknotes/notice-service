@@ -378,3 +378,29 @@ func TestStopWithTimeoutForcesExit(t *testing.T) {
 	close(block)
 	q.Stop()
 }
+
+// TestCleanerPurgesRateLimits 验证 rate_limits 已接入每日清理（R2 §4.3）。
+func TestCleanerPurgesRateLimits(t *testing.T) {
+	db := testDB(t)
+	if _, err := db.Exec("DELETE FROM rate_limits"); err != nil {
+		t.Fatal(err)
+	}
+	ns := NewNotificationService(db, nil)
+	q := NewQueueService(db, ns, queueCfg(), "test-inst")
+	if _, err := db.Exec(
+		"INSERT INTO rate_limits (bucket, window_start, count) VALUES ('webhook:old', 0, 1)"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(
+		"UPDATE rate_limits SET updated_at = NOW() - INTERVAL 2 DAY WHERE bucket='webhook:old'"); err != nil {
+		t.Fatal(err)
+	}
+	q.cleanup()
+	var n int
+	if err := db.QueryRow("SELECT COUNT(*) FROM rate_limits WHERE bucket='webhook:old'").Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	if n != 0 {
+		t.Fatalf("cleanup should purge stale rate_limits rows, got %d", n)
+	}
+}
