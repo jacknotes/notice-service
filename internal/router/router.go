@@ -161,6 +161,9 @@ func NewRouter(db *sql.DB, authSvc *service.AuthService, cipher *crypto.Cipher, 
 			admin.POST("/users/:id/enable", userH.Enable)               // 启用用户
 
 			admin.GET("/audit", auditH.List) // 操作审计日志
+
+			expH := handler.NewExportHandler(db, cipher)
+			admin.GET("/export", expH.Export) // 导出渠道/模板/任务 JSON 备份（仅管理员）
 		}
 	}
 	api.POST("/webhook/:api_key", webhookH.Trigger)
