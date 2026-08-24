@@ -87,3 +87,11 @@ func (r *ChannelRepo) BatchDelete(ids []int64) error {
 		"UPDATE channels SET deleted_at = NOW() WHERE id IN ("+placeholders+") AND deleted_at IS NULL", args...)
 	return err
 }
+
+// CountEncrypted 统计存在加密渠道配置的行（config_json 非空且未删除）。
+func (r *ChannelRepo) CountEncrypted() (int, error) {
+	var n int
+	err := r.db.QueryRow(
+		"SELECT COUNT(*) FROM channels WHERE config_json IS NOT NULL AND config_json != '' AND deleted_at IS NULL").Scan(&n)
+	return n, err
+}
