@@ -177,9 +177,15 @@ async function loadDetail() {
   loading.value = true
   try {
     log.value = await logApi.detail(id.value)
-  } catch {
-    // 404 等：统一展示「日志不存在」
-    log.value = null
+  } catch (e: any) {
+    if (e?.response?.status === 404) {
+      // 日志不存在（404）→ 空状态
+      log.value = null
+    } else {
+      // 其它错误（网络/500/参数错误）→ 提示 + 空状态，避免误报「日志不存在」
+      ElMessage.error(e?.response?.data?.error || '加载失败，请稍后再试')
+      log.value = null
+    }
   } finally {
     loading.value = false
   }
@@ -212,6 +218,15 @@ onMounted(() => {
   loadDetail()
   loadMeta()
 })
+
+// 路由参数变化（组件复用场景）时重新加载，避免展示陈旧日志
+watch(
+  () => route.params.id,
+  () => {
+    loadDetail()
+    loadMeta()
+  },
+)
 </script>
 
 <style scoped>
