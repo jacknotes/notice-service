@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"log"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -13,6 +14,7 @@ import (
 
 	"notice-service/internal/crypto"
 	"notice-service/internal/handler"
+	"notice-service/internal/metrics"
 	"notice-service/internal/middleware"
 	"notice-service/internal/scheduler"
 	"notice-service/internal/service"
@@ -28,6 +30,11 @@ type Options struct {
 	SwaggerEnabled bool
 	// MaxBodyBytes 请求体大小上限（字节）。
 	MaxBodyBytes int64
+	// MetricsEnabled 是否暴露 /metrics（Prometheus）。默认关闭。
+	MetricsEnabled bool
+	// MetricsUser / MetricsPassword 同时非空时 /metrics 需 Basic Auth。
+	MetricsUser     string
+	MetricsPassword string
 }
 
 func NewRouter(db *sql.DB, authSvc *service.AuthService, cipher *crypto.Cipher, sched *scheduler.Scheduler, queue *service.QueueService, opts ...Options) *gin.Engine {
@@ -36,10 +43,15 @@ func NewRouter(db *sql.DB, authSvc *service.AuthService, cipher *crypto.Cipher, 
 		if opts[0].SwaggerEnabled {
 			o.SwaggerEnabled = true
 		}
+		if opts[0].MetricsEnabled {
+			o.MetricsEnabled = true
+		}
 		if opts[0].MaxBodyBytes > 0 {
 			o.MaxBodyBytes = opts[0].MaxBodyBytes
 		}
 		o.TrustedProxies = opts[0].TrustedProxies
+		o.MetricsUser = opts[0].MetricsUser
+		o.MetricsPassword = opts[0].MetricsPassword
 	}
 
 	// 不用 gin.Default()（它信任全部代理头）；显式 New + Recovery + 自研
@@ -72,6 +84,13 @@ func NewRouter(db *sql.DB, authSvc *service.AuthService, cipher *crypto.Cipher, 
 	sysH := handler.NewSystemHandler(db)
 
 	r.GET("/api/health", handler.Health(db))
+	if o.MetricsEnabled {
+		m := r.Group("")
+		if o.MetricsUser != "" || o.MetricsPassword != "" {
+			m.Use(metricsBasicAuth(o.MetricsUser, o.MetricsPassword))
+		}
+		m.GET("/metrics", gin.WrapH(metrics.Handler()))
+	}
 	if o.SwaggerEnabled {
 		r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 	}
@@ -80,7 +99,7 @@ func NewRouter(db *sql.DB, authSvc *service.AuthService, cipher *crypto.Cipher, 
 	api.Use(bodyLimit(o.MaxBodyBytes))
 	api.POST("/auth/login", authH.Login)
 	api.POST("/auth/forgot-password", authH.ForgotPassword) // 公开：一次性令牌自助重置密码
-	api.POST("/auth/2fa/verify", authH.Verify2FA)          // 公开：登录第二步（持待验证令牌）
+	api.POST("/auth/2fa/verify", authH.Verify2FA)           // 公开：登录第二步（持待验证令牌）
 
 	auth := api.Group("")
 	auth.Use(middleware.Auth(authSvc))
@@ -156,6 +175,8 @@ func accessLogger() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		start := time.Now()
 		c.Next()
+		// 指标 path 标签用路由模板（c.FullPath()），避免 api_key 泄漏与路径基数爆炸。
+		metrics.HTTPRequests.WithLabelValues(strconv.Itoa(c.Writer.Status()), c.Request.Method, c.FullPath()).Inc()
 		path := c.Request.URL.Path
 		if strings.HasPrefix(path, "/api/webhook/") {
 			path = "/api/webhook/<redacted>"
@@ -163,6 +184,19 @@ func accessLogger() gin.HandlerFunc {
 		log.Printf("[http] %s %s %d %s %s",
 			c.Request.Method, path, c.Writer.Status(),
 			time.Since(start).Round(time.Millisecond), c.ClientIP())
+	}
+}
+
+// metricsBasicAuth /metrics 的可选 Basic Auth（两字段都非空才要求）。
+func metricsBasicAuth(user, pass string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		u, p, ok := c.Request.BasicAuth()
+		if !ok || u != user || p != pass {
+			c.Header("WWW-Authenticate", `Basic realm="metrics"`)
+			c.AbortWithStatus(http.StatusUnauthorized)
+			return
+		}
+		c.Next()
 	}
 }
 

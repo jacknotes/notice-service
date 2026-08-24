@@ -28,6 +28,7 @@ import (
 	"notice-service/internal/config"
 	"notice-service/internal/crypto"
 	"notice-service/internal/database"
+	"notice-service/internal/metrics"
 	"notice-service/internal/repository"
 	"notice-service/internal/router"
 	"notice-service/internal/scheduler"
@@ -109,6 +110,15 @@ func main() {
 	queue.Start()
 	defer queue.StopWithTimeout(15 * time.Second)
 
+	// 注入 /metrics 的队列深度指标（scrape 时实时统计 pending job 数）。
+	metrics.QueuePendingFunc = func() float64 {
+		n, err := repository.NewSendJobRepo(db).CountPending()
+		if err != nil {
+			return 0
+		}
+		return float64(n)
+	}
+
 	// 调度器：cron 到点只做快速入队（毫秒级），带 dedupe key 防极端竞态重复
 	sched := scheduler.New(func(taskID int64, dedupeKey string) {
 		if _, err := queue.Enqueue(taskID, nil, dedupeKey,
@@ -166,8 +176,11 @@ func main() {
 	}()
 
 	engine := router.NewRouter(db, authSvc, ciph, sched, queue, router.Options{
-		TrustedProxies: cfg.TrustedProxies,
-		SwaggerEnabled: cfg.SwaggerEnabled,
+		TrustedProxies:  cfg.TrustedProxies,
+		SwaggerEnabled:  cfg.SwaggerEnabled,
+		MetricsEnabled:  cfg.MetricsEnabled,
+		MetricsUser:     cfg.MetricsUser,
+		MetricsPassword: cfg.MetricsPassword,
 	})
 	staticDir, staticOK := resolveStaticDir(cfg.StaticDir)
 	if staticOK {

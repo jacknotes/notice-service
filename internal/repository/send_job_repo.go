@@ -12,6 +12,13 @@ type SendJobRepo struct{ db *sql.DB }
 
 func NewSendJobRepo(db *sql.DB) *SendJobRepo { return &SendJobRepo{db: db} }
 
+// CountPending 统计待处理（pending）job 数（/metrics 用）。
+func (r *SendJobRepo) CountPending() (int64, error) {
+	var n int64
+	err := r.db.QueryRow("SELECT COUNT(*) FROM send_jobs WHERE status='pending'").Scan(&n)
+	return n, err
+}
+
 const sendJobCols = `id, task_id, log_id, trigger_type, trigger_by, trigger_ip, vars_json, status, claimed_by, claimed_at, attempts,
 	next_retry_at, last_error, created_at, updated_at, sent_at, dedupe_key`
 
