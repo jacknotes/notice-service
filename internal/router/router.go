@@ -86,7 +86,7 @@ func NewRouter(db *sql.DB, authSvc *service.AuthService, cipher *crypto.Cipher, 
 	r.GET("/api/health", handler.Health(db))
 	if o.MetricsEnabled {
 		m := r.Group("")
-		if o.MetricsUser != "" || o.MetricsPassword != "" {
+		if o.MetricsUser != "" && o.MetricsPassword != "" {
 			m.Use(metricsBasicAuth(o.MetricsUser, o.MetricsPassword))
 		}
 		m.GET("/metrics", gin.WrapH(metrics.Handler()))
