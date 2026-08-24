@@ -3,10 +3,12 @@ package handler
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
+	"io"
+	"log"
 	"net"
 	"net/http"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -16,48 +18,17 @@ import (
 	"notice-service/internal/service"
 )
 
-// keyRateLimiter 按 key 的固定窗口限流（内存态，单实例计数）。
-type keyRateLimiter struct {
-	mu       sync.Mutex
-	hits     map[string]int
-	windowAt map[string]time.Time
-	limit    int
-	window   time.Duration
-}
-
-func newKeyRateLimiter(limit int, window time.Duration) *keyRateLimiter {
-	return &keyRateLimiter{
-		hits:     map[string]int{},
-		windowAt: map[string]time.Time{},
-		limit:    limit,
-		window:   window,
-	}
-}
-
-func (l *keyRateLimiter) allow(key string) bool {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	now := time.Now()
-	if start, ok := l.windowAt[key]; !ok || now.Sub(start) >= l.window {
-		l.windowAt[key] = now
-		l.hits[key] = 1
-		return true
-	}
-	l.hits[key]++
-	return l.hits[key] <= l.limit
-}
-
 type WebhookHandler struct {
-	repo    *repository.TaskRepo
-	queue   *service.QueueService
-	limiter *keyRateLimiter
+	repo      *repository.TaskRepo
+	queue     *service.QueueService
+	rateLimit *repository.RateLimitRepo
 }
 
 func NewWebhookHandler(db *sql.DB, queue *service.QueueService) *WebhookHandler {
 	return &WebhookHandler{
-		repo:    repository.NewTaskRepo(db),
-		queue:   queue,
-		limiter: newKeyRateLimiter(60, time.Minute), // 每 api_key 每分钟 60 次
+		repo:      repository.NewTaskRepo(db),
+		queue:     queue,
+		rateLimit: repository.NewRateLimitRepo(db),
 	}
 }
 
@@ -79,7 +50,11 @@ func (h *WebhookHandler) Trigger(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "缺少 API Key"})
 		return
 	}
-	if !h.limiter.allow(apiKey) {
+	// 集中式限流：每 api_key 60 次/分钟（多实例共享，DB 计数）。DB 故障时 fail-open。
+	allowed, err := h.rateLimit.Allow("webhook:"+apiKey, time.Minute, 60)
+	if err != nil {
+		log.Printf("webhook: rate limit check failed: %v", err)
+	} else if !allowed {
 		c.JSON(http.StatusTooManyRequests, gin.H{"error": "请求过于频繁，请稍后再试"})
 		return
 	}
@@ -99,9 +74,11 @@ func (h *WebhookHandler) Trigger(c *gin.Context) {
 	var req struct {
 		Variables map[string]string `json:"variables"`
 	}
-	_ = c.ShouldBindJSON(&req)
+	if err := c.ShouldBindJSON(&req); err != nil && !errors.Is(err, io.EOF) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "请求体不是合法 JSON"})
+		return
+	}
 	// 异步入队：请求立即返回 202，发送由后台 worker 池消费（含重试/崩溃接管）。
-	// 触发来源：webhook，触发 IP 取可信反代判定后的客户端地址。
 	jobID, err := h.queue.Enqueue(task.ID, req.Variables, "",
 		service.Trigger{Type: "webhook", By: "webhook", IP: c.ClientIP()})
 	if err != nil {

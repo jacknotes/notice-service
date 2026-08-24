@@ -185,7 +185,15 @@ func securityHeaders() gin.HandlerFunc {
 // bodyLimit 限制请求体大小，防超大请求拖垮内存。
 func bodyLimit(maxBytes int64) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxBytes)
+		// Go 1.25 起 http.NewRequest(..., nil) 生成的请求 Body 为 nil；
+		// MaxBytesReader 包装 nil 会得到内部 reader 为 nil 的 maxBytesReader，
+		// 读取请求体时 panic（如空 body 的 webhook POST）。统一把 nil 转成
+		// http.NoBody（读到即 io.EOF），既有非空请求行为不变。
+		body := c.Request.Body
+		if body == nil {
+			body = http.NoBody
+		}
+		c.Request.Body = http.MaxBytesReader(c.Writer, body, maxBytes)
 		c.Next()
 	}
 }

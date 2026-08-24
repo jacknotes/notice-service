@@ -5,9 +5,11 @@ package handler_test
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
 
@@ -234,5 +236,76 @@ func TestWebhookSwitchCronToAPIAndBack(t *testing.T) {
 	r.ServeHTTP(w2, req2)
 	if w2.Code != http.StatusNotFound {
 		t.Fatalf("old api_key should be invalid after cron switch, got %d body=%s", w2.Code, w2.Body.String())
+	}
+}
+
+// TestWebhookRateLimitSharedAcrossInstances 验证 R2：限流由 DB 集中计数（多实例共享）。
+// 关键断言：跨「新实例」（新内存计数器）第 61 次仍被拒绝——内存态会放行、DB 态不会。
+func TestWebhookRateLimitSharedAcrossInstances(t *testing.T) {
+	key := fmt.Sprintf("ratelimit-%d", time.Now().UnixNano())
+	db := testDB(t)
+	if _, err := db.Exec("DELETE FROM rate_limits WHERE bucket=?", "webhook:"+key); err != nil {
+		t.Fatal(err)
+	}
+	fire := func(r *gin.Engine) int {
+		w := httptest.NewRecorder()
+		req, _ := http.NewRequest("POST", "/api/webhook/"+key, bytes.NewBufferString(`{}`))
+		req.Header.Set("Content-Type", "application/json")
+		r.ServeHTTP(w, req)
+		return w.Code
+	}
+	r1 := testRouter(t)
+	for i := 0; i < 60; i++ {
+		if code := fire(r1); code == http.StatusTooManyRequests {
+			t.Fatalf("request #%d should not be limited yet", i+1)
+		}
+	}
+	// 新实例（全新内存计数器）的第 61 次：内存态会放行，DB 集中计数应仍拒绝（429）
+	r2 := testRouter(t)
+	if code := fire(r2); code != http.StatusTooManyRequests {
+		t.Fatalf("61st across a fresh instance should be 429 (DB shared), got %d", code)
+	}
+}
+
+// TestWebhookMalformedJSON400 验证 R8：畸形 JSON → 400；空 body 按空变量接受（202）。
+func TestWebhookMalformedJSON400(t *testing.T) {
+	channel.Register(&fakeOKChan{})
+	r := testRouter(t)
+	tok := login(t, r)
+
+	wt := authReq(t, r, tok, "POST", "/api/templates", `{"name":"t","subject":"s","content_md":"hi","variables":[]}`)
+	if wt.Code != 200 {
+		t.Fatalf("create template = %d body=%s", wt.Code, wt.Body.String())
+	}
+	tpl := mustJSON(t, wt)
+	wc := authReq(t, r, tok, "POST", "/api/channels", `{"type":"fake-ok","name":"c","config":{},"enabled":true}`)
+	if wc.Code != 200 {
+		t.Fatalf("create channel = %d body=%s", wc.Code, wc.Body.String())
+	}
+	ch := mustJSON(t, wc)
+	payload := `{"name":"t","channel_id":` + num(int64(ch["id"].(float64))) + `,"template_id":` + num(int64(tpl["id"].(float64))) + `,"trigger_type":"api","receivers":[],"enabled":true}`
+	wtk := authReq(t, r, tok, "POST", "/api/tasks", payload)
+	if wtk.Code != 200 {
+		t.Fatalf("create task = %d body=%s", wtk.Code, wtk.Body.String())
+	}
+	apiKey := mustJSON(t, wtk)["api_key"].(string)
+
+	post := func(body string) int {
+		var req *http.Request
+		if body == "" {
+			req, _ = http.NewRequest("POST", "/api/webhook/"+apiKey, nil)
+		} else {
+			req, _ = http.NewRequest("POST", "/api/webhook/"+apiKey, bytes.NewBufferString(body))
+		}
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+		return w.Code
+	}
+	if code := post(`{bad`); code != http.StatusBadRequest {
+		t.Fatalf("malformed json = %d, want 400", code)
+	}
+	if code := post(""); code != http.StatusAccepted {
+		t.Fatalf("empty body = %d, want 202", code)
 	}
 }
