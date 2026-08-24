@@ -53,7 +53,8 @@ func TestPasswordResetFlow(t *testing.T) {
 func TestLoginRateLimit(t *testing.T) {
 	db := testDB(t)
 	authSvc := NewAuthService(db, "secret", "admin", "admin123")
-	authSvc.limiter = newLoginLimiter(3, 5*time.Minute) // 加速：3 次失败即锁定
+	authSvc.maxFails = 3   // 加速：3 次失败即锁定
+	authSvc.lockWindow = 5 * time.Minute
 	uid := seedServiceUser(t, db)
 	if err := authSvc.users.UpdatePassword(uid, hashOf("Oldpass123!x")); err != nil {
 		t.Fatal(err)

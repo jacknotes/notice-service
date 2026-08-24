@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"log"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -25,22 +26,26 @@ type AuthClaims struct {
 }
 
 type AuthService struct {
-	users     *repository.UserRepo
-	jwtSecret []byte
-	adminUser string
-	adminPass string
-	tokenTTL  time.Duration
-	limiter   *loginLimiter
+	users      *repository.UserRepo
+	rateLimit  *repository.RateLimitRepo
+	jwtSecret  []byte
+	adminUser  string
+	adminPass  string
+	tokenTTL   time.Duration
+	maxFails   int
+	lockWindow time.Duration
 }
 
 func NewAuthService(db *sql.DB, jwtSecret, adminUser, adminPass string) *AuthService {
 	return &AuthService{
-		users:     repository.NewUserRepo(db),
-		jwtSecret: []byte(jwtSecret),
-		adminUser: adminUser,
-		adminPass: adminPass,
-		tokenTTL:  24 * time.Hour,
-		limiter:   newLoginLimiter(5, 15*time.Minute),
+		users:      repository.NewUserRepo(db),
+		rateLimit:  repository.NewRateLimitRepo(db),
+		jwtSecret:  []byte(jwtSecret),
+		adminUser:  adminUser,
+		adminPass:  adminPass,
+		tokenTTL:   24 * time.Hour,
+		maxFails:   5,
+		lockWindow: 15 * time.Minute,
 	}
 }
 
@@ -185,12 +190,17 @@ type LoginResult struct {
 func (s *AuthService) Login(username, password string) (*LoginResult, error) {
 	username = strings.TrimSpace(username) // 忽略首尾空格
 	password = strings.TrimSpace(password)
-	if err := s.limiter.checkLocked(username); err != nil {
-		return nil, err
+	bucket := "login:" + username
+	// 锁定判定：DB 集中式（多实例共享）。DB 故障时 fail-open（登录本身依赖 DB）。
+	locked, err := s.rateLimit.LoginLocked(bucket)
+	if err != nil {
+		log.Printf("auth: rate limit check failed: %v", err)
+	} else if locked {
+		return nil, errors.New("登录失败次数过多，请稍后再试")
 	}
 	u, err := s.users.GetByUsername(username)
 	if errors.Is(err, repository.ErrNotFound) {
-		s.limiter.recordFailure(username)
+		_ = s.rateLimit.RecordLoginFailure(bucket, s.maxFails, s.lockWindow)
 		return nil, errors.New("用户名或密码错误")
 	}
 	if err != nil {
@@ -201,10 +211,10 @@ func (s *AuthService) Login(username, password string) (*LoginResult, error) {
 		return nil, errors.New("账号已被禁用")
 	}
 	if bcrypt.CompareHashAndPassword([]byte(u.PasswordHash), []byte(password)) != nil {
-		s.limiter.recordFailure(username)
+		_ = s.rateLimit.RecordLoginFailure(bucket, s.maxFails, s.lockWindow)
 		return nil, errors.New("用户名或密码错误")
 	}
-	s.limiter.reset(username)
+	_ = s.rateLimit.Reset(bucket)
 	if u.TOTPEnabled {
 		pending, err := s.IssuePending2FAToken(u.ID)
 		if err != nil {
