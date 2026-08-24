@@ -52,6 +52,7 @@ type QueueService struct {
 	cfg        QueueConfig
 	instanceID string
 	stopCh     chan struct{}
+	stopOnce   sync.Once
 	wg         sync.WaitGroup
 }
 
@@ -80,9 +81,23 @@ func (q *QueueService) Start() {
 	go q.cleanerLoop()
 }
 
-func (q *QueueService) Stop() {
-	close(q.stopCh)
-	q.wg.Wait()
+func (q *QueueService) Stop() { q.StopWithTimeout(0) }
+
+// StopWithTimeout 停止队列：关闭 stopCh 并等待 worker 退出；d<=0 无限等待，
+// d>0 时超时记录日志强制返回（防止 worker 卡在发送导致进程挂住不退）。幂等。
+func (q *QueueService) StopWithTimeout(d time.Duration) {
+	q.stopOnce.Do(func() { close(q.stopCh) })
+	done := make(chan struct{})
+	go func() { q.wg.Wait(); close(done) }()
+	if d <= 0 {
+		<-done
+		return
+	}
+	select {
+	case <-done:
+	case <-time.After(d):
+		log.Printf("queue: drain timeout after %s, forcing exit", d)
+	}
 }
 
 // Enqueue 落库入队。dedupeKey 非空时保证相同键只入队一次（cron 用）；

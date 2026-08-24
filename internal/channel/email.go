@@ -13,6 +13,9 @@ import (
 	"notice-service/internal/render"
 )
 
+// smtpOpTimeout SMTP 会话整体超时（覆盖 MAIL/RCPT/DATA/QUIT 全程）。
+const smtpOpTimeout = 30 * time.Second
+
 type EmailChannel struct {
 	config map[string]string
 }
@@ -52,6 +55,12 @@ func dialAndAuth(cfg map[string]string) (*smtp.Client, error) {
 		conn, err = dialer.Dial("tcp", addr)
 	}
 	if err != nil {
+		return nil, err
+	}
+
+	// 整体超时：SMTP 会话全程有界（dial 只有 TCP 层 10s，会话若无限等待会卡死 worker）。
+	if err := conn.SetDeadline(time.Now().Add(smtpOpTimeout)); err != nil {
+		_ = conn.Close()
 		return nil, err
 	}
 

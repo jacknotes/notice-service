@@ -321,3 +321,60 @@ func TestQueueEnqueueLogRetryRejectsSuccess(t *testing.T) {
 		t.Fatal("retry of a success log should be rejected")
 	}
 }
+
+// blockingChan 发送时阻塞，模拟 worker 卡在下游（验证 StopWithTimeout 超时兜底）。
+type blockingChan struct{ release chan struct{} }
+
+func (b *blockingChan) Type() string                           { return "queue-block" }
+func (b *blockingChan) ValidateConfig(map[string]string) error { return nil }
+func (b *blockingChan) TestConnection(map[string]string) error { return nil }
+func (b *blockingChan) Send(m *channel.Message, r *channel.Receiver) error {
+	<-b.release
+	return nil
+}
+
+func TestStopWithTimeoutForcesExit(t *testing.T) {
+	db := testDB(t)
+	if _, err := db.Exec("DELETE FROM send_jobs"); err != nil {
+		t.Fatal(err)
+	}
+	ns := NewNotificationService(db, nil)
+	block := make(chan struct{})
+	ns.Instancer = func(c *model.Channel) (channel.Channel, error) { return &blockingChan{release: block}, nil }
+	cfg := queueCfg()
+	cfg.Workers = 1
+	q := NewQueueService(db, ns, cfg, "test-inst")
+	uid := seedServiceUser(t, db)
+	chID := seedServiceChannel(t, db, uid)
+	tplID := seedServiceTemplate(t, db, uid)
+	tkID := seedServiceTask(t, db, uid, chID, tplID)
+	q.Start()
+	jobID, err := q.Enqueue(tkID, nil, "", Trigger{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// 等 worker 认领并卡在 Send
+	deadline := time.Now().Add(3 * time.Second)
+	for {
+		j, err := q.jobRepo.GetByID(jobID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if j.Status == "claimed" {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("job should be claimed, status=%s", j.Status)
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	// StopWithTimeout 应在超时后返回（不挂住进程）
+	start := time.Now()
+	q.StopWithTimeout(50 * time.Millisecond)
+	if elapsed := time.Since(start); elapsed > 2*time.Second {
+		t.Fatalf("StopWithTimeout hung for %v", elapsed)
+	}
+	// 释放阻塞，worker 完成；再次 Stop 应幂等不 panic
+	close(block)
+	q.Stop()
+}

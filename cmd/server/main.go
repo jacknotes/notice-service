@@ -106,7 +106,7 @@ func main() {
 	}
 	queue := service.NewQueueService(db, ns, qcfg, cfg.InstanceID)
 	queue.Start()
-	defer queue.Stop()
+	defer queue.StopWithTimeout(15 * time.Second)
 
 	// 调度器：cron 到点只做快速入队（毫秒级），带 dedupe key 防极端竞态重复
 	sched := scheduler.New(func(taskID int64, dedupeKey string) {
