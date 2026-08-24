@@ -266,3 +266,66 @@ func scanRowCounts(rows *sql.Rows) ([]RowCount, error) {
 	}
 	return out, rows.Err()
 }
+
+// LogExportRow CSV 导出用扁平行（左连任务/渠道取名称）。
+type LogExportRow struct {
+	ID          int64
+	SentAt      time.Time
+	TaskID      int64
+	TaskName    string
+	ChannelID   int64
+	ChannelName string
+	Status      string
+	Subject     string
+	ErrorMsg    string
+	TriggerType string
+	TriggerBy   string
+	TriggerIP   string
+}
+
+// ListExportRows 按过滤条件导出全部匹配行（不分页，最多 limit 行；CSV 用）。
+func (r *TaskLogRepo) ListExportRows(f LogFilter, limit int) ([]*LogExportRow, error) {
+	where := "WHERE 1=1"
+	args := []interface{}{}
+	if f.TaskID > 0 {
+		where += " AND tl.task_id=?"
+		args = append(args, f.TaskID)
+	}
+	if f.Status != "" {
+		where += " AND tl.status=?"
+		args = append(args, f.Status)
+	}
+	if !f.From.IsZero() {
+		where += " AND tl.sent_at >= ?"
+		args = append(args, f.From)
+	}
+	if !f.To.IsZero() {
+		where += " AND tl.sent_at < ?"
+		args = append(args, f.To)
+	}
+	if limit <= 0 || limit > 100000 {
+		limit = 100000
+	}
+	query := `SELECT tl.id, tl.sent_at, tl.task_id, COALESCE(t.name,''), tl.channel_id, COALESCE(c.name,''),
+		tl.status, tl.subject, COALESCE(tl.error_msg,''), COALESCE(tl.trigger_type,''), COALESCE(tl.trigger_by,''), COALESCE(tl.trigger_ip,'')
+		FROM task_logs tl
+		LEFT JOIN tasks t ON t.id = tl.task_id
+		LEFT JOIN channels c ON c.id = tl.channel_id
+		` + where + ` ORDER BY tl.id ASC LIMIT ?`
+	args = append(args, limit)
+	rows, err := r.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []*LogExportRow{}
+	for rows.Next() {
+		row := &LogExportRow{}
+		if err := rows.Scan(&row.ID, &row.SentAt, &row.TaskID, &row.TaskName, &row.ChannelID, &row.ChannelName,
+			&row.Status, &row.Subject, &row.ErrorMsg, &row.TriggerType, &row.TriggerBy, &row.TriggerIP); err != nil {
+			return nil, err
+		}
+		out = append(out, row)
+	}
+	return out, rows.Err()
+}

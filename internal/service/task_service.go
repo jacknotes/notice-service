@@ -210,6 +210,11 @@ func (s *TaskService) QueryLogs(f repository.LogFilter) (int, []*model.TaskLog, 
 	return s.logRepo.Query(f)
 }
 
+// ExportLogRows 导出日志扁平行（CSV 用）。
+func (s *TaskService) ExportLogRows(f repository.LogFilter, limit int) ([]*repository.LogExportRow, error) {
+	return s.logRepo.ListExportRows(f, limit)
+}
+
 // TaskPreviewResult 任务预览结果（发送视角：渲染后的标题/正文与解析后的接收地址）。
 type TaskPreviewResult struct {
 	Subject   string   `json:"subject"`
