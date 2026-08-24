@@ -930,20 +930,9 @@ func TestEncryptKeyFileAndAutoFlag(t *testing.T) {
 		t.Error("explicit ENCRYPT_KEY -> not auto-generated")
 	}
 }
-
-func TestStaticDirDefault(t *testing.T) {
-	clearEnv(t)
-	cfg := LoadFile(t.TempDir() + "/nope.yml")
-	if cfg.StaticDir != "./web/dist" {
-		t.Errorf("StaticDir default = %q, want ./web/dist", cfg.StaticDir)
-	}
-	t.Setenv("STATIC_DIR", "/srv/static")
-	cfg2 := LoadFile(t.TempDir() + "/nope.yml")
-	if cfg2.StaticDir != "/srv/static" {
-		t.Errorf("STATIC_DIR override = %q", cfg2.StaticDir)
-	}
-}
 ```
+
+> 注意：`StaticDir` 字段与 `TestStaticDirDefault` 属于 Task 8（R12），此处不要添加。
 
 - [ ] **Step 2: 跑测试确认失败**
 
@@ -1237,7 +1226,9 @@ git commit -m "fix(shutdown): 队列排空超时兜底 + SMTP 会话整体超时
 - Modify: `cmd/server/main.go`
 - Test: `cmd/server/static_test.go`（新建）
 
-- [ ] **Step 1: 写失败测试** `cmd/server/static_test.go`：
+- [ ] **Step 1: 写失败测试**
+
+1a. `cmd/server/static_test.go`（新建）：
 
 ```go
 package main
@@ -1271,6 +1262,23 @@ func TestDirExists(t *testing.T) {
 		t.Fatal("regular file should be false")
 	}
 	_ = os.Getenv // keep import used if needed
+}
+```
+
+1b. 追加到 `internal/config/config_test.go`：
+
+```go
+func TestStaticDirDefault(t *testing.T) {
+	clearEnv(t)
+	cfg := LoadFile(t.TempDir() + "/nope.yml")
+	if cfg.StaticDir != "./web/dist" {
+		t.Errorf("StaticDir default = %q, want ./web/dist", cfg.StaticDir)
+	}
+	t.Setenv("STATIC_DIR", "/srv/static")
+	cfg2 := LoadFile(t.TempDir() + "/nope.yml")
+	if cfg2.StaticDir != "/srv/static" {
+		t.Errorf("STATIC_DIR override = %q", cfg2.StaticDir)
+	}
 }
 ```
 
