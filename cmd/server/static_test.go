@@ -1,7 +1,6 @@
 package main
 
 import (
-	"os"
 	"path/filepath"
 	"testing"
 )
@@ -28,5 +27,4 @@ func TestDirExists(t *testing.T) {
 	if dirExists("/dev/null") != false {
 		t.Fatal("regular file should be false")
 	}
-	_ = os.Getenv // keep import used if needed
 }
