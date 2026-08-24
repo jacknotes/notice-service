@@ -15,10 +15,10 @@ type User struct {
 	DeletedAt    *time.Time `json:"-"`
 
 	// 双因子认证（TOTP）
-	TOTPSecret         string   `json:"-"`
-	TOTPEnabled        bool     `json:"totp_enabled"`
-	TOTPRecoveryCodes  []string `json:"-"`
-	TOTPRecoveryJSON   string   `json:"-"`
+	TOTPSecret        string   `json:"-"`
+	TOTPEnabled       bool     `json:"totp_enabled"`
+	TOTPRecoveryCodes []string `json:"-"`
+	TOTPRecoveryJSON  string   `json:"-"`
 }
 
 type Channel struct {
@@ -55,47 +55,48 @@ type Template struct {
 }
 
 type Task struct {
-	ID             int64             `json:"id"`
-	UserID         int64             `json:"user_id"`
-	Name           string            `json:"name"`
-	ChannelID      int64             `json:"channel_id"`
-	ChannelIDs     []int64           `json:"channel_ids,omitempty"`
-	ChannelIDsJSON string            `json:"-"`
-	TemplateID     int64             `json:"template_id"`
-	TriggerType    string            `json:"trigger_type"`
-	Receivers      []string          `json:"receivers"`
-	ReceiversJSON  string            `json:"-"`
-	CronExpr       string            `json:"cron_expr"`
-	APIKey         string            `json:"api_key,omitempty"`
-	AllowedIPs     []string          `json:"allowed_ips,omitempty"`
-	AllowedIPsJSON string            `json:"-"`
-	Variables      map[string]string `json:"variables,omitempty"`
-	VariablesJSON  string            `json:"-"`
-	LockedBy       string            `json:"-"`
-	LockedAt       *time.Time        `json:"-"`
-	Enabled        bool              `json:"enabled"`
-	LastRunAt      *time.Time        `json:"last_run_at"`
-	NextRunAt      *time.Time        `json:"next_run_at"`
-	CreatedAt      time.Time         `json:"created_at"`
-	UpdatedAt      time.Time         `json:"updated_at"`
-	DeletedAt      *time.Time        `json:"-"`
+	ID               int64             `json:"id"`
+	UserID           int64             `json:"user_id"`
+	Name             string            `json:"name"`
+	ChannelID        int64             `json:"channel_id"`
+	ChannelIDs       []int64           `json:"channel_ids,omitempty"`
+	ChannelIDsJSON   string            `json:"-"`
+	TemplateID       int64             `json:"template_id"`
+	TriggerType      string            `json:"trigger_type"`
+	Receivers        []string          `json:"receivers"`
+	ReceiversJSON    string            `json:"-"`
+	CronExpr         string            `json:"cron_expr"`
+	APIKey           string            `json:"api_key,omitempty"`
+	RequireSignature bool              `json:"require_signature"`
+	AllowedIPs       []string          `json:"allowed_ips,omitempty"`
+	AllowedIPsJSON   string            `json:"-"`
+	Variables        map[string]string `json:"variables,omitempty"`
+	VariablesJSON    string            `json:"-"`
+	LockedBy         string            `json:"-"`
+	LockedAt         *time.Time        `json:"-"`
+	Enabled          bool              `json:"enabled"`
+	LastRunAt        *time.Time        `json:"last_run_at"`
+	NextRunAt        *time.Time        `json:"next_run_at"`
+	CreatedAt        time.Time         `json:"created_at"`
+	UpdatedAt        time.Time         `json:"updated_at"`
+	DeletedAt        *time.Time        `json:"-"`
 }
 
 type TaskLog struct {
-	ID         int64     `json:"id"`
-	TaskID     int64     `json:"task_id"`
-	ChannelID  int64     `json:"channel_id"`
-	Subject    string    `json:"subject"`
-	Content    string    `json:"content"`
-	Status     string    `json:"status"`
-	Request    string    `json:"request"`
-	Response   string    `json:"response"`
-	ErrorMsg   string    `json:"error_msg"`
-	RetryCount int       `json:"retry_count"`
-	TriggerType string   `json:"trigger_type"`
-	TriggerBy  string    `json:"trigger_by"`
-	TriggerIP  string    `json:"trigger_ip"`
-	SentAt     time.Time `json:"sent_at"`
+	ID          int64     `json:"id"`
+	TaskID      int64     `json:"task_id"`
+	ChannelID   int64     `json:"channel_id"`
+	Subject     string    `json:"subject"`
+	Content     string    `json:"content"`
+	Status      string    `json:"status"`
+	Request     string    `json:"request"`
+	Response    string    `json:"response"`
+	ErrorMsg    string    `json:"error_msg"`
+	RetryCount  int       `json:"retry_count"`
+	TriggerType string    `json:"trigger_type"`
+	TriggerBy   string    `json:"trigger_by"`
+	TriggerIP   string    `json:"trigger_ip"`
+	SentAt      time.Time `json:"sent_at"`
 }
 
 type SendJob struct {
