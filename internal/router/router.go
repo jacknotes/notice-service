@@ -117,7 +117,8 @@ func NewRouter(db *sql.DB, authSvc *service.AuthService, cipher *crypto.Cipher, 
 		auth.GET("/tasks", taskH.List)
 		auth.POST("/tasks/preview", taskH.Preview) // 任务发送预览（渲染，不发送）
 		auth.GET("/tasks/:id/logs", taskH.Logs)
-		auth.GET("/logs", taskH.LogsAll) // 日志分页/筛选（后端下推）
+		auth.GET("/logs", taskH.LogsAll)     // 日志分页/筛选（后端下推）
+		auth.GET("/logs/:id", taskH.LogByID) // 单条日志详情（完整内容）
 
 		auth.GET("/dashboard/stats", dashH.Stats)
 		auth.GET("/dashboard/trend", dashH.Trend)

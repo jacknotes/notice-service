@@ -354,3 +354,24 @@ func (h *TaskHandler) LogsAll(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, gin.H{"total": total, "items": logs})
 }
+
+// LogByID 发送日志详情（完整内容）。
+// @Summary 发送日志详情
+// @Tags 任务
+// @Security BearerAuth
+// @Param id path int true "日志 ID"
+// @Success 200 {object} model.TaskLog
+// @Router /api/logs/{id} [get]
+func (h *TaskHandler) LogByID(c *gin.Context) {
+	id, _ := strconv.ParseInt(c.Param("id"), 10, 64)
+	if id <= 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "参数错误"})
+		return
+	}
+	log, err := h.svc.GetLog(id)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "日志不存在"})
+		return
+	}
+	c.JSON(http.StatusOK, log)
+}

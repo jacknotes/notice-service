@@ -215,6 +215,11 @@ func (s *TaskService) ExportLogRows(f repository.LogFilter, limit int) ([]*repos
 	return s.logRepo.ListExportRows(f, limit)
 }
 
+// GetLog 返回单条发送日志完整内容（详情页用）；不存在返回 repository.ErrNotFound。
+func (s *TaskService) GetLog(logID int64) (*model.TaskLog, error) {
+	return s.logRepo.GetByID(logID)
+}
+
 // TaskPreviewResult 任务预览结果（发送视角：渲染后的标题/正文与解析后的接收地址）。
 type TaskPreviewResult struct {
 	Subject   string   `json:"subject"`
