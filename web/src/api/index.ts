@@ -149,3 +149,18 @@ export const dashboardApi = {
   channelStats: (params?: { from?: string; to?: string }) =>
     client.get('/dashboard/channel-stats', { params }).then((r) => r.data),
 }
+
+// backupApi 数据备份（导出/导入，仅管理员；后端 F3 已就绪）。
+export interface BackupImportResult {
+  channels_created: number
+  templates_created: number
+  tasks_created: number
+  skipped: string[]
+}
+
+export const backupApi = {
+  export: (): Promise<Blob> =>
+    client.get('/export', { responseType: 'blob' }).then((r) => r.data as Blob),
+  import: (data: any): Promise<BackupImportResult> =>
+    client.post('/import', data).then((r) => r.data),
+}

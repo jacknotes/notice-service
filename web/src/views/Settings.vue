@@ -165,6 +165,32 @@
           <span class="hint">修改成功后需使用新密码重新登录</span>
         </div>
       </el-form>
+
+      <div v-if="isAdmin" class="section-divider"></div>
+
+      <!-- ── 段 4：数据备份（导出/导入，仅管理员） ─────────────────── -->
+      <div v-if="isAdmin" class="section-head">
+        <h3>数据备份</h3>
+        <span class="pwd-sub mono">BACKUP &amp; RESTORE</span>
+      </div>
+      <p v-if="isAdmin" class="backup-desc">
+        导出包含渠道明文配置（含 SMTP 密码等敏感信息），请妥善保管备份文件。
+      </p>
+      <div v-if="isAdmin" class="backup-actions">
+        <el-button type="primary" :icon="Download" :loading="exporting" @click="onExport">
+          导出备份
+        </el-button>
+        <el-upload
+          ref="importUploadRef"
+          :auto-upload="false"
+          accept=".json"
+          :show-file-list="false"
+          :disabled="importing"
+          :on-change="onImportFile"
+        >
+          <el-button type="success" plain :icon="Upload" :loading="importing">导入备份</el-button>
+        </el-upload>
+      </div>
     </div>
 
     <!-- ── 开启 2FA 向导：扫码 → 保存备用码 → 验证启用 ──────────────── -->
@@ -261,13 +287,15 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
-import { EditPen, Key, Lock, CopyDocument } from '@element-plus/icons-vue'
+import { EditPen, Key, Lock, CopyDocument, Download, Upload } from '@element-plus/icons-vue'
 import QRCode from 'qrcode'
-import { authApi } from '@/api'
+import { authApi, backupApi } from '@/api'
 import { useAuthStore } from '@/stores/auth'
 
 const router = useRouter()
 const auth = useAuthStore()
+
+const isAdmin = computed(() => auth.user?.role === 'admin')
 
 // 显示名：优先 display_name，未设置时回退到用户名。
 const displayName = computed<string>(
@@ -470,6 +498,90 @@ async function onChangePassword() {
     ElMessage.error(e?.response?.data?.error || '修改失败，请检查原密码')
   } finally {
     pwdLoading.value = false
+  }
+}
+
+/* ── 数据备份（导出/导入，仅管理员） ────────────────────────────── */
+const exporting = ref(false)
+const importing = ref(false)
+const importUploadRef = ref()
+
+// 文件名后缀：本地时区 yyyyMMdd-HHmmss
+function backupTimestamp(): string {
+  const d = new Date()
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`
+}
+
+async function onExport() {
+  if (exporting.value) return
+  exporting.value = true
+  try {
+    const blob = await backupApi.export()
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `notice-backup-${backupTimestamp()}.json`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+    ElMessage.success('备份已导出，请妥善保管')
+  } catch (e: any) {
+    // blob responseType 下错误响应也是 Blob，先尝试解析其中的 {error}
+    const raw = e?.response?.data
+    if (raw instanceof Blob) {
+      try {
+        const parsed = JSON.parse(await raw.text())
+        ElMessage.error(parsed?.error || '导出失败，请重试')
+        return
+      } catch {
+        /* 非 JSON 错误体，走默认文案 */
+      }
+    }
+    ElMessage.error(e?.response?.data?.error || '导出失败，请重试')
+  } finally {
+    exporting.value = false
+  }
+}
+
+function onImportFile(file: any) {
+  const raw: File | undefined = file?.raw
+  if (!raw) return
+  const reader = new FileReader()
+  reader.onload = () => {
+    let bundle: any
+    try {
+      bundle = JSON.parse(String(reader.result))
+    } catch {
+      ElMessage.error('备份文件解析失败，请确认为有效的 JSON 备份')
+      importUploadRef.value?.clearFiles()
+      return
+    }
+    doImport(bundle)
+  }
+  reader.onerror = () => {
+    ElMessage.error('读取备份文件失败')
+    importUploadRef.value?.clearFiles()
+  }
+  reader.readAsText(raw)
+}
+
+async function doImport(bundle: any) {
+  if (importing.value) return
+  importing.value = true
+  try {
+    const res = await backupApi.import(bundle)
+    const skippedList = res.skipped || []
+    const skipped = skippedList.length
+      ? `；跳过：${skippedList.slice(0, 5).join('、')}${skippedList.length > 5 ? ` 等 ${skippedList.length} 项` : ''}`
+      : ''
+    ElMessage.success(`成功：+${res.channels_created} 渠道 / +${res.templates_created} 模板 / +${res.tasks_created} 任务${skipped}`)
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.error || '导入失败，请重试')
+  } finally {
+    importing.value = false
+    importUploadRef.value?.clearFiles() // 清空选中，便于再次选择同一文件
   }
 }
 
@@ -716,6 +828,20 @@ onMounted(refresh2FA)
   color: var(--text-secondary);
   font-size: var(--text-sm);
   line-height: 1.7;
+}
+
+/* ── 数据备份 ────────────────────────────────────────────────────── */
+.backup-desc {
+  margin: 0 0 var(--space-4);
+  color: var(--amber-400);
+  font-size: var(--text-sm);
+  line-height: 1.8;
+}
+.backup-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-4);
 }
 
 /* 修改密码表单输入框成列居中（label 仍在上方） */
