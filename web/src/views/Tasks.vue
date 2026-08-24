@@ -222,6 +222,27 @@
           />
         </el-form-item>
 
+        <el-form-item v-if="form.trigger_type === 'api'" label="HMAC 签名校验">
+          <div class="signature-row">
+            <el-switch v-model="form.require_signature" />
+            <span class="signature-label">需要 HMAC 签名</span>
+          </div>
+          <el-alert
+            v-if="form.require_signature"
+            class="signature-alert"
+            type="info"
+            :closable="false"
+            show-icon
+          >
+            <pre class="signature-pre mono">X-Timestamp: &lt;unix 秒&gt;
+X-Signature: hex(HMAC-SHA256(key=任务APIKey, msg="&lt;timestamp&gt;\n&lt;原始请求体&gt;"))</pre>
+            <p class="signature-note">
+              时间戳偏差超过 ±300 秒会被拒绝；签名消息为 timestamp + 换行 + 原始请求体。
+              HMAC 密钥即该任务的 API Key。
+            </p>
+          </el-alert>
+        </el-form-item>
+
         <el-form-item v-if="selectedTemplateVariables.length" label="模板变量">
           <div class="tpl-vars-list">
             <div v-for="v in selectedTemplateVariables" :key="v.name" class="tpl-var-item">
@@ -355,6 +376,7 @@ interface TaskRow {
   cron_expr: string
   api_key?: string
   allowed_ips: string[]
+  require_signature?: boolean
   variables?: Record<string, string>
   enabled: boolean
   created_at?: string
@@ -420,6 +442,7 @@ const form = reactive<{
   cron_expr: string
   receivers: string
   allowed_ips: string
+  require_signature: boolean
   variables: Record<string, string>
   enabled: boolean
 }>({
@@ -431,6 +454,7 @@ const form = reactive<{
   cron_expr: '',
   receivers: '',
   allowed_ips: '',
+  require_signature: false,
   variables: {},
   enabled: true,
 })
@@ -618,6 +642,7 @@ function openCreate() {
   form.cron_expr = ''
   form.receivers = ''
   form.allowed_ips = ''
+  form.require_signature = false
   form.variables = {}
   form.enabled = true
   dialogVisible.value = true
@@ -632,6 +657,7 @@ function openEdit(row: TaskRow) {
   form.cron_expr = row.cron_expr || ''
   form.receivers = (row.receivers || []).join('\n')
   form.allowed_ips = (row.allowed_ips || []).join('\n')
+  form.require_signature = row.require_signature ?? false
   form.variables = row.variables ? { ...row.variables } : {}
   form.enabled = row.enabled
   dialogVisible.value = true
@@ -648,6 +674,7 @@ function duplicateTask(row: TaskRow) {
   form.cron_expr = row.cron_expr || ''
   form.receivers = (row.receivers || []).join('\n')
   form.allowed_ips = (row.allowed_ips || []).join('\n')
+  form.require_signature = row.require_signature ?? false
   form.variables = row.variables ? { ...row.variables } : {}
   form.enabled = row.enabled
   dialogVisible.value = true
@@ -712,6 +739,7 @@ async function saveTask() {
       cron_expr: form.trigger_type === 'cron' ? form.cron_expr.trim() : '',
       receivers: splitLines(form.receivers),
       allowed_ips: form.trigger_type === 'api' ? splitLines(form.allowed_ips) : [],
+      require_signature: form.trigger_type === 'api' ? form.require_signature : false,
       variables: form.variables,
       enabled: form.enabled,
     }
@@ -963,6 +991,40 @@ onMounted(() => {
 .enabled-hint {
   color: var(--text-muted);
   font-size: var(--text-xs);
+}
+
+/* ── HMAC 签名开关与调用示例 ─────────────────────────────────────── */
+.signature-row {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+.signature-label {
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+}
+.signature-alert {
+  width: 100%;
+  margin-top: var(--space-3);
+}
+.signature-pre {
+  margin: 0 0 var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: rgba(11, 17, 32, 0.72);
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 1.7;
+  white-space: pre;
+  overflow-x: auto;
+}
+.signature-note {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  line-height: 1.7;
 }
 
 .dialog-footer {
