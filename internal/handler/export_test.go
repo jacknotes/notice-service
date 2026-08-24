@@ -59,6 +59,53 @@ func indexOf(s, sub string) int {
 	return -1
 }
 
+// TestImportCreatesAndSkips 验证 F3：导入可建新记录、名称冲突跳过、api_key 保留。
+func TestImportCreatesAndSkips(t *testing.T) {
+	r := testRouter(t)
+	tok := login(t, r)
+
+	// 先建一个用于「跳过冲突」的渠道
+	if w := authReq(t, r, tok, "POST", "/api/channels", `{"type":"email","name":"dup-ch","config":{"host":"smtp.x.com","port":"587","username":"u","password":"p","from":"a@x.com"},"enabled":true}`); w.Code != 200 {
+		t.Fatalf("create dup channel = %d", w.Code)
+	}
+
+	// 构造导入 bundle：渠道数组 = [dup-ch(跳过), new-ch(新建)] → new-ch 下标 1 → channel_id:1；
+	// 模板数组 = [new-tpl] → new-tpl 下标 0 → template_id:0
+	bundle := `{
+		"version":1,
+		"channels":[{"type":"email","name":"dup-ch","config":{"host":"smtp.y.com","port":"587","username":"u","password":"p","from":"b@x.com"},"enabled":true},
+		            {"type":"email","name":"new-ch","config":{"host":"smtp.z.com","port":"587","username":"u","password":"p","from":"c@x.com"},"enabled":true}],
+		"templates":[{"name":"new-tpl","subject":"S {{name}}","content_md":"hi","variables":[{"name":"name","default":"张三"}]}],
+		"tasks":[{"name":"new-task","channel_id":1,"template_id":0,"trigger_type":"api","receivers":["a@x.com"],"api_key":"imported-key-123","enabled":true}]
+	}`
+	w := authReq(t, r, tok, "POST", "/api/import", bundle)
+	if w.Code != 200 {
+		t.Fatalf("import = %d body=%s", w.Code, w.Body.String())
+	}
+	res := mustJSON(t, w)
+	if int(res["channels_created"].(float64)) != 1 {
+		t.Fatalf("channels_created = %v, want 1", res["channels_created"])
+	}
+	if int(res["templates_created"].(float64)) != 1 {
+		t.Fatalf("templates_created = %v, want 1", res["templates_created"])
+	}
+	if int(res["tasks_created"].(float64)) != 1 {
+		t.Fatalf("tasks_created = %v, want 1", res["tasks_created"])
+	}
+	if len(res["skipped"].([]interface{})) != 1 {
+		t.Fatalf("skipped = %v, want 1 (dup-ch)", res["skipped"])
+	}
+
+	// 导入的 api 任务应保留 api_key：导出中应出现 imported-key-123
+	we := authReq(t, r, tok, "GET", "/api/export", "")
+	if we.Code != 200 {
+		t.Fatalf("export = %d", we.Code)
+	}
+	if !containsStr(we.Body.String(), "imported-key-123") {
+		t.Fatalf("export should contain preserved api_key, got:\n%s", we.Body.String())
+	}
+}
+
 // normalUserToken 创建一个普通用户并登录，返回其 token（Task 6 定义，Task 9 复用）。
 func normalUserToken(t *testing.T, r *gin.Engine) string {
 	t.Helper()

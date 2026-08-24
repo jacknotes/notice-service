@@ -178,6 +178,11 @@ func (s *TaskService) BatchDelete(ids []int64) error {
 	return s.repo.BatchDelete(ids)
 }
 
+// SetAPIKey 覆盖任务的 api_key（导入备份时保留 webhook URL）。
+func (s *TaskService) SetAPIKey(taskID int64, key string) error {
+	return s.repo.SetAPIKey(taskID, key)
+}
+
 func (s *TaskService) Toggle(userID, id int64, enabled bool) error {
 	ex, err := s.repo.GetByID(id)
 	if err != nil {

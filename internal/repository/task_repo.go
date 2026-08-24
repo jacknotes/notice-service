@@ -205,6 +205,19 @@ func (r *TaskRepo) UpdateSchedule(taskID int64, lastRun, nextRun *time.Time) err
 	return err
 }
 
+// SetAPIKey 覆盖任务 api_key（导入备份用）。
+func (r *TaskRepo) SetAPIKey(taskID int64, key string) error {
+	_, err := r.db.Exec("UPDATE tasks SET api_key=? WHERE id=?", nullableKey(key), taskID)
+	return err
+}
+
+// CountByName 统计同名未删除任务数（导入冲突检测）。
+func (r *TaskRepo) CountByName(name string) (int, error) {
+	var n int
+	err := r.db.QueryRow("SELECT COUNT(*) FROM tasks WHERE name=? AND deleted_at IS NULL", name).Scan(&n)
+	return n, err
+}
+
 // SetEnabled 启用/禁用。
 func (r *TaskRepo) SetEnabled(taskID int64, enabled bool) error {
 	_, err := r.db.Exec("UPDATE tasks SET enabled = ? WHERE id = ?", enabled, taskID)
