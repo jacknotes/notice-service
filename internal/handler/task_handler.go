@@ -318,6 +318,8 @@ func (h *TaskHandler) ExportLogs(c *gin.Context) {
 	filename := "logs-" + time.Now().Format("20060102-150405") + ".csv"
 	c.Header("Content-Type", "text/csv; charset=utf-8")
 	c.Header("Content-Disposition", `attachment; filename="`+filename+`"`)
+	// UTF-8 BOM：Windows Excel 无 BOM 时会把中文按 ANSI/GBK 误读，导致中文内容乱码。
+	_, _ = c.Writer.Write([]byte("\xEF\xBB\xBF"))
 	w := csv.NewWriter(c.Writer)
 	_ = w.Write([]string{"id", "sent_at", "task_id", "task_name", "channel_id", "channel_name", "status", "subject", "error_msg", "trigger_type", "trigger_by", "trigger_ip"})
 	for _, r := range rows {

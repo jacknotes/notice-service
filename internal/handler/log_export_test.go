@@ -18,14 +18,20 @@ func TestLogExportCSV(t *testing.T) {
 	db.Exec("DELETE FROM channels")
 
 	wc := authReq(t, r, tok, "POST", "/api/channels", `{"type":"email","name":"exp-ch","config":{"host":"smtp.x.com","port":"587","username":"u","password":"p","from":"a@x.com"},"enabled":true}`)
-	if wc.Code != 200 { t.Fatalf("create channel = %d", wc.Code) }
+	if wc.Code != 200 {
+		t.Fatalf("create channel = %d", wc.Code)
+	}
 	ch := mustJSON(t, wc)
 	wt := authReq(t, r, tok, "POST", "/api/templates", `{"name":"t","subject":"s","content_md":"hi","variables":[]}`)
-	if wt.Code != 200 { t.Fatalf("create template = %d", wt.Code) }
+	if wt.Code != 200 {
+		t.Fatalf("create template = %d", wt.Code)
+	}
 	tpl := mustJSON(t, wt)
 	payload := `{"name":"exp-task","channel_id":` + num(int64(ch["id"].(float64))) + `,"template_id":` + num(int64(tpl["id"].(float64))) + `,"trigger_type":"api","receivers":["a@x.com"],"enabled":true}`
 	wtk := authReq(t, r, tok, "POST", "/api/tasks", payload)
-	if wtk.Code != 200 { t.Fatalf("create task = %d", wtk.Code) }
+	if wtk.Code != 200 {
+		t.Fatalf("create task = %d", wtk.Code)
+	}
 	tk := mustJSON(t, wtk)
 	taskID := int64(tk["id"].(float64))
 	channelID := int64(ch["id"].(float64))
@@ -36,7 +42,9 @@ func TestLogExportCSV(t *testing.T) {
 	t.Cleanup(func() { db.Exec("DELETE FROM task_logs WHERE task_id=?", taskID) })
 
 	w := authReq(t, r, tok, "GET", "/api/logs/export?task_id="+num(taskID), "")
-	if w.Code != 200 { t.Fatalf("export = %d body=%s", w.Code, w.Body.String()) }
+	if w.Code != 200 {
+		t.Fatalf("export = %d body=%s", w.Code, w.Body.String())
+	}
 	if ct := w.Header().Get("Content-Type"); !strings.HasPrefix(ct, "text/csv") {
 		t.Fatalf("content-type = %q, want text/csv", ct)
 	}
