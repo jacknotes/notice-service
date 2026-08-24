@@ -43,13 +43,11 @@ func NewRouter(db *sql.DB, authSvc *service.AuthService, cipher *crypto.Cipher, 
 		if opts[0].SwaggerEnabled {
 			o.SwaggerEnabled = true
 		}
-		if opts[0].MetricsEnabled {
-			o.MetricsEnabled = true
-		}
 		if opts[0].MaxBodyBytes > 0 {
 			o.MaxBodyBytes = opts[0].MaxBodyBytes
 		}
 		o.TrustedProxies = opts[0].TrustedProxies
+		o.MetricsEnabled = opts[0].MetricsEnabled
 		o.MetricsUser = opts[0].MetricsUser
 		o.MetricsPassword = opts[0].MetricsPassword
 	}
@@ -175,8 +173,13 @@ func accessLogger() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		start := time.Now()
 		c.Next()
-		// 指标 path 标签用路由模板（c.FullPath()），避免 api_key 泄漏与路径基数爆炸。
-		metrics.HTTPRequests.WithLabelValues(strconv.Itoa(c.Writer.Status()), c.Request.Method, c.FullPath()).Inc()
+		// 指标 path 标签用路由模板（c.FullPath()），避免 api_key 泄漏与路径基数爆炸；
+		// NoRoute/404 时 FullPath 为空，统一归入 /<unmatched>。
+		pathLabel := c.FullPath()
+		if pathLabel == "" {
+			pathLabel = "/<unmatched>"
+		}
+		metrics.HTTPRequests.WithLabelValues(strconv.Itoa(c.Writer.Status()), c.Request.Method, pathLabel).Inc()
 		path := c.Request.URL.Path
 		if strings.HasPrefix(path, "/api/webhook/") {
 			path = "/api/webhook/<redacted>"
