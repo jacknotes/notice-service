@@ -29,11 +29,11 @@ type ExportService struct {
 	tasks     *TaskService
 }
 
-func NewExportService(db *sql.DB, cipher *crypto.Cipher) *ExportService {
+func NewExportService(db *sql.DB, cipher *crypto.Cipher, sched Scheduler) *ExportService {
 	return &ExportService{
 		channels:  NewChannelService(db, cipher),
 		templates: NewTemplateService(db),
-		tasks:     NewTaskService(db, nil),
+		tasks:     NewTaskService(db, sched),
 	}
 }
 
@@ -74,7 +74,7 @@ type ImportResult struct {
 	Skipped          []string `json:"skipped"`
 }
 
-// Import 导入备份：按 渠道→模板→任务 顺序建表，旧 id（数组下标）→ 新 id 重映射；
+// Import 导入备份：按 渠道→模板→任务 顺序建表，导出真实 id → 新 id 重映射；
 // 名称冲突跳过并记入摘要；api 任务的 api_key 保留（迁移后 webhook URL 不变）。
 func (s *ExportService) Import(userID int64, b *ExportBundle) (*ImportResult, error) {
 	if b == nil {
@@ -84,8 +84,8 @@ func (s *ExportService) Import(userID int64, b *ExportBundle) (*ImportResult, er
 		return nil, errors.New("不支持的备份版本")
 	}
 	res := &ImportResult{}
-	chMap := map[int]int64{} // 数组下标 -> 新渠道 id
-	for i, c := range b.Channels {
+	chMap := map[int64]int64{} // 导出渠道 id -> 新渠道 id
+	for _, c := range b.Channels {
 		if c == nil || c.Name == "" || c.Type == "" {
 			res.Skipped = append(res.Skipped, "(无效渠道)")
 			continue
@@ -94,16 +94,16 @@ func (s *ExportService) Import(userID int64, b *ExportBundle) (*ImportResult, er
 			res.Skipped = append(res.Skipped, "渠道 "+c.Name)
 			continue
 		}
+		oldID := c.ID
 		nc := &model.Channel{Type: c.Type, Name: c.Name, Config: c.Config, Enabled: c.Enabled}
 		if err := s.channels.Create(userID, nc); err != nil {
-			res.Skipped = append(res.Skipped, "渠道 "+c.Name+" ("+err.Error()+")")
-			continue
+			return nil, fmt.Errorf("导入渠道 %q 失败: %w", c.Name, err)
 		}
-		chMap[i] = nc.ID
+		chMap[oldID] = nc.ID
 		res.ChannelsCreated++
 	}
-	tplMap := map[int]int64{}
-	for i, t := range b.Templates {
+	tplMap := map[int64]int64{} // 导出模板 id -> 新模板 id
+	for _, t := range b.Templates {
 		if t == nil || t.Name == "" {
 			res.Skipped = append(res.Skipped, "(无效模板)")
 			continue
@@ -112,12 +112,12 @@ func (s *ExportService) Import(userID int64, b *ExportBundle) (*ImportResult, er
 			res.Skipped = append(res.Skipped, "模板 "+t.Name)
 			continue
 		}
+		oldID := t.ID
 		nt := &model.Template{Name: t.Name, Subject: t.Subject, ContentMD: t.ContentMD, Variables: t.Variables}
 		if err := s.templates.Create(userID, nt); err != nil {
-			res.Skipped = append(res.Skipped, "模板 "+t.Name+" ("+err.Error()+")")
-			continue
+			return nil, fmt.Errorf("导入模板 %q 失败: %w", t.Name, err)
 		}
-		tplMap[i] = nt.ID
+		tplMap[oldID] = nt.ID
 		res.TemplatesCreated++
 	}
 	for _, t := range b.Tasks {
@@ -148,12 +148,12 @@ func (s *ExportService) Import(userID int64, b *ExportBundle) (*ImportResult, er
 		}
 		oldKey := t.APIKey
 		if err := s.tasks.Create(userID, nt); err != nil {
-			res.Skipped = append(res.Skipped, "任务 "+t.Name+" ("+err.Error()+")")
-			continue
+			return nil, fmt.Errorf("导入任务 %q 失败: %w", t.Name, err)
 		}
 		if oldKey != "" && nt.TriggerType == "api" {
 			if err := s.tasks.SetAPIKey(nt.ID, oldKey); err != nil {
-				res.Skipped = append(res.Skipped, "任务 "+t.Name+"（api_key 保留失败）")
+				res.TasksCreated++
+				res.Skipped = append(res.Skipped, fmt.Sprintf("任务 %s（已创建，但 api_key 保留失败，将使用新生成的 key）", nt.Name))
 				continue
 			}
 		}
@@ -162,9 +162,9 @@ func (s *ExportService) Import(userID int64, b *ExportBundle) (*ImportResult, er
 	return res, nil
 }
 
-// remapID 按数组下标映射旧 id 到新 id；未命中返回 0。
-func remapID(m map[int]int64, oldID int64) int64 {
-	if v, ok := m[int(oldID)]; ok {
+// remapID 按导出真实 id 映射旧 id 到新 id；未命中返回 0。
+func remapID(m map[int64]int64, oldID int64) int64 {
+	if v, ok := m[oldID]; ok {
 		return v
 	}
 	return 0

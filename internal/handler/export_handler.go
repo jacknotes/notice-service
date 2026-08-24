@@ -15,8 +15,8 @@ type ExportHandler struct {
 	db  *sql.DB
 }
 
-func NewExportHandler(db *sql.DB, cipher *crypto.Cipher) *ExportHandler {
-	return &ExportHandler{svc: service.NewExportService(db, cipher), db: db}
+func NewExportHandler(db *sql.DB, cipher *crypto.Cipher, sched service.Scheduler) *ExportHandler {
+	return &ExportHandler{svc: service.NewExportService(db, cipher, sched), db: db}
 }
 
 // Export 导出备份（仅管理员）。
