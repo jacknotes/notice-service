@@ -996,12 +996,15 @@ func TestImportCreatesAndSkips(t *testing.T) {
 	}
 
 	// 构造导入 bundle：1 个已存在的渠道（跳过）+ 1 个新模板 + 1 个新 api 任务（保留 api_key）
+	// 注意：tasks 里 channel_id/template_id 是「数组下标」引用（0 基）——
+	//   渠道数组 = [dup-ch(跳过), new-ch(新建)] → new-ch 下标 1 → channel_id:1
+	//   模板数组 = [new-tpl]                 → new-tpl 下标 0 → template_id:0
 	bundle := `{
 		"version":1,
 		"channels":[{"type":"email","name":"dup-ch","config":{"host":"smtp.y.com","port":"587","username":"u","password":"p","from":"b@x.com"},"enabled":true},
 		            {"type":"email","name":"new-ch","config":{"host":"smtp.z.com","port":"587","username":"u","password":"p","from":"c@x.com"},"enabled":true}],
 		"templates":[{"name":"new-tpl","subject":"S {{name}}","content_md":"hi","variables":[{"name":"name","default":"张三"}]}],
-		"tasks":[{"name":"new-task","channel_id":2,"template_id":1,"trigger_type":"api","receivers":["a@x.com"],"api_key":"imported-key-123","enabled":true}]
+		"tasks":[{"name":"new-task","channel_id":1,"template_id":0,"trigger_type":"api","receivers":["a@x.com"],"api_key":"imported-key-123","enabled":true}]
 	}`
 	w := authReq(t, r, tok, "POST", "/api/import", bundle)
 	if w.Code != 200 {
@@ -1154,22 +1157,56 @@ func remapID(m map[int]int64, oldID int64) int64 {
 }
 ```
 
-> 关键决策：重映射用「**数组下标**」而非「旧 id 数值」（导出/导入结构无全局 id，且旧 id 在目标库中无意义；下标映射在测试 bundle 里即 tasks 引用第 2 个渠道=下标 1、第 1 个模板=下标 0）。因此 `chMap[i]`/`tplMap[i]` 按数组下标存，`remapID` 用 `int(oldID)` 查。若测试与实际不符，以让 `TestImportCreatesAndSkips` 通过为准微调下标约定，并保持注释说明。
+> 关键决策：重映射用「**数组下标**」（0 基）而非「旧 id 数值」（导出/导入结构无全局 id，旧 id 在目标库中无意义）。因此 `chMap[i]`/`tplMap[i]` 按数组下标存，`remapID` 用 `int(oldID)` 查（channel_id:1 → 数组第 2 个元素、template_id:0 → 数组第 1 个元素，与测试一致）。
 
-3b. `nameExists`（检查名称冲突；渠道按 (name,type) 唯一，模板/任务按 name 唯一）：
+3b. `nameExists`（检查名称冲突；渠道按 (name,type) 唯一，模板/任务按 name 唯一）。若 `ChannelRepo`/`TemplateRepo`/`TaskRepo` 无按名查询，各加一个小方法并测试复用既有 seed 助手：
+- `ChannelRepo.CountByNameType(name, typ string) (int, error)`（`WHERE name=? AND type=? AND deleted_at IS NULL`）
+- `TemplateRepo.CountByName(name string) (int, error)`
+- `TaskRepo.CountByName(name string) (int, error)`
 
 ```go
+// nameExists 检查名称冲突：渠道按 (name,type)，模板/任务按 name（均排除软删）。
 func (s *ExportService) nameExists(table, name, typ string) bool {
-	// 直接查 DB：channels 按 name+type；templates/tasks 按 name（均排除软删）。
-	// 实现用 repository 层查询；若现有 repo 无按名查询方法，则在相应 repo 增加
-	// CountByName(name, type) 之类的幂等查询。
-	...
+	switch table {
+	case "channels":
+		n, _ := s.channels.repo.CountByNameType(name, typ)
+		return n > 0
+	case "templates":
+		n, _ := s.templates.repo.CountByName(name)
+		return n > 0
+	default:
+		n, _ := s.tasks.repo.CountByName(name)
+		return n > 0
+	}
 }
 ```
 
-> 若 `ChannelRepo`/`TemplateRepo`/`TaskRepo` 无按名查询，需各加一个小方法（如 `TaskRepo.CountByName(name string) (int, error)`、`ChannelRepo.CountByNameType(name, typ string) (int, error)`、`TemplateRepo.CountByName(name string) (int, error)`）。请先读这三个 repo 文件，按现有风格补方法。
+（`ChannelService`/`TemplateService`/`TaskService` 各自持有 repo 字段——`channels.repo`/`templates.repo`/`tasks.repo` 均为小写私有字段，同一包 `service` 内可访问。）
 
-3c. `internal/service/task_service.go` 增加（转发到 repo）：
+3c. 评审 Important 修复（随 Task 7 一并落地到 `internal/service/export_service.go`）：
+
+```go
+// exportVersion 当前备份格式版本（导入时校验）。
+const exportVersion = 1
+```
+
+- `Export` 中把 `Version: 1` 改为 `Version: exportVersion`，并在组装 bundle 前加解密校验（解不开就响亮失败，防止静默导出缺配置的备份）：
+
+```go
+	chs, err := s.channels.List(userID)
+	if err != nil {
+		return nil, err
+	}
+	for _, c := range chs {
+		if c.Config == nil {
+			return nil, fmt.Errorf("渠道 %q 配置解密失败，已中止导出（请确认 ENCRYPT_KEY 与写入时一致）", c.Name)
+		}
+	}
+```
+
+- `Import` 中 `if b.Version != 1` 改为 `if b.Version != exportVersion`。
+
+3d. `internal/service/task_service.go` 增加（转发到 repo）：
 
 ```go
 // SetAPIKey 覆盖任务的 api_key（导入备份时保留 webhook URL）。
@@ -1178,7 +1215,7 @@ func (s *TaskService) SetAPIKey(taskID int64, key string) error {
 }
 ```
 
-3d. `internal/repository/task_repo.go` 增加：
+3e. `internal/repository/task_repo.go` 增加：
 
 ```go
 // SetAPIKey 覆盖任务 api_key（导入备份用）。
@@ -1186,7 +1223,16 @@ func (r *TaskRepo) SetAPIKey(taskID int64, key string) error {
 	_, err := r.db.Exec("UPDATE tasks SET api_key=? WHERE id=?", nullableKey(key), taskID)
 	return err
 }
+
+// CountByName 统计同名未删除任务数（导入时冲突检测）。
+func (r *TaskRepo) CountByName(name string) (int, error) {
+	var n int
+	err := r.db.QueryRow("SELECT COUNT(*) FROM tasks WHERE name=? AND deleted_at IS NULL", name).Scan(&n)
+	return n, err
+}
 ```
+
+（`TemplateRepo.CountByName` / `ChannelRepo.CountByNameType` 在对应 repo 文件同样追加，风格一致。）
 
 - [ ] **Step 4: 跑测试确认通过**
 
