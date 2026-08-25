@@ -114,6 +114,9 @@ jobs:
       - name: Type check
         working-directory: web
         run: npx vue-tsc --noEmit
+      - name: Test
+        working-directory: web
+        run: npm run test
       - name: Build
         working-directory: web
         run: npm run build
