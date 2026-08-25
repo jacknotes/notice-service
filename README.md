@@ -155,6 +155,8 @@ Webhook 的 IP 白名单依赖 `X-Real-IP` / `X-Forwarded-For` 头，但这些�
 | `QUEUE_JOB_RETENTION_DAYS` | 30 | 已完成 job 保留天数 |
 | `AUDIT_RETENTION_DAYS` | 180 | 审计日志保留天数（超出自动清理） |
 | `TRUSTED_PROXIES` | 127.0.0.1,::1,172.16.0.0/12 | 可信反向代理 CIDR（逗号分隔），控制 X-Forwarded-For / X-Real-IP 是否可信 |
+| `METRICS_ENABLED` | true | 是否暴露 /metrics Prometheus 指标端点 |
+| `METRICS_USER` / `METRICS_PASSWORD` | 空 | 同时设置时 /metrics 启用 Basic Auth（建议再用反代/内网保护） |
 | `ENCRYPT_KEY_FILE` | .notice-encrypt.key | 渠道加密密钥文件路径（未设 ENCRYPT_KEY 时读取/生成；重启前请确保持久化，否则历史渠道配置无法解密） |
 | `STATIC_DIR` | ./web/dist | 前端静态资源目录（SPA 产物；非固定工作目录启动时请指定） |
 | `SWAGGER_ENABLED` | true | 是否暴露 `/swagger` API 文档 |
@@ -215,9 +217,15 @@ Webhook 的 IP 白名单依赖 `X-Real-IP` / `X-Forwarded-For` 头，但这些�
       GET /api/tasks/:id/logs
 日志  GET /api/logs   分页/筛选 + 排序（sort_by/sort_order，含触发方式/人/IP）
       POST /api/logs/:id/retry  重试失败日志
+      GET /api/logs/export   导出发送日志 CSV（仅管理员，同列表筛选，上限 10 万行）
+      GET /api/logs/:id      单条发送日志详情（完整内容）
 审计  GET /api/audit   操作审计日志（仅管理员，模块/操作/关键词/日期筛选 + 分页）
 系统  GET /api/instances  后端节点健康列表（多实例「信号在线」）
+      GET /metrics             Prometheus 指标（METRICS_ENABLED 控制；可选 Basic Auth）
+备份  GET /api/export        导出渠道/模板/任务 JSON（仅管理员，含明文 config）
+      POST /api/import       导入备份（重映射 id、名称冲突跳过、保留 api_key）
 外部  POST /api/webhook/:api_key   （无需登录，可选 IP 白名单；异步入队，返回 202）
+Webhook 可选 HMAC 签名：任务开启「需要签名」后须带 X-Timestamp（±300s）与 X-Signature（hex HMAC-SHA256(key=api_key, msg="<ts>\n<body>")）
 仪表盘 GET /api/dashboard/stats   GET /api/dashboard/trend   GET /api/dashboard/top-tasks   GET /api/dashboard/channel-stats
 ```
 

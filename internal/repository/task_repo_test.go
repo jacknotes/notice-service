@@ -119,3 +119,36 @@ func TestTaskRepoCRUDAndLease(t *testing.T) {
 	}
 	tr.ReleaseLease(tk.ID, "inst-b")
 }
+
+// TestTaskRequireSignatureRoundtrip 验证 R4：require_signature 列可读写。
+func TestTaskRequireSignatureRoundtrip(t *testing.T) {
+	db := openTestDB(t)
+	r := NewTaskRepo(db)
+	uid := seedUser(t, db)
+	chID := seedChannel(t, db, uid)
+	tplID := seedTemplate(t, db, uid)
+	tk := &model.Task{UserID: uid, Name: "sig-" + randSuffix(), ChannelID: chID, TemplateID: tplID,
+		TriggerType: "api", ReceiversJSON: `[]`, Enabled: true, RequireSignature: true}
+	if err := r.Create(tk); err != nil {
+		t.Fatal(err)
+	}
+	got, err := r.GetByID(tk.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !got.RequireSignature {
+		t.Fatal("RequireSignature should be true after create+get")
+	}
+	// 关回 false 也能更新
+	tk.RequireSignature = false
+	if err := r.Update(tk); err != nil {
+		t.Fatal(err)
+	}
+	got2, err := r.GetByID(tk.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got2.RequireSignature {
+		t.Fatal("RequireSignature should be false after update")
+	}
+}

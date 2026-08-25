@@ -5,6 +5,16 @@
         <h1 class="grad-text">发送日志</h1>
         <p class="sub">查看所有任务的投递记录与失败回执</p>
       </div>
+      <div class="actions">
+        <el-button
+          v-if="isAdmin"
+          :icon="Download"
+          :loading="exporting"
+          @click="exportCsv"
+        >
+          导出 CSV
+        </el-button>
+      </div>
     </div>
 
     <div class="filters">
@@ -206,8 +216,9 @@
           </template>
         </el-table-column>
 
-        <el-table-column label="操作" width="90" align="center" fixed="right">
+        <el-table-column label="操作" width="140" align="center" fixed="right">
           <template #default="{ row }">
+            <el-button link type="primary" size="small" @click="goDetail(row)">详情</el-button>
             <el-button
               v-if="row.status === 'failed'"
               link
@@ -218,7 +229,6 @@
             >
               重试
             </el-button>
-            <span v-else class="ok-cell">—</span>
           </template>
         </el-table-column>
       </el-table>
@@ -247,10 +257,11 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Search } from '@element-plus/icons-vue'
+import { Download, Search } from '@element-plus/icons-vue'
 import { channelApi, logApi, taskApi } from '@/api'
+import { useAuthStore } from '@/stores/auth'
 
 interface LogRow {
   id: number
@@ -270,6 +281,10 @@ interface LogRow {
 }
 
 const route = useRoute()
+const router = useRouter()
+
+const auth = useAuthStore()
+const isAdmin = computed(() => auth.user?.role === 'admin')
 
 const loading = ref(false)
 const tasksLoaded = ref(false)
@@ -429,6 +444,52 @@ async function retryLog(row: LogRow) {
     ElMessage.error(errMsg(e, '重试失败'))
   } finally {
     retryingId.value = null
+  }
+}
+
+/* ── 导出 CSV（仅管理员；筛选条件与列表一致） ───────────────────────── */
+const exporting = ref(false)
+
+function goDetail(row: LogRow) {
+  router.push('/logs/' + row.id)
+}
+
+async function exportCsv() {
+  if (exporting.value) return
+  exporting.value = true
+  try {
+    const params: { task_id?: number; status?: string; from?: string; to?: string } = {}
+    if (taskFilter.value !== undefined) params.task_id = taskFilter.value
+    if (statusFilter.value) params.status = statusFilter.value
+    if (dateRange.value) {
+      params.from = dateRange.value[0]
+      params.to = dateRange.value[1]
+    }
+    const blob = await logApi.export(params)
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `logs-${fmtDate(new Date())}.csv`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+    ElMessage.success('日志已导出')
+  } catch (e: any) {
+    // blob 响应下错误也是 Blob，先尝试解析其中的 {error}
+    const raw = e?.response?.data
+    if (raw instanceof Blob) {
+      try {
+        const parsed = JSON.parse(await raw.text())
+        ElMessage.error(parsed?.error || '导出失败，请重试')
+        return
+      } catch {
+        /* 非 JSON 错误体，走默认文案 */
+      }
+    }
+    ElMessage.error(errMsg(e, '导出失败，请重试'))
+  } finally {
+    exporting.value = false
   }
 }
 

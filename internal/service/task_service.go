@@ -178,6 +178,11 @@ func (s *TaskService) BatchDelete(ids []int64) error {
 	return s.repo.BatchDelete(ids)
 }
 
+// SetAPIKey 覆盖任务的 api_key（导入备份时保留 webhook URL）。
+func (s *TaskService) SetAPIKey(taskID int64, key string) error {
+	return s.repo.SetAPIKey(taskID, key)
+}
+
 func (s *TaskService) Toggle(userID, id int64, enabled bool) error {
 	ex, err := s.repo.GetByID(id)
 	if err != nil {
@@ -203,6 +208,16 @@ func (s *TaskService) Logs(taskID int64) ([]*model.TaskLog, error) {
 // QueryLogs 按过滤条件分页查询发送日志（后端筛选下推 DB）。
 func (s *TaskService) QueryLogs(f repository.LogFilter) (int, []*model.TaskLog, error) {
 	return s.logRepo.Query(f)
+}
+
+// ExportLogRows 导出日志扁平行（CSV 用）。
+func (s *TaskService) ExportLogRows(f repository.LogFilter, limit int) ([]*repository.LogExportRow, error) {
+	return s.logRepo.ListExportRows(f, limit)
+}
+
+// GetLog 返回单条发送日志完整内容（详情页用）；不存在返回 repository.ErrNotFound。
+func (s *TaskService) GetLog(logID int64) (*model.TaskLog, error) {
+	return s.logRepo.GetByID(logID)
 }
 
 // TaskPreviewResult 任务预览结果（发送视角：渲染后的标题/正文与解析后的接收地址）。

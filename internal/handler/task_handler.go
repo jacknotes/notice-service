@@ -2,6 +2,8 @@ package handler
 
 import (
 	"database/sql"
+	"encoding/csv"
+	"errors"
 	"net/http"
 	"strconv"
 	"time"
@@ -254,20 +256,10 @@ func (h *TaskHandler) Preview(c *gin.Context) {
 	c.JSON(http.StatusOK, out)
 }
 
-// LogsAll 分页/筛选查询全部发送日志（筛选条件后端下推 DB）。
-// LogsAll 发送日志（分页/筛选）
-// @Summary 分页查询全部发送日志
-// @Tags 任务
-// @Security BearerAuth
-// @Param task_id query int false "任务 ID"
-// @Param status query string false "状态 success/failed"
-// @Param from query string false "开始日期 YYYY-MM-DD"
-// @Param to query string false "结束日期 YYYY-MM-DD"
-// @Param page query int false "页码"
-// @Param page_size query int false "每页数量"
-// @Success 200 {object} map[string]interface{}
-// @Router /api/logs [get]
-func (h *TaskHandler) LogsAll(c *gin.Context) {
+// logFilterFromQuery 从查询参数解析日志过滤条件（task_id/status/from/to/
+// page/page_size/sort_by/sort_order），返回带默认 Page/PageSize 的 filter。
+// LogsAll 与 ExportLogs 共用，保证导出与列表筛选一致。
+func (h *TaskHandler) logFilterFromQuery(c *gin.Context) repository.LogFilter {
 	f := repository.LogFilter{Page: 1, PageSize: 50}
 	if v := c.Query("task_id"); v != "" {
 		if n, err := strconv.ParseInt(v, 10, 64); err == nil {
@@ -304,10 +296,87 @@ func (h *TaskHandler) LogsAll(c *gin.Context) {
 	if v := c.Query("sort_order"); v == "asc" || v == "desc" {
 		f.SortOrder = v
 	}
+	return f
+}
+
+// ExportLogs 导出发送日志为 CSV（仅管理员）。
+// @Summary 导出发送日志 CSV（仅管理员）
+// @Tags 任务
+// @Security BearerAuth
+// @Param task_id query int false "任务 ID"
+// @Param status query string false "状态"
+// @Param from query string false "开始日期"
+// @Param to query string false "结束日期"
+// @Success 200 {string} string "CSV"
+// @Router /api/logs/export [get]
+func (h *TaskHandler) ExportLogs(c *gin.Context) {
+	f := h.logFilterFromQuery(c)
+	rows, err := h.svc.ExportLogRows(f, 100000)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	filename := "logs-" + time.Now().Format("20060102-150405") + ".csv"
+	c.Header("Content-Type", "text/csv; charset=utf-8")
+	c.Header("Content-Disposition", `attachment; filename="`+filename+`"`)
+	// UTF-8 BOM：Windows Excel 无 BOM 时会把中文按 ANSI/GBK 误读，导致中文内容乱码。
+	_, _ = c.Writer.Write([]byte("\xEF\xBB\xBF"))
+	w := csv.NewWriter(c.Writer)
+	_ = w.Write([]string{"id", "sent_at", "task_id", "task_name", "channel_id", "channel_name", "status", "subject", "error_msg", "trigger_type", "trigger_by", "trigger_ip"})
+	for _, r := range rows {
+		_ = w.Write([]string{
+			strconv.FormatInt(r.ID, 10), r.SentAt.Format("2006-01-02 15:04:05"),
+			strconv.FormatInt(r.TaskID, 10), r.TaskName, strconv.FormatInt(r.ChannelID, 10), r.ChannelName,
+			r.Status, r.Subject, r.ErrorMsg, r.TriggerType, r.TriggerBy, r.TriggerIP,
+		})
+	}
+	w.Flush()
+}
+
+// LogsAll 分页/筛选查询全部发送日志（筛选条件后端下推 DB）。
+// LogsAll 发送日志（分页/筛选）
+// @Summary 分页查询全部发送日志
+// @Tags 任务
+// @Security BearerAuth
+// @Param task_id query int false "任务 ID"
+// @Param status query string false "状态 success/failed"
+// @Param from query string false "开始日期 YYYY-MM-DD"
+// @Param to query string false "结束日期 YYYY-MM-DD"
+// @Param page query int false "页码"
+// @Param page_size query int false "每页数量"
+// @Success 200 {object} map[string]interface{}
+// @Router /api/logs [get]
+func (h *TaskHandler) LogsAll(c *gin.Context) {
+	f := h.logFilterFromQuery(c)
 	total, logs, err := h.svc.QueryLogs(f)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"total": total, "items": logs})
+}
+
+// LogByID 发送日志详情（完整内容）。
+// @Summary 发送日志详情
+// @Tags 任务
+// @Security BearerAuth
+// @Param id path int true "日志 ID"
+// @Success 200 {object} model.TaskLog
+// @Router /api/logs/{id} [get]
+func (h *TaskHandler) LogByID(c *gin.Context) {
+	id, _ := strconv.ParseInt(c.Param("id"), 10, 64)
+	if id <= 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "参数错误"})
+		return
+	}
+	log, err := h.svc.GetLog(id)
+	if errors.Is(err, repository.ErrNotFound) {
+		c.JSON(http.StatusNotFound, gin.H{"error": "日志不存在"})
+		return
+	}
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, log)
 }

@@ -50,6 +50,11 @@ type Config struct {
 	StaticDir string
 	// SwaggerEnabled 是否暴露 /swagger API 文档。
 	SwaggerEnabled bool
+	// MetricsEnabled 是否暴露 /metrics（Prometheus 采集端点）。
+	MetricsEnabled bool
+	// MetricsUser / MetricsPassword 同时非空时 /metrics 需 Basic Auth。
+	MetricsUser     string
+	MetricsPassword string
 }
 
 // fileConfig 对应 config.yml（键为 kebab-case；指针字段区分「未设置」与「0」）。
@@ -84,6 +89,11 @@ type fileConfig struct {
 	TrustedProxies     string `yaml:"trusted_proxies"`
 	StaticDir          string `yaml:"static_dir"`
 	SwaggerEnabled     *bool  `yaml:"swagger_enabled"`
+	Metrics            struct {
+		Enabled  *bool  `yaml:"enabled"`
+		User     string `yaml:"user"`
+		Password string `yaml:"password"`
+	} `yaml:"metrics"`
 }
 
 // WeakSecretWarnings 返回需要告警的弱密钥配置说明（空表示全部健康）。
@@ -159,6 +169,9 @@ func loadFromPath(path string) *Config {
 		TrustedProxies:        parseCSV(firstNonEmpty(os.Getenv("TRUSTED_PROXIES"), f.TrustedProxies, "127.0.0.1,::1,172.16.0.0/12")),
 		StaticDir:             firstNonEmpty(os.Getenv("STATIC_DIR"), f.StaticDir, "./web/dist"),
 		SwaggerEnabled:        firstBool("SWAGGER_ENABLED", f.SwaggerEnabled, true),
+		MetricsEnabled:        firstBool("METRICS_ENABLED", f.Metrics.Enabled, true),
+		MetricsUser:           firstNonEmpty(os.Getenv("METRICS_USER"), f.Metrics.User, ""),
+		MetricsPassword:       firstNonEmpty(os.Getenv("METRICS_PASSWORD"), f.Metrics.Password, ""),
 	}
 }
 

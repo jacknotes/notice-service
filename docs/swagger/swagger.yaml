@@ -1,3 +1,154 @@
+definitions:
+  model.Channel:
+    properties:
+      config:
+        additionalProperties:
+          type: string
+        type: object
+      created_at:
+        type: string
+      enabled:
+        type: boolean
+      id:
+        type: integer
+      name:
+        type: string
+      type:
+        type: string
+      updated_at:
+        type: string
+      user_id:
+        type: integer
+    type: object
+  model.Task:
+    properties:
+      allowed_ips:
+        items:
+          type: string
+        type: array
+      api_key:
+        type: string
+      channel_id:
+        type: integer
+      channel_ids:
+        items:
+          type: integer
+        type: array
+      created_at:
+        type: string
+      cron_expr:
+        type: string
+      enabled:
+        type: boolean
+      id:
+        type: integer
+      last_run_at:
+        type: string
+      name:
+        type: string
+      next_run_at:
+        type: string
+      receivers:
+        items:
+          type: string
+        type: array
+      require_signature:
+        type: boolean
+      template_id:
+        type: integer
+      trigger_type:
+        type: string
+      updated_at:
+        type: string
+      user_id:
+        type: integer
+      variables:
+        additionalProperties:
+          type: string
+        type: object
+    type: object
+  model.TaskLog:
+    properties:
+      channel_id:
+        type: integer
+      content:
+        type: string
+      error_msg:
+        type: string
+      id:
+        type: integer
+      request:
+        type: string
+      response:
+        type: string
+      retry_count:
+        type: integer
+      sent_at:
+        type: string
+      status:
+        type: string
+      subject:
+        type: string
+      task_id:
+        type: integer
+      trigger_by:
+        type: string
+      trigger_ip:
+        type: string
+      trigger_type:
+        type: string
+    type: object
+  model.Template:
+    properties:
+      content_md:
+        type: string
+      created_at:
+        type: string
+      id:
+        type: integer
+      name:
+        type: string
+      subject:
+        type: string
+      updated_at:
+        type: string
+      user_id:
+        type: integer
+      variables:
+        items:
+          $ref: '#/definitions/model.TemplateVar'
+        type: array
+    type: object
+  model.TemplateVar:
+    properties:
+      default:
+        type: string
+      description:
+        type: string
+      name:
+        type: string
+      type:
+        type: string
+    type: object
+  service.ExportBundle:
+    properties:
+      channels:
+        items:
+          $ref: '#/definitions/model.Channel'
+        type: array
+      exported_at:
+        type: string
+      tasks:
+        items:
+          $ref: '#/definitions/model.Task'
+        type: array
+      templates:
+        items:
+          $ref: '#/definitions/model.Template'
+        type: array
+      version:
+        type: integer
+    type: object
 info:
   contact: {}
   description: 自托管通知发送服务 API（邮箱/企微/钉钉/飞书/PushPlus 多渠道投递）。
@@ -449,6 +600,40 @@ paths:
       summary: 区间内每日发送趋势
       tags:
       - 仪表盘
+  /api/export:
+    get:
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/service.ExportBundle'
+      security:
+      - BearerAuth: []
+      summary: 导出渠道/模板/任务 JSON 备份
+      tags:
+      - 系统
+  /api/import:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 备份内容
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/service.ExportBundle'
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 导入渠道/模板/任务 JSON 备份
+      tags:
+      - 系统
   /api/instances:
     get:
       responses:
@@ -500,6 +685,24 @@ paths:
       summary: 分页查询全部发送日志
       tags:
       - 任务
+  /api/logs/{id}:
+    get:
+      parameters:
+      - description: 日志 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.TaskLog'
+      security:
+      - BearerAuth: []
+      summary: 发送日志详情
+      tags:
+      - 任务
   /api/logs/{id}/retry:
     post:
       parameters:
@@ -517,6 +720,35 @@ paths:
       security:
       - BearerAuth: []
       summary: 重试失败日志（定向重发该条）
+      tags:
+      - 任务
+  /api/logs/export:
+    get:
+      parameters:
+      - description: 任务 ID
+        in: query
+        name: task_id
+        type: integer
+      - description: 状态
+        in: query
+        name: status
+        type: string
+      - description: 开始日期
+        in: query
+        name: from
+        type: string
+      - description: 结束日期
+        in: query
+        name: to
+        type: string
+      responses:
+        "200":
+          description: CSV
+          schema:
+            type: string
+      security:
+      - BearerAuth: []
+      summary: 导出发送日志 CSV（仅管理员）
       tags:
       - 任务
   /api/tasks:

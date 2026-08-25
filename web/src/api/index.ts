@@ -92,6 +92,11 @@ export const logApi = {
     sort_order?: 'asc' | 'desc'
   }) => client.get('/logs', { params }).then((r) => r.data),
   retry: (id: number) => client.post(`/logs/${id}/retry`).then((r) => r.data),
+  // 单条日志完整内容（详情页用）
+  detail: (id: number): Promise<any> => client.get(`/logs/${id}`).then((r) => r.data),
+  // 导出 CSV（仅管理员），筛选条件与列表一致
+  export: (params: { task_id?: number; status?: string; from?: string; to?: string }): Promise<Blob> =>
+    client.get('/logs/export', { params, responseType: 'blob' }).then((r) => r.data as Blob),
 }
 
 export const userApi = {
@@ -148,4 +153,19 @@ export const dashboardApi = {
     client.get('/dashboard/top-tasks', { params }).then((r) => r.data),
   channelStats: (params?: { from?: string; to?: string }) =>
     client.get('/dashboard/channel-stats', { params }).then((r) => r.data),
+}
+
+// backupApi 数据备份（导出/导入，仅管理员；后端 F3 已就绪）。
+export interface BackupImportResult {
+  channels_created: number
+  templates_created: number
+  tasks_created: number
+  skipped: string[]
+}
+
+export const backupApi = {
+  export: (): Promise<Blob> =>
+    client.get('/export', { responseType: 'blob' }).then((r) => r.data as Blob),
+  import: (data: any): Promise<BackupImportResult> =>
+    client.post('/import', data).then((r) => r.data),
 }

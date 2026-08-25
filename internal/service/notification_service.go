@@ -5,9 +5,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"time"
 
 	"notice-service/internal/channel"
 	"notice-service/internal/crypto"
+	"notice-service/internal/metrics"
 	"notice-service/internal/model"
 	"notice-service/internal/render"
 	"notice-service/internal/repository"
@@ -128,7 +130,12 @@ func (s *NotificationService) SendTask(taskID int64, vars map[string]string, tr 
 // sendOnce 单次发送并写一条日志（成功或失败各一条；重试由队列调度）。
 func (s *NotificationService) sendOnce(inst channel.Channel, msg *channel.Message, addr string, task *model.Task, ch *model.Channel, tr Trigger) error {
 	reqBody, _ := json.Marshal(map[string]string{"address": addr})
-	if err := inst.Send(msg, &channel.Receiver{Address: addr}); err != nil {
+	start := time.Now()
+	err := inst.Send(msg, &channel.Receiver{Address: addr})
+	dur := time.Since(start).Seconds()
+	if err != nil {
+		metrics.SendsTotal.WithLabelValues(ch.Type, "failed").Inc()
+		metrics.SendDuration.WithLabelValues(ch.Type).Observe(dur)
 		_ = s.logRepo.Create(&model.TaskLog{
 			TaskID: task.ID, ChannelID: ch.ID, Subject: msg.Subject, Content: msg.Content,
 			Status: "failed", Request: string(reqBody), ErrorMsg: err.Error(),
@@ -136,6 +143,8 @@ func (s *NotificationService) sendOnce(inst channel.Channel, msg *channel.Messag
 		})
 		return err
 	}
+	metrics.SendsTotal.WithLabelValues(ch.Type, "success").Inc()
+	metrics.SendDuration.WithLabelValues(ch.Type).Observe(dur)
 	_ = s.logRepo.Create(&model.TaskLog{
 		TaskID: task.ID, ChannelID: ch.ID, Subject: msg.Subject, Content: msg.Content,
 		Status: "success", Request: string(reqBody), Response: "ok",

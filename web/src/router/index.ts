@@ -15,6 +15,7 @@ const router = createRouter({
         { path: 'templates', component: () => import('@/views/Templates.vue'), meta: { title: '模板管理' } },
         { path: 'tasks', component: () => import('@/views/Tasks.vue'), meta: { title: '任务管理' } },
         { path: 'logs', component: () => import('@/views/Logs.vue'), meta: { title: '发送日志' } },
+        { path: 'logs/:id', component: () => import('@/views/LogDetail.vue'), meta: { title: '日志详情' } },
         { path: 'audit', component: () => import('@/views/Audit.vue'), meta: { title: '操作审计', adminOnly: true } },
         { path: 'users', component: () => import('@/views/Users.vue'), meta: { title: '用户管理', adminOnly: true } },
         { path: 'settings', component: () => import('@/views/Settings.vue'), meta: { title: '个人设置' } },

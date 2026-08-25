@@ -6,6 +6,12 @@
 
 ## [Unreleased]
 
+### 二期功能
+- **Webhook 可选 HMAC 签名**：任务可开启「需要签名」，调用方须带 X-Timestamp（±300s 防重放）与 X-Signature（hex HMAC-SHA256(key=任务api_key, msg="<timestamp>\n<body>")）；默认关闭，向后兼容
+- **发送日志 CSV 导出 + 详情页**：管理员可按列表同款筛选导出 CSV（含任务/渠道名，上限 10 万行）；新增 GET /api/logs/:id 与前端详情页（渲染全文/请求/响应/错误，支持重试）
+- **Prometheus /metrics**：新增 /metrics 端点（notice_sends_total / notice_send_duration_seconds / notice_queue_pending / http_requests_total + Go runtime），可选 Basic Auth（METRICS_USER/PASSWORD），METRICS_ENABLED 可关
+- **数据备份/恢复**：管理员可导出渠道（明文 config）/模板/任务为 JSON，并可导入（按 渠道→模板→任务 顺序建表、旧 id 重映射、名称冲突跳过、api 任务保留 api_key）
+
 ### 已实现
 ### 安全加固（一期）
 - **角色即时生效**：登录 token 中的角色不再可信，每次请求从 DB 读取——管理员提权/降级在下一个请求即生效（此前被降级者旧 token 24h 内仍可调管理接口）

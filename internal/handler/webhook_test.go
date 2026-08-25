@@ -4,10 +4,14 @@ package handler_test
 
 import (
 	"bytes"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"testing"
 	"time"
 
@@ -307,5 +311,88 @@ func TestWebhookMalformedJSON400(t *testing.T) {
 	}
 	if code := post(""); code != http.StatusAccepted {
 		t.Fatalf("empty body = %d, want 202", code)
+	}
+}
+
+// hmacSig 按协议计算 X-Signature：hex(HMAC-SHA256(key, "<ts>\n<body>"))。
+func hmacSig(key string, ts string, body string) string {
+	mac := hmac.New(sha256.New, []byte(key))
+	mac.Write([]byte(ts))
+	mac.Write([]byte("\n"))
+	mac.Write([]byte(body))
+	return hex.EncodeToString(mac.Sum(nil))
+}
+
+// TestWebhookSignatureRequired 验证 R4：require_signature=1 时缺/错/过期签名均 401，正确签名 202。
+func TestWebhookSignatureRequired(t *testing.T) {
+	channel.Register(&fakeOKChan{})
+	r := testRouter(t)
+	tok := login(t, r)
+
+	wt := authReq(t, r, tok, "POST", "/api/templates", `{"name":"t","subject":"s","content_md":"hi","variables":[]}`)
+	if wt.Code != 200 {
+		t.Fatalf("create template = %d", wt.Code)
+	}
+	tpl := mustJSON(t, wt)
+	wc := authReq(t, r, tok, "POST", "/api/channels", `{"type":"fake-ok","name":"c","config":{},"enabled":true}`)
+	if wc.Code != 200 {
+		t.Fatalf("create channel = %d", wc.Code)
+	}
+	ch := mustJSON(t, wc)
+	payload := `{"name":"sig-task","channel_id":` + num(int64(ch["id"].(float64))) + `,"template_id":` + num(int64(tpl["id"].(float64))) + `,"trigger_type":"api","receivers":[],"require_signature":true,"enabled":true}`
+	wtk := authReq(t, r, tok, "POST", "/api/tasks", payload)
+	if wtk.Code != 200 {
+		t.Fatalf("create task = %d body=%s", wtk.Code, wtk.Body.String())
+	}
+	tk := mustJSON(t, wtk)
+	apiKey := tk["api_key"].(string)
+	if apiKey == "" {
+		t.Fatal("api key empty")
+	}
+
+	body := `{"variables":{"name":"李四"}}`
+	ts := strconv.FormatInt(time.Now().Unix(), 10)
+
+	// 无签名头 → 401
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("POST", "/api/webhook/"+apiKey, bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("no signature = %d, want 401", w.Code)
+	}
+
+	// 错误签名 → 401
+	w2 := httptest.NewRecorder()
+	req2, _ := http.NewRequest("POST", "/api/webhook/"+apiKey, bytes.NewBufferString(body))
+	req2.Header.Set("Content-Type", "application/json")
+	req2.Header.Set("X-Timestamp", ts)
+	req2.Header.Set("X-Signature", "deadbeef")
+	r.ServeHTTP(w2, req2)
+	if w2.Code != http.StatusUnauthorized {
+		t.Fatalf("wrong signature = %d, want 401", w2.Code)
+	}
+
+	// 时间戳超出 ±300s → 401
+	oldTs := strconv.FormatInt(time.Now().Unix()-9999, 10)
+	w3 := httptest.NewRecorder()
+	req3, _ := http.NewRequest("POST", "/api/webhook/"+apiKey, bytes.NewBufferString(body))
+	req3.Header.Set("Content-Type", "application/json")
+	req3.Header.Set("X-Timestamp", oldTs)
+	req3.Header.Set("X-Signature", hmacSig(apiKey, oldTs, body))
+	r.ServeHTTP(w3, req3)
+	if w3.Code != http.StatusUnauthorized {
+		t.Fatalf("expired timestamp = %d, want 401", w3.Code)
+	}
+
+	// 正确签名 → 202
+	w4 := httptest.NewRecorder()
+	req4, _ := http.NewRequest("POST", "/api/webhook/"+apiKey, bytes.NewBufferString(body))
+	req4.Header.Set("Content-Type", "application/json")
+	req4.Header.Set("X-Timestamp", ts)
+	req4.Header.Set("X-Signature", hmacSig(apiKey, ts, body))
+	r.ServeHTTP(w4, req4)
+	if w4.Code != http.StatusAccepted {
+		t.Fatalf("valid signature = %d, want 202 body=%s", w4.Code, w4.Body.String())
 	}
 }

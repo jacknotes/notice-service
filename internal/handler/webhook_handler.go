@@ -1,13 +1,19 @@
 package handler
 
 import (
+	"bytes"
+	"crypto/hmac"
+	"crypto/sha256"
+	"crypto/subtle"
 	"database/sql"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"io"
 	"log"
 	"net"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -74,9 +80,24 @@ func (h *WebhookHandler) Trigger(c *gin.Context) {
 	var req struct {
 		Variables map[string]string `json:"variables"`
 	}
-	if err := c.ShouldBindJSON(&req); err != nil && !errors.Is(err, io.EOF) {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "请求体不是合法 JSON"})
+	raw, err := io.ReadAll(c.Request.Body)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "请求体读取失败"})
 		return
+	}
+	// 可选 HMAC 签名认证：require_signature=1 时校验（密钥 = 任务 api_key）。
+	if task.RequireSignature {
+		if err := verifyWebhookSignature(c, task.APIKey, raw); err != nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+			return
+		}
+	}
+	// R8：空 body（或纯空白）按空变量接受；其它解析错误 400。
+	if len(bytes.TrimSpace(raw)) > 0 {
+		if err := json.Unmarshal(raw, &req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "请求体不是合法 JSON"})
+			return
+		}
 	}
 	// 异步入队：请求立即返回 202，发送由后台 worker 池消费（含重试/崩溃接管）。
 	jobID, err := h.queue.Enqueue(task.ID, req.Variables, "",
@@ -118,4 +139,33 @@ func ipMatches(allow, remote string) bool {
 		return ip != nil && ipnet.Contains(ip)
 	}
 	return allow == remote
+}
+
+// webhookSigWindow 签名时间戳允许偏差（秒），防重放。
+const webhookSigWindow = 300
+
+// verifyWebhookSignature 校验 HMAC 签名：X-Timestamp + X-Signature，
+// 签名消息为 "<X-Timestamp>\n<原始请求体>"，HMAC-SHA256，密钥为任务 api_key。
+func verifyWebhookSignature(c *gin.Context, key string, body []byte) error {
+	tsStr := c.GetHeader("X-Timestamp")
+	sig := c.GetHeader("X-Signature")
+	if tsStr == "" || sig == "" {
+		return errors.New("缺少 X-Timestamp / X-Signature 请求头")
+	}
+	ts, err := strconv.ParseInt(tsStr, 10, 64)
+	if err != nil {
+		return errors.New("X-Timestamp 格式错误")
+	}
+	if delta := time.Now().Unix() - ts; delta < -webhookSigWindow || delta > webhookSigWindow {
+		return errors.New("X-Timestamp 超出允许时间窗（±300 秒）")
+	}
+	mac := hmac.New(sha256.New, []byte(key))
+	mac.Write([]byte(tsStr))
+	mac.Write([]byte("\n"))
+	mac.Write(body)
+	expect := hex.EncodeToString(mac.Sum(nil))
+	if subtle.ConstantTimeCompare([]byte(expect), []byte(sig)) != 1 {
+		return errors.New("签名无效")
+	}
+	return nil
 }

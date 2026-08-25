@@ -73,6 +73,13 @@ func (r *TemplateRepo) List() ([]*model.Template, error) {
 	return out, rows.Err()
 }
 
+// CountByName 统计同名未删除模板数（导入冲突检测）。
+func (r *TemplateRepo) CountByName(name string) (int, error) {
+	var n int
+	err := r.db.QueryRow("SELECT COUNT(*) FROM templates WHERE name=? AND deleted_at IS NULL", name).Scan(&n)
+	return n, err
+}
+
 // BatchDelete 批量软删除模板（单条 UPDATE）。
 func (r *TemplateRepo) BatchDelete(ids []int64) error {
 	if len(ids) == 0 {

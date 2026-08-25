@@ -88,6 +88,14 @@ func (r *ChannelRepo) BatchDelete(ids []int64) error {
 	return err
 }
 
+// CountByNameType 统计同名同类型未删除渠道数（导入冲突检测）。
+func (r *ChannelRepo) CountByNameType(name, typ string) (int, error) {
+	var n int
+	err := r.db.QueryRow(
+		"SELECT COUNT(*) FROM channels WHERE name=? AND type=? AND deleted_at IS NULL", name, typ).Scan(&n)
+	return n, err
+}
+
 // CountEncrypted 统计存在加密渠道配置的行（config_json 非空且未删除）。
 func (r *ChannelRepo) CountEncrypted() (int, error) {
 	var n int
