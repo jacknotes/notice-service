@@ -137,6 +137,11 @@
                 <span class="detail-label">错误信息</span>
                 <pre class="detail-code mono detail-error">{{ row.error_msg }}</pre>
               </div>
+
+              <div v-if="row.retry_count" class="detail-block">
+                <span class="detail-label">重试次数</span>
+                <span class="mono detail-trigger-text">{{ row.retry_count }}</span>
+              </div>
             </div>
           </template>
         </el-table-column>
@@ -168,45 +173,11 @@
           </template>
         </el-table-column>
 
-        <el-table-column label="触发" min-width="150" sortable="custom" prop="trigger_type">
-          <template #default="{ row }">
-            <el-tag
-              v-if="row.trigger_type"
-              :style="triggerTagStyle(row.trigger_type)"
-              effect="plain"
-              size="small"
-            >
-              {{ triggerLabel(row.trigger_type) }}
-            </el-tag>
-            <span v-else class="ok-cell">—</span>
-            <span class="mono trigger-by">{{ row.trigger_by || '' }}</span>
-          </template>
-        </el-table-column>
-
-        <el-table-column label="触发 IP" min-width="110" sortable="custom" prop="trigger_ip">
-          <template #default="{ row }">
-            <span class="mono time-cell">{{ row.trigger_ip || '—' }}</span>
-          </template>
-        </el-table-column>
-
         <el-table-column label="状态" width="100" align="center" sortable="custom" prop="status">
           <template #default="{ row }">
             <el-tag :type="row.status === 'success' ? 'success' : 'danger'" effect="light" size="small">
               {{ row.status === 'success' ? '成功' : '失败' }}
             </el-tag>
-          </template>
-        </el-table-column>
-
-        <el-table-column label="重试" width="80" align="center" sortable="custom" prop="retry_count">
-          <template #default="{ row }">
-            <span class="mono retry-cell">{{ row.retry_count ?? 0 }}</span>
-          </template>
-        </el-table-column>
-
-        <el-table-column label="错误信息" min-width="200" show-overflow-tooltip>
-          <template #default="{ row }">
-            <span v-if="row.error_msg" class="err-cell">{{ row.error_msg }}</span>
-            <span v-else class="ok-cell">—</span>
           </template>
         </el-table-column>
 
@@ -216,7 +187,7 @@
           </template>
         </el-table-column>
 
-        <el-table-column label="操作" width="140" align="center" fixed="right">
+        <el-table-column label="操作" width="140" align="center">
           <template #default="{ row }">
             <el-button link type="primary" size="small" @click="goDetail(row)">详情</el-button>
             <el-button
@@ -631,19 +602,6 @@ onMounted(() => {
   color: var(--text-primary);
   font-size: var(--text-sm);
   margin-right: 8px;
-}
-.retry-cell {
-  color: var(--text-secondary);
-  font-size: var(--text-xs);
-}
-.trigger-by {
-  margin-left: 6px;
-  color: var(--text-faint);
-  font-size: var(--text-xs);
-}
-.err-cell {
-  color: var(--rose-400);
-  font-size: var(--text-xs);
 }
 .ok-cell {
   color: var(--text-faint);
