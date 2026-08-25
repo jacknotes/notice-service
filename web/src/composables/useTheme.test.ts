@@ -15,6 +15,7 @@ describe('useTheme', () => {
   afterEach(() => {
     localStorage.clear()
     document.documentElement.removeAttribute('data-theme')
+    vi.restoreAllMocks()
   })
 
   it('默认初始主题为 dark，并写入 <html data-theme>', async () => {
