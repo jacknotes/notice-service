@@ -60,6 +60,8 @@ describe('api/client 拦截器', () => {
   })
 
   it('响应 401 时清 token/user', async () => {
+    localStorage.setItem('token', 'tk')
+    localStorage.setItem('user', 'u')
     const handler = getResponseErrorHandler()
     await expect(handler({ response: { status: 401 } })).rejects.toBeTruthy()
     expect(localStorage.getItem('token')).toBeNull()
@@ -87,6 +89,14 @@ describe('api/client 拦截器', () => {
     const handler = getResponseErrorHandler()
     await expect(handler({ response: { status: 500 } })).rejects.toEqual({ response: { status: 500 } })
     expect(localStorage.getItem('token')).toBe('keep')
+  })
+
+  it('网络错误（无 response）不误清 token 也不跳转', async () => {
+    localStorage.setItem('token', 'keep')
+    const handler = getResponseErrorHandler()
+    await expect(handler(new Error('Network Error'))).rejects.toBeTruthy()
+    expect(localStorage.getItem('token')).toBe('keep')
+    expect(window.location.href).toBe('http://localhost/dashboard')
   })
 
   it('响应成功时透传响应对象', () => {
