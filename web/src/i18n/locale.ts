@@ -1,4 +1,4 @@
-import { i18n } from './index'
+import { i18n, STORAGE_KEY } from './index'
 
 export const SUPPORTED_LOCALES = ['zh-CN', 'en-US'] as const
 export type SupportedLocale = (typeof SUPPORTED_LOCALES)[number]
@@ -6,7 +6,7 @@ export type SupportedLocale = (typeof SUPPORTED_LOCALES)[number]
 export function setLocale(locale: SupportedLocale) {
   i18n.global.locale.value = locale
   try {
-    localStorage.setItem('i18n-locale', locale)
+    localStorage.setItem(STORAGE_KEY, locale)
   } catch {
     /* private mode — 本次会话生效即可 */
   }
