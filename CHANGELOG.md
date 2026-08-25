@@ -6,6 +6,8 @@
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-08-24
+
 ### 二期功能
 - **Webhook 可选 HMAC 签名**：任务可开启「需要签名」，调用方须带 X-Timestamp（±300s 防重放）与 X-Signature（hex HMAC-SHA256(key=任务api_key, msg="<timestamp>\n<body>")）；默认关闭，向后兼容
 - **发送日志 CSV 导出 + 详情页**：管理员可按列表同款筛选导出 CSV（含任务/渠道名，上限 10 万行）；新增 GET /api/logs/:id 与前端详情页（渲染全文/请求/响应/错误，支持重试）
@@ -179,7 +181,8 @@
 - 服务必须置于可信 Nginx 反向代理之后（`X-Real-IP` / `X-Forwarded-For` 才可信，Webhook IP 白名单依赖此）
 - Google Fonts 在中国大陆不可达时前端自动降级为系统字体（不影响功能）
 
-[Unreleased]: https://github.com/jacknotes/notice-service/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/jacknotes/notice-service/compare/v1.3.0...HEAD
+[1.3.0]: https://github.com/jacknotes/notice-service/releases/tag/v1.3.0
 [1.0.0]: https://github.com/jacknotes/notice-service/releases/tag/v1.0.0
 
 ## [1.1.0] - 2026-08-18
