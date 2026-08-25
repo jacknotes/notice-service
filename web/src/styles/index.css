@@ -386,15 +386,15 @@ body::after {
 .el-table th.el-table__cell { font-weight: 600; letter-spacing: 0.02em; }
 .el-table__inner-wrapper::before { display: none; }
 
-/* 固定列（fixed=right/left）：表头与普通表头同色；行单元格保留不透明背景盖住下层滚动内容，
-   避免下层列透出（与原有行为一致）。 */
+/* 固定列（fixed=right/left）：表头与行单元格统一用不透明卡片色，盖住下层滚动内容、
+   避免缩窗横向滚动时半透明表头重叠。 */
 .el-table .el-table-fixed-column--right,
 .el-table .el-table-fixed-column--left {
   background: var(--bg-card-solid) !important;
 }
 .el-table__header-wrapper th.el-table-fixed-column--right,
 .el-table__header-wrapper th.el-table-fixed-column--left {
-  background: var(--el-table-header-bg-color) !important;
+  background: var(--bg-card-solid) !important;
 }
 
 /* --- Dialog / message-box -------------------------------------------------- */
