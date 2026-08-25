@@ -36,7 +36,7 @@ func TestLogExportCSV(t *testing.T) {
 	taskID := int64(tk["id"].(float64))
 	channelID := int64(ch["id"].(float64))
 
-	if _, err := db.Exec("INSERT INTO task_logs (task_id, channel_id, subject, status, error_msg, trigger_type, trigger_by, trigger_ip, sent_at) VALUES (?, ?, '主题A', 'failed', 'boom', 'manual', 'admin', '1.2.3.4', NOW())", taskID, channelID); err != nil {
+	if _, err := db.Exec("INSERT INTO task_logs (task_id, channel_id, subject, content, request, response, status, error_msg, retry_count, trigger_type, trigger_by, trigger_ip, sent_at) VALUES (?, ?, '主题A', '内容B', '请求C', '响应D', 'failed', 'boom', 3, 'manual', 'admin', '1.2.3.4', NOW())", taskID, channelID); err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { db.Exec("DELETE FROM task_logs WHERE task_id=?", taskID) })
@@ -57,6 +57,12 @@ func TestLogExportCSV(t *testing.T) {
 	}
 	if !strings.Contains(body, "主题A") || !strings.Contains(body, "boom") || !strings.Contains(body, "1.2.3.4") {
 		t.Fatalf("CSV missing subject/error/ip:\n%s", body)
+	}
+	// 新列：发送内容/请求/响应/重试次数
+	for _, want := range []string{"content", "request", "response", "retry_count", "内容B", "请求C", "响应D", ",3,"} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("CSV missing %q:\n%s", want, body)
+		}
 	}
 	// 普通用户无权导出
 	wu := normalUserToken(t, r)

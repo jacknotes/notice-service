@@ -322,12 +322,13 @@ func (h *TaskHandler) ExportLogs(c *gin.Context) {
 	// UTF-8 BOM：Windows Excel 无 BOM 时会把中文按 ANSI/GBK 误读，导致中文内容乱码。
 	_, _ = c.Writer.Write([]byte("\xEF\xBB\xBF"))
 	w := csv.NewWriter(c.Writer)
-	_ = w.Write([]string{"id", "sent_at", "task_id", "task_name", "channel_id", "channel_name", "status", "subject", "error_msg", "trigger_type", "trigger_by", "trigger_ip"})
+	_ = w.Write([]string{"id", "sent_at", "task_id", "task_name", "channel_id", "channel_name", "status", "subject", "content", "request", "response", "error_msg", "retry_count", "trigger_type", "trigger_by", "trigger_ip"})
 	for _, r := range rows {
 		_ = w.Write([]string{
 			strconv.FormatInt(r.ID, 10), r.SentAt.Format("2006-01-02 15:04:05"),
 			strconv.FormatInt(r.TaskID, 10), r.TaskName, strconv.FormatInt(r.ChannelID, 10), r.ChannelName,
-			r.Status, r.Subject, r.ErrorMsg, r.TriggerType, r.TriggerBy, r.TriggerIP,
+			r.Status, r.Subject, r.Content, r.Request, r.Response, r.ErrorMsg,
+			strconv.Itoa(r.RetryCount), r.TriggerType, r.TriggerBy, r.TriggerIP,
 		})
 	}
 	w.Flush()

@@ -277,7 +277,11 @@ type LogExportRow struct {
 	ChannelName string
 	Status      string
 	Subject     string
+	Content     string
+	Request     string
+	Response    string
 	ErrorMsg    string
+	RetryCount  int
 	TriggerType string
 	TriggerBy   string
 	TriggerIP   string
@@ -307,7 +311,8 @@ func (r *TaskLogRepo) ListExportRows(f LogFilter, limit int) ([]*LogExportRow, e
 		limit = 100000
 	}
 	query := `SELECT tl.id, tl.sent_at, tl.task_id, COALESCE(t.name,''), tl.channel_id, COALESCE(c.name,''),
-		tl.status, tl.subject, COALESCE(tl.error_msg,''), COALESCE(tl.trigger_type,''), COALESCE(tl.trigger_by,''), COALESCE(tl.trigger_ip,'')
+		tl.status, tl.subject, COALESCE(tl.content,''), COALESCE(tl.request,''), COALESCE(tl.response,''),
+		COALESCE(tl.error_msg,''), tl.retry_count, COALESCE(tl.trigger_type,''), COALESCE(tl.trigger_by,''), COALESCE(tl.trigger_ip,'')
 		FROM task_logs tl
 		LEFT JOIN tasks t ON t.id = tl.task_id
 		LEFT JOIN channels c ON c.id = tl.channel_id
@@ -322,7 +327,8 @@ func (r *TaskLogRepo) ListExportRows(f LogFilter, limit int) ([]*LogExportRow, e
 	for rows.Next() {
 		row := &LogExportRow{}
 		if err := rows.Scan(&row.ID, &row.SentAt, &row.TaskID, &row.TaskName, &row.ChannelID, &row.ChannelName,
-			&row.Status, &row.Subject, &row.ErrorMsg, &row.TriggerType, &row.TriggerBy, &row.TriggerIP); err != nil {
+			&row.Status, &row.Subject, &row.Content, &row.Request, &row.Response, &row.ErrorMsg, &row.RetryCount,
+			&row.TriggerType, &row.TriggerBy, &row.TriggerIP); err != nil {
 			return nil, err
 		}
 		out = append(out, row)
