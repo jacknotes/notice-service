@@ -41,6 +41,8 @@ const enUS: EnMessages = {
     lastMonth: 'Last month',
     success: 'Succeeded',
     failed: 'Failed',
+    switchToDay: 'Switch to light mode',
+    switchToNight: 'Switch to dark mode',
   },
   nav: {
     dashboard: 'Dashboard',
@@ -63,7 +65,7 @@ const enUS: EnMessages = {
     codeHint: 'Two-factor authentication is enabled. Enter the 6-digit code from your authenticator app (or a one-time backup code).',
     backToPassword: '← Back to login',
     verifying: 'Verifying…',
-    login: 'Login',
+    signIn: 'Login',
     verify: 'Verify',
     forgot: 'Forgot password?',
     resetPasswordTitle: 'Reset Password',
@@ -75,7 +77,6 @@ const enUS: EnMessages = {
     confirmPassword: 'Confirm new password',
     confirmPasswordPlaceholder: 'Enter the new password again',
     tokenRequired: 'Enter the reset token',
-    resetting: 'Reset Password',
     loginResponseError: 'Unexpected login response, please retry',
     loginNetworkError: 'Login failed, please check your network',
     codeIncorrect: 'Incorrect verification code, please retry',
@@ -83,8 +84,6 @@ const enUS: EnMessages = {
     confirmMismatch: 'The two passwords do not match',
     passwordResetOk: 'Password reset. Please log in with the new password.',
     resetFailed: 'Reset failed, please check the token',
-    switchToDay: 'Switch to light mode',
-    switchToNight: 'Switch to dark mode',
   },
 }
 

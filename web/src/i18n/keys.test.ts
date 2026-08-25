@@ -6,6 +6,11 @@ import zhCN from '@/locales/zh-CN'
 // 组件里静态用到的 t('...')/$t('...') key 必须在 zh-CN 文案表中存在。
 // vue-i18n 9 的 t() 对「新字面量」不做编译期硬校验，这个扫描测试就是
 // 拼写错误（如 t('login.usernaem')）在测试期的兜底（Tasks 10–19 依赖此网）。
+//
+// 注意本测试的局限：只扫描「静态单引号」t('...')/$t('...') 字面量（见下方 KEY_RE），
+// 动态 key（如 t(item.labelKey)、t(route.meta.titleKey) —— 即导航/标题 key 的计划约定）
+// 不在扫描范围内，是刻意为之；这类动态 key 由 en-US.ts 的 EnMessages 映射类型
+// 保证键一致性，并在运行时经 fallbackLocale 回退兜底。
 
 function collectFiles(dir: string): string[] {
   const out: string[] = []

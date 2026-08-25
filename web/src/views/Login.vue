@@ -4,7 +4,7 @@
 
     <button
       class="theme-toggle"
-      :aria-label="theme === 'dark' ? t('login.switchToDay') : t('login.switchToNight')"
+      :aria-label="theme === 'dark' ? t('common.switchToDay') : t('common.switchToNight')"
       @click="toggleTheme"
     >
       <el-icon :size="18"><component :is="theme === 'dark' ? Sunny : Moon" /></el-icon>
@@ -80,7 +80,7 @@
           :loading="loading"
           native-type="submit"
         >
-          {{ loading ? t('login.verifying') : t('login.login') }}
+          {{ loading ? t('login.verifying') : t('login.signIn') }}
         </el-button>
         <el-button
           v-else
@@ -128,7 +128,7 @@
         <div class="dialog-footer">
           <span class="footer-grow"></span>
           <el-button @click="forgotVisible = false">{{ t('common.cancel') }}</el-button>
-          <el-button type="primary" :loading="forgotLoading" @click="submitForgot">{{ t('login.resetting') }}</el-button>
+          <el-button type="primary" :loading="forgotLoading" @click="submitForgot">{{ t('login.resetPasswordTitle') }}</el-button>
         </div>
       </template>
     </el-dialog>
@@ -136,7 +136,7 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, ref } from 'vue'
+import { computed, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
@@ -160,11 +160,12 @@ const pendingToken = ref('')
 
 const form = reactive({ username: '', password: '', code: '' })
 
-const rules: FormRules = {
+// 校验规则用 computed：运行时切换 locale 后 t() 重求值，规则文案即时生效（Tasks 11–18 同此范式）
+const rules = computed<FormRules>(() => ({
   username: [{ required: true, message: t('login.usernamePlaceholder'), trigger: 'blur' }],
   password: [{ required: true, message: t('login.passwordPlaceholder'), trigger: 'blur' }],
   code: [{ required: true, message: t('login.codeRequired'), trigger: 'blur' }],
-}
+}))
 
 async function onSubmit() {
   if (loading.value) return
@@ -226,7 +227,7 @@ const forgotVisible = ref(false)
 const forgotLoading = ref(false)
 const forgotFormRef = ref<FormInstance>()
 const forgotForm = reactive({ username: '', token: '', newPassword: '', confirm: '' })
-const forgotRules: FormRules = {
+const forgotRules = computed<FormRules>(() => ({
   username: [{ required: true, message: t('login.usernamePlaceholder'), trigger: 'blur' }],
   token: [{ required: true, message: t('login.tokenRequired'), trigger: 'blur' }],
   newPassword: [
@@ -249,7 +250,7 @@ const forgotRules: FormRules = {
       trigger: 'blur',
     },
   ],
-}
+}))
 
 function openForgot() {
   forgotForm.username = ''

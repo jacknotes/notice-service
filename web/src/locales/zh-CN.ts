@@ -36,6 +36,8 @@ const zhCN = {
     lastMonth: '最近一个月',
     success: '成功',
     failed: '失败',
+    switchToDay: '切换到白天模式',
+    switchToNight: '切换到夜晚模式',
   },
   nav: {
     dashboard: '仪表盘',
@@ -58,7 +60,7 @@ const zhCN = {
     codeHint: '账号已开启双因子认证，请输入认证器中的 6 位动态码（或一次性备用码）',
     backToPassword: '← 返回重新登录',
     verifying: '验证中…',
-    login: '登 录',
+    signIn: '登 录',
     verify: '验 证',
     forgot: '忘记密码？',
     resetPasswordTitle: '重置密码',
@@ -70,7 +72,6 @@ const zhCN = {
     confirmPassword: '确认新密码',
     confirmPasswordPlaceholder: '再次输入新密码',
     tokenRequired: '请输入重置令牌',
-    resetting: '重置密码',
     loginResponseError: '登录响应异常，请重试',
     loginNetworkError: '登录失败，请检查网络连接',
     codeIncorrect: '验证码不正确，请重试',
@@ -78,8 +79,6 @@ const zhCN = {
     confirmMismatch: '两次输入的密码不一致',
     passwordResetOk: '密码已重置，请使用新密码登录',
     resetFailed: '重置失败，请检查令牌是否正确',
-    switchToDay: '切换到白天模式',
-    switchToNight: '切换到夜晚模式',
   },
 } as const
 
