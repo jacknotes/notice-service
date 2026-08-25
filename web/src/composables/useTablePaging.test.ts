@@ -23,6 +23,12 @@ describe('useTablePaging', () => {
     expect(sorted.value.map((r) => r.id)).toEqual([4, 3, 2, 1])
   })
 
+  it('数字列 id 升序排序', () => {
+    const { onSortChange, sorted } = useTablePaging(rows)
+    onSortChange({ prop: 'id', order: 'ascending' })
+    expect(sorted.value.map((r) => r.id)).toEqual([1, 2, 3, 4])
+  })
+
   it('字符串列 name 按中文比较升序', () => {
     const { onSortChange, sorted } = useTablePaging(rows)
     onSortChange({ prop: 'name', order: 'ascending' })
@@ -34,6 +40,14 @@ describe('useTablePaging', () => {
     onSortChange({ prop: 'id', order: 'descending' })
     onSortChange({ prop: 'id', order: null })
     expect(sorted.value.map((r) => r.id)).toEqual([3, 1, 2, 4])
+  })
+
+  it('排序后回到第 1 页', () => {
+    const { page, onSortChange, sorted } = useTablePaging(rows)
+    page.value = 2
+    onSortChange({ prop: 'id', order: 'descending' })
+    expect(sorted.value.map((r) => r.id)).toEqual([4, 3, 2, 1])
+    expect(page.value).toBe(1)
   })
 
   it('翻页切片正确（每页 2 条）', () => {
