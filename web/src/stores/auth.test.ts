@@ -22,7 +22,7 @@ describe('auth store', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     localStorage.clear()
-    vi.clearAllMocks()
+    vi.resetAllMocks()
   })
 
   it('isLoggedIn 由 token 决定', () => {
@@ -34,7 +34,7 @@ describe('auth store', () => {
 
   it('login 委托 authApi.login 并透传响应', async () => {
     const resp = { requires_2fa: true, pending_token: 'p1', user: mockUser }
-    ;(authApi.login as any).mockResolvedValue(resp)
+    vi.mocked(authApi.login).mockResolvedValue(resp)
     const s = useAuthStore()
     const out = await s.login('admin', 'x')
     expect(authApi.login).toHaveBeenCalledWith('admin', 'x')
@@ -64,5 +64,18 @@ describe('auth store', () => {
     localStorage.setItem('user', '{broken')
     const s = useAuthStore()
     expect(s.user).toBeNull()
+  })
+
+  it('创建时从 localStorage 恢复 token', () => {
+    localStorage.setItem('token', 't')
+    const s = useAuthStore()
+    expect(s.token).toBe('t')
+    expect(s.isLoggedIn).toBe(true)
+  })
+
+  it('login 失败时错误透传', async () => {
+    vi.mocked(authApi.login).mockRejectedValue(new Error('401'))
+    const s = useAuthStore()
+    await expect(s.login('a', 'b')).rejects.toThrow('401')
   })
 })
