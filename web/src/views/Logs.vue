@@ -108,8 +108,8 @@
                   >
                     {{ triggerLabel(row.trigger_type) }}
                   </el-tag>
-                  <span class="mono detail-trigger-text">人：{{ row.trigger_by || '—' }}</span>
-                  <span class="mono detail-trigger-text">IP：{{ row.trigger_ip || '—' }}</span>
+                  <span class="mono detail-value-text">人：{{ row.trigger_by || '—' }}</span>
+                  <span class="mono detail-value-text">IP：{{ row.trigger_ip || '—' }}</span>
                 </div>
               </div>
 
@@ -140,7 +140,7 @@
 
               <div v-if="row.retry_count" class="detail-block">
                 <span class="detail-label">重试次数</span>
-                <span class="mono detail-trigger-text">{{ row.retry_count }}</span>
+                <span class="mono detail-value-text">{{ row.retry_count }}</span>
               </div>
             </div>
           </template>
@@ -647,7 +647,7 @@ onMounted(() => {
   gap: var(--space-3);
   flex-wrap: wrap;
 }
-.detail-trigger-text {
+.detail-value-text {
   color: var(--text-secondary);
   font-size: var(--text-xs);
 }
