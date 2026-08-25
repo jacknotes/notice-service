@@ -14,10 +14,10 @@ import { authApi, backupApi, channelApi, logApi, taskApi, templateApi, userApi }
 
 // 让 get/post/put/delete 默认返回 { data } 结构
 function respondWith(data: any) {
-  ;(mockClient.get as any).mockResolvedValue({ data })
-  ;(mockClient.post as any).mockResolvedValue({ data })
-  ;(mockClient.put as any).mockResolvedValue({ data })
-  ;(mockClient.delete as any).mockResolvedValue({ data })
+  vi.mocked(mockClient.get).mockResolvedValue({ data })
+  vi.mocked(mockClient.post).mockResolvedValue({ data })
+  vi.mocked(mockClient.put).mockResolvedValue({ data })
+  vi.mocked(mockClient.delete).mockResolvedValue({ data })
 }
 
 describe('api/index 各接口封装', () => {
@@ -27,7 +27,7 @@ describe('api/index 各接口封装', () => {
   })
 
   it('authApi.login → POST /auth/login，透传 data', async () => {
-    ;(mockClient.post as any).mockResolvedValue({ data: { token: 't', user: {} } })
+    vi.mocked(mockClient.post).mockResolvedValue({ data: { token: 't', user: {} } })
     const out = await authApi.login('u', 'p')
     expect(mockClient.post).toHaveBeenCalledWith('/auth/login', { username: 'u', password: 'p' })
     expect(out).toEqual({ token: 't', user: {} })
@@ -48,11 +48,20 @@ describe('api/index 各接口封装', () => {
     expect(mockClient.post).toHaveBeenCalledWith('/channels/9/test', { config: { key: 'v' } })
   })
 
-  it('templateApi.preview 传 id 与表单负载', async () => {
-    await templateApi.preview(0, { subject: 's', content_md: 'c', variables: { a: '1' } })
+  it('channelApi.list 透传 data', async () => {
+    vi.mocked(mockClient.get).mockResolvedValue({ data: { id: 1, type: 'email' } })
+    const out = await channelApi.list()
+    expect(mockClient.get).toHaveBeenCalledWith('/channels')
+    expect(out).toEqual({ id: 1, type: 'email' })
+  })
+
+  it('templateApi.preview 传 id 与表单负载并透传 data', async () => {
+    vi.mocked(mockClient.post).mockResolvedValue({ data: { subject: 's', content: 'c' } })
+    const out = await templateApi.preview(0, { subject: 's', content_md: 'c', variables: { a: '1' } })
     expect(mockClient.post).toHaveBeenCalledWith('/templates/0/preview', {
       subject: 's', content_md: 'c', variables: { a: '1' },
     })
+    expect(out).toEqual({ subject: 's', content: 'c' })
   })
 
   it('taskApi.toggle/sendNow/logs/preview 的 URL', async () => {
@@ -66,11 +75,22 @@ describe('api/index 各接口封装', () => {
     expect(mockClient.post).toHaveBeenCalledWith('/tasks/preview', { template_id: 1, variables: {}, receivers: ['a@b.c'] })
   })
 
-  it('logApi.query 把筛选参数放进 query', async () => {
-    await logApi.query({ task_id: 7, status: 'failed', page: 2, page_size: 20, sort_by: 'sent_at', sort_order: 'asc' })
+  it('taskApi.logs 透传 data', async () => {
+    vi.mocked(mockClient.get).mockResolvedValue({ data: [{ id: 1, task_id: 5, status: 'sent' }] })
+    const out = await taskApi.logs(5)
+    expect(mockClient.get).toHaveBeenCalledWith('/tasks/5/logs')
+    expect(out).toEqual([{ id: 1, task_id: 5, status: 'sent' }])
+  })
+
+  it('logApi.query 把筛选参数放进 query 并透传 data', async () => {
+    vi.mocked(mockClient.get).mockResolvedValue({ data: { items: [], total: 0 } })
+    const out = await logApi.query({
+      task_id: 7, status: 'failed', page: 2, page_size: 20, sort_by: 'sent_at', sort_order: 'asc',
+    })
     expect(mockClient.get).toHaveBeenCalledWith('/logs', {
       params: { task_id: 7, status: 'failed', page: 2, page_size: 20, sort_by: 'sent_at', sort_order: 'asc' },
     })
+    expect(out).toEqual({ items: [], total: 0 })
   })
 
   it('logApi.export 带 responseType=blob', async () => {
@@ -93,12 +113,19 @@ describe('api/index 各接口封装', () => {
     expect(mockClient.post).toHaveBeenCalledWith('/users/2/2fa-disable')
   })
 
+  it('userApi.list 透传 data', async () => {
+    vi.mocked(mockClient.get).mockResolvedValue({ data: [{ id: 1, username: 'u', role: 'admin' }] })
+    const out = await userApi.list()
+    expect(mockClient.get).toHaveBeenCalledWith('/users')
+    expect(out).toEqual([{ id: 1, username: 'u', role: 'admin' }])
+  })
+
   it('backupApi.export 下载 JSON，import 上传', async () => {
-    ;(mockClient.get as any).mockResolvedValue({ data: new Blob(['x']) })
+    vi.mocked(mockClient.get).mockResolvedValue({ data: new Blob(['x']) })
     const blob = await backupApi.export()
     expect(mockClient.get).toHaveBeenCalledWith('/export', { responseType: 'blob' })
     expect(blob).toBeInstanceOf(Blob)
-    ;(mockClient.post as any).mockResolvedValue({ data: { channels_created: 1, skipped: ['a'] } })
+    vi.mocked(mockClient.post).mockResolvedValue({ data: { channels_created: 1, skipped: ['a'] } })
     const res = await backupApi.import({ version: 1 })
     expect(mockClient.post).toHaveBeenCalledWith('/import', { version: 1 })
     expect(res.skipped).toEqual(['a'])
