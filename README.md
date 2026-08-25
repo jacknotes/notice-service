@@ -59,9 +59,10 @@ make deps    # 一键安装：npm install（前端）+ go mod download（后端�
 
 ### 本地开发（推荐日常用）
 ```bash
-make dev     # 编译后端 :8080（release）+ 前端 Vite :5173（热更新；/api、/swagger 自动代理到 :8080）
+make db-start   # 启动本地 MySQL（.dev 裸 MariaDB，已在运行则跳过；首次会自动初始化数据目录）
+make dev        # 编译后端 :8080（release）+ 前端 Vite :5173（热更新；/api、/swagger 自动代理到 :8080）
 ```
-访问 **http://localhost:5173**。前提：本机 MySQL（`.dev/mysql-run`）在跑，且 :8080 未被占用（有旧进程先 `kill <pid>`）。
+访问 **http://localhost:5173**。前提：本地 MySQL 在跑（`make db-start`），且 :8080 未被占用（有旧进程先 `kill <pid>`）。
 
 ### 只跑后端 / 只跑前端
 ```bash
@@ -89,6 +90,15 @@ make docker-up      # docker compose up -d（2 实例 + MySQL 5.7 高可用）
 make docker-down    # 停止
 make docker-logs    # 跟随日志
 ```
+
+### 本地 MySQL（.dev 裸 MariaDB）
+```bash
+make db-start     # 启动本地 MySQL（已在运行则跳过；首次会自动初始化数据目录）
+make db-stop      # 优雅停止本地 MySQL
+make db-status    # 查看运行状态（端口/socket/Uptime）
+```
+本地开发用的 MySQL 不是 Docker 或系统服务，而是 `.dev` 目录下的独立 MariaDB 实例
+（数据 `.dev/mysql-data` / socket `.dev/mysql-run/mysqld.sock` / 日志 `.dev/mysql-run/mariadb.log`）。
 
 ### 运维 / 清理
 ```bash

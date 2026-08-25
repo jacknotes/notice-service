@@ -8,7 +8,7 @@ PORT   := 8080
 GO_ENV := GOCACHE=$(CURDIR)/.dev/go-cache GOMODCACHE=$(CURDIR)/.dev/gomodcache GOPATH=/tmp/dsh-gopath
 
 .PHONY: help deps build run dev dev-backend prod-backend test vet fmt swagger frontend-install frontend-build frontend-dev \
-        docker-build docker-up docker-down docker-logs db-clean clean
+        docker-build docker-up docker-down docker-logs db-clean db-start db-stop db-status clean
 
 help: ## 显示所有命令
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'
@@ -69,6 +69,57 @@ docker-down: ## 停止部署
 
 docker-logs: ## 查看部署日志
 	docker compose logs -f
+
+## ---------- 本地 MySQL（.dev 下的裸 MariaDB） ----------
+
+# 本地开发用的 MariaDB 不是 Docker/系统服务，而是 .dev 目录里的独立实例：
+#   数据目录 .dev/mysql-data / socket .dev/mysql-run/mysqld.sock / 日志 .dev/mysql-run/mariadb.log
+MYSQL_SOCK := $(CURDIR)/.dev/mysql-run/mysqld.sock
+MYSQL_DATA := $(CURDIR)/.dev/mysql-data
+MYSQL_RUN  := $(CURDIR)/.dev/mysql-run
+MYSQL_USER := $(shell id -un)
+
+db-start: ## 启动本地 MySQL（.dev 裸 MariaDB；已在运行则跳过）
+	@mkdir -p $(MYSQL_RUN); \
+	if mysqladmin --socket=$(MYSQL_SOCK) -u root ping >/dev/null 2>&1; then \
+		echo "MySQL 已在运行（socket: $(MYSQL_SOCK)）"; \
+		exit 0; \
+	fi; \
+	if [ ! -d "$(MYSQL_DATA)/mysql" ]; then \
+		echo "首次初始化数据目录 $(MYSQL_DATA) ..."; \
+		mariadb-install-db --datadir="$(MYSQL_DATA)" --user=$(MYSQL_USER) >/dev/null 2>&1 || true; \
+		echo "提示：首次使用请按 README「快速开始」创建数据库与用户（notice_service / notice_service_test / notice）"; \
+	fi; \
+	echo "启动 mariadbd（127.0.0.1:3306）..."; \
+	nohup mariadbd --datadir="$(MYSQL_DATA)" --socket="$(MYSQL_SOCK)" \
+		--port=3306 --bind-address=127.0.0.1 \
+		--pid-file="$(MYSQL_RUN)/mysqld.pid" \
+		--log-error="$(MYSQL_RUN)/mariadb.log" \
+		--user=$(MYSQL_USER) >/dev/null 2>&1 & \
+	for i in $$(seq 1 30); do \
+		if mysqladmin --socket="$(MYSQL_SOCK)" -u root ping >/dev/null 2>&1; then \
+			echo "MySQL 已就绪（127.0.0.1:3306）"; \
+			exit 0; \
+		fi; \
+		sleep 1; \
+	done; \
+	echo "错误：MySQL 启动超时，请查看日志 $(MYSQL_RUN)/mariadb.log"; \
+	exit 1
+
+db-stop: ## 停止本地 MySQL（优雅关闭）
+	@if mysqladmin --socket=$(MYSQL_SOCK) -u root ping >/dev/null 2>&1; then \
+		mysqladmin --socket=$(MYSQL_SOCK) -u root shutdown && echo "MySQL 已停止"; \
+	else \
+		echo "MySQL 未在运行"; \
+	fi
+
+db-status: ## 查看本地 MySQL 状态
+	@if mysqladmin --socket=$(MYSQL_SOCK) -u root ping >/dev/null 2>&1; then \
+		echo "运行中：127.0.0.1:3306（socket: $(MYSQL_SOCK)）"; \
+		mysqladmin --socket=$(MYSQL_SOCK) -u root status 2>/dev/null | sed -n '1p' || true; \
+	else \
+		echo "未运行（可执行 make db-start 启动）"; \
+	fi
 
 ## ---------- 运维 ----------
 
