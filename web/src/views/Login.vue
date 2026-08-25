@@ -4,7 +4,7 @@
 
     <button
       class="theme-toggle"
-      :aria-label="theme === 'dark' ? '切换到白天模式' : '切换到夜晚模式'"
+      :aria-label="theme === 'dark' ? t('login.switchToDay') : t('login.switchToNight')"
       @click="toggleTheme"
     >
       <el-icon :size="18"><component :is="theme === 'dark' ? Sunny : Moon" /></el-icon>
@@ -25,21 +25,21 @@
         size="large"
         @submit.prevent="onSubmit"
       >
-        <el-form-item v-if="step === 'password'" label="用户名" prop="username">
+        <el-form-item v-if="step === 'password'" :label="t('login.username')" prop="username">
           <el-input
             v-model="form.username"
-            placeholder="请输入用户名"
+            :placeholder="t('login.usernamePlaceholder')"
             :prefix-icon="User"
             autocomplete="username"
             clearable
           />
         </el-form-item>
 
-        <el-form-item v-if="step === 'password'" label="密码" prop="password">
+        <el-form-item v-if="step === 'password'" :label="t('login.password')" prop="password">
           <el-input
             v-model="form.password"
             type="password"
-            placeholder="请输入密码"
+            :placeholder="t('login.passwordPlaceholder')"
             :prefix-icon="Lock"
             show-password
             autocomplete="current-password"
@@ -48,21 +48,21 @@
         </el-form-item>
 
         <template v-if="step === '2fa'">
-          <el-form-item label="动态验证码" prop="code">
+          <el-form-item :label="t('login.code')" prop="code">
             <el-input
               v-model="form.code"
-              placeholder="输入 6 位动态码或备用码"
+              :placeholder="t('login.codePlaceholder')"
               :prefix-icon="Key"
               maxlength="16"
               class="mono code-input"
               @keyup.enter="onVerify2FA"
             />
             <div class="code-hint">
-              账号已开启双因子认证，请输入认证器中的 6 位动态码（或一次性备用码）
+              {{ t('login.codeHint') }}
             </div>
           </el-form-item>
           <el-button link type="primary" size="small" class="back-login" @click="backToPassword">
-            ← 返回重新登录
+            {{ t('login.backToPassword') }}
           </el-button>
         </template>
 
@@ -80,7 +80,7 @@
           :loading="loading"
           native-type="submit"
         >
-          {{ loading ? '验证中…' : '登 录' }}
+          {{ loading ? t('login.verifying') : t('login.login') }}
         </el-button>
         <el-button
           v-else
@@ -89,11 +89,11 @@
           :loading="loading"
           @click="onVerify2FA"
         >
-          {{ loading ? '验证中…' : '验 证' }}
+          {{ loading ? t('login.verifying') : t('login.verify') }}
         </el-button>
 
         <div v-if="step === 'password'" class="forgot-row">
-          <el-button link type="primary" size="small" @click="openForgot">忘记密码？</el-button>
+          <el-button link type="primary" size="small" @click="openForgot">{{ t('login.forgot') }}</el-button>
         </div>
       </el-form>
 
@@ -101,34 +101,34 @@
     </div>
 
     <!-- 忘记密码：用管理员生成的一次性令牌自助重置 -->
-    <el-dialog v-model="forgotVisible" title="重置密码" width="440px" :close-on-click-modal="false">
+    <el-dialog v-model="forgotVisible" :title="t('login.resetPasswordTitle')" width="440px" :close-on-click-modal="false">
       <el-form ref="forgotFormRef" :model="forgotForm" :rules="forgotRules" label-position="top">
         <p class="forgot-hint">
-          请输入用户名，以及管理员生成的一次性重置令牌（15 分钟内有效，使用后即失效）。
+          {{ t('login.forgotHint') }}
         </p>
-        <el-form-item label="用户名" prop="username">
-          <el-input v-model="forgotForm.username" placeholder="登录用户名" />
+        <el-form-item :label="t('login.username')" prop="username">
+          <el-input v-model="forgotForm.username" :placeholder="t('login.usernamePlaceholder')" />
         </el-form-item>
-        <el-form-item label="重置令牌" prop="token">
-          <el-input v-model="forgotForm.token" placeholder="向管理员索取的一次性令牌" class="mono" />
+        <el-form-item :label="t('login.resetToken')" prop="token">
+          <el-input v-model="forgotForm.token" :placeholder="t('login.resetTokenPlaceholder')" class="mono" />
         </el-form-item>
-        <el-form-item label="新密码" prop="newPassword">
+        <el-form-item :label="t('login.newPassword')" prop="newPassword">
           <el-input
             v-model="forgotForm.newPassword"
             type="password"
             show-password
-            placeholder="至少 12 位，含大小写字母、数字、特殊字符"
+            :placeholder="t('login.newPasswordPlaceholder')"
           />
         </el-form-item>
-        <el-form-item label="确认新密码" prop="confirm">
-          <el-input v-model="forgotForm.confirm" type="password" show-password placeholder="再次输入新密码" />
+        <el-form-item :label="t('login.confirmPassword')" prop="confirm">
+          <el-input v-model="forgotForm.confirm" type="password" show-password :placeholder="t('login.confirmPasswordPlaceholder')" />
         </el-form-item>
       </el-form>
       <template #footer>
         <div class="dialog-footer">
           <span class="footer-grow"></span>
-          <el-button @click="forgotVisible = false">取消</el-button>
-          <el-button type="primary" :loading="forgotLoading" @click="submitForgot">重置密码</el-button>
+          <el-button @click="forgotVisible = false">{{ t('common.cancel') }}</el-button>
+          <el-button type="primary" :loading="forgotLoading" @click="submitForgot">{{ t('login.resetting') }}</el-button>
         </div>
       </template>
     </el-dialog>
@@ -138,6 +138,7 @@
 <script setup lang="ts">
 import { reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import { User, Lock, WarningFilled, Sunny, Moon, Key } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
@@ -146,6 +147,8 @@ import { authApi } from '@/api'
 
 const router = useRouter()
 const auth = useAuthStore()
+
+const { t } = useI18n()
 
 const formRef = ref<FormInstance>()
 const loading = ref(false)
@@ -158,9 +161,9 @@ const pendingToken = ref('')
 const form = reactive({ username: '', password: '', code: '' })
 
 const rules: FormRules = {
-  username: [{ required: true, message: '请输入用户名', trigger: 'blur' }],
-  password: [{ required: true, message: '请输入密码', trigger: 'blur' }],
-  code: [{ required: true, message: '请输入动态验证码', trigger: 'blur' }],
+  username: [{ required: true, message: t('login.usernamePlaceholder'), trigger: 'blur' }],
+  password: [{ required: true, message: t('login.passwordPlaceholder'), trigger: 'blur' }],
+  code: [{ required: true, message: t('login.codeRequired'), trigger: 'blur' }],
 }
 
 async function onSubmit() {
@@ -181,10 +184,10 @@ async function onSubmit() {
       auth.completeLogin(res as any)
       router.push('/dashboard')
     } else {
-      error.value = '登录响应异常，请重试'
+      error.value = t('login.loginResponseError')
     }
   } catch (e: any) {
-    error.value = e?.response?.data?.error || '登录失败，请检查网络连接'
+    error.value = e?.response?.data?.error || t('login.loginNetworkError')
   } finally {
     loading.value = false
   }
@@ -195,7 +198,7 @@ async function onVerify2FA() {
   if (loading.value) return
   error.value = ''
   if (!form.code.trim()) {
-    error.value = '请输入 6 位动态验证码'
+    error.value = t('login.codeRequired')
     return
   }
   loading.value = true
@@ -204,7 +207,7 @@ async function onVerify2FA() {
     auth.completeLogin(data)
     router.push('/dashboard')
   } catch (e: any) {
-    error.value = e?.response?.data?.error || '验证码不正确，请重试'
+    error.value = e?.response?.data?.error || t('login.codeIncorrect')
   } finally {
     loading.value = false
   }
@@ -224,23 +227,23 @@ const forgotLoading = ref(false)
 const forgotFormRef = ref<FormInstance>()
 const forgotForm = reactive({ username: '', token: '', newPassword: '', confirm: '' })
 const forgotRules: FormRules = {
-  username: [{ required: true, message: '请输入用户名', trigger: 'blur' }],
-  token: [{ required: true, message: '请输入重置令牌', trigger: 'blur' }],
+  username: [{ required: true, message: t('login.usernamePlaceholder'), trigger: 'blur' }],
+  token: [{ required: true, message: t('login.tokenRequired'), trigger: 'blur' }],
   newPassword: [
-    { required: true, message: '请输入新密码', trigger: 'blur' },
+    { required: true, message: t('login.newPasswordPlaceholder'), trigger: 'blur' },
     {
       validator: (_r, v, cb) => {
-        if (v && !PASSWORD_RE.test(v)) cb(new Error('密码至少 12 位，且需包含大小写字母、数字、特殊字符'))
+        if (v && !PASSWORD_RE.test(v)) cb(new Error(t('login.passwordRule')))
         else cb()
       },
       trigger: 'blur',
     },
   ],
   confirm: [
-    { required: true, message: '请再次输入新密码', trigger: 'blur' },
+    { required: true, message: t('login.confirmPasswordPlaceholder'), trigger: 'blur' },
     {
       validator: (_r, v, cb) => {
-        if (v !== forgotForm.newPassword) cb(new Error('两次输入的密码不一致'))
+        if (v !== forgotForm.newPassword) cb(new Error(t('login.confirmMismatch')))
         else cb()
       },
       trigger: 'blur',
@@ -263,11 +266,11 @@ async function submitForgot() {
   forgotLoading.value = true
   try {
     await authApi.forgotPassword(forgotForm.username.trim(), forgotForm.token.trim(), forgotForm.newPassword)
-    ElMessage.success('密码已重置，请使用新密码登录')
+    ElMessage.success(t('login.passwordResetOk'))
     forgotVisible.value = false
     form.username = forgotForm.username.trim()
   } catch (e: any) {
-    ElMessage.error(e?.response?.data?.error || '重置失败，请检查令牌是否正确')
+    ElMessage.error(e?.response?.data?.error || t('login.resetFailed'))
   } finally {
     forgotLoading.value = false
   }
