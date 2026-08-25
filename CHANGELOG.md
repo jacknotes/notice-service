@@ -7,7 +7,7 @@
 ## [Unreleased]
 
 ### 已实现
-- **Makefile 本地 MySQL 管理**：新增 `db-start` / `db-stop` / `db-status`——管理 `.dev` 目录下的裸 MariaDB 实例（已在运行则跳过、首次自动初始化数据目录、优雅停止），`make dev` 前不用再手敲 `mariadbd` 命令
+- **Makefile 本地 MySQL 管理**：新增 `db-start` / `db-stop` / `db-status`——管理 `.dev` 目录下的裸 MariaDB 实例（已在运行则跳过、首次自动初始化数据目录、优雅停止）；`make dev` 现在会自动先拉起 MySQL，一条命令即可前后端 + 数据库全就绪
 
 ## [1.3.0] - 2026-08-24
 

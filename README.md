@@ -59,10 +59,10 @@ make deps    # 一键安装：npm install（前端）+ go mod download（后端�
 
 ### 本地开发（推荐日常用）
 ```bash
-make db-start   # 启动本地 MySQL（.dev 裸 MariaDB，已在运行则跳过；首次会自动初始化数据目录）
-make dev        # 编译后端 :8080（release）+ 前端 Vite :5173（热更新；/api、/swagger 自动代理到 :8080）
+make dev     # 一条命令：启动本地 MySQL（未运行则自动拉起）→ 编译后端 :8080 + 前端 Vite :5173
 ```
-访问 **http://localhost:5173**。前提：本地 MySQL 在跑（`make db-start`），且 :8080 未被占用（有旧进程先 `kill <pid>`）。
+访问 **http://localhost:5173**。`make dev` 会先执行 `db-start`（MySQL 已在跑则跳过），
+前提仅剩 :8080 未被占用（有旧进程先 `kill <pid>`）。
 
 ### 只跑后端 / 只跑前端
 ```bash

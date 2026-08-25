@@ -27,7 +27,7 @@ build: swagger ## 编译后端（静态；先生成 swagger，避免 docs 缺失
 run: build ## 编译并启动后端（:$(PORT)，默认 release 模式）
 	PORT=$(PORT) $(BIN)
 
-dev: ## 本地开发：后端 + 前端 dev server（:8080 + :5173，/api 自动代理）
+dev: db-start ## 本地开发：启动本地 MySQL（未运行则拉起）+ 后端 :8080 + 前端 :5173（/api 自动代理）
 	$(MAKE) -j2 run frontend-dev
 
 dev-backend: build ## 开发后端（GIN_MODE=debug，:$(PORT)）
