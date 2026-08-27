@@ -1,8 +1,10 @@
 import type { MessageSchema } from './zh-CN'
 
-// Record<keyof MessageSchema, ...> 的严格版：按 zh-CN 的键结构做映射，
-// 任何 zh 有而 en 缺的键（或 en 多出的键）都会在类型层面报错；值可自由翻译。
-type EnMessages = { [K in keyof MessageSchema]: { [P in keyof MessageSchema[K]]: string } }
+// Record<keyof MessageSchema, ...> 的严格版：按 zh-CN 的键结构做递归映射，
+// 任意层级中 zh 有而 en 缺的键（或 en 多出的键、非字符串叶子）都会在类型层面报错；
+// 值可自由翻译。
+type EnSegment<T> = { [K in keyof T]: T[K] extends string ? string : EnSegment<T[K]> }
+type EnMessages = { [K in keyof MessageSchema]: EnSegment<MessageSchema[K]> }
 
 const enUS: EnMessages = {
   common: {
@@ -111,6 +113,63 @@ const enUS: EnMessages = {
     taskFallback: 'Task #{id}',
     channelFallback: 'Channel #{id}',
     loadFailed: 'Failed to load dashboard, please retry',
+  },
+  channels: {
+    readOnlyMode: 'Read-only',
+    subtitle: 'Configure delivery channels: Email (SMTP), WeCom, DingTalk, Feishu, PushPlus',
+    searchPlaceholder: 'Search name or type…',
+    createTitle: 'New Channel',
+    editTitle: 'Edit Channel',
+    emptyTable: 'No channels yet. Click "New Channel" in the top right to start.',
+    createdAt: 'Created at',
+    testAction: 'Test',
+    duplicateAction: 'Duplicate',
+    type: {
+      email: 'Email (SMTP)',
+      wecom: 'WeCom',
+      dingtalk: 'DingTalk',
+      feishu: 'Feishu',
+      wechat: 'PushPlus',
+    },
+    fieldHost: 'SMTP server',
+    fieldPort: 'Port',
+    fieldUsername: 'Username',
+    fieldPassword: 'Password / secret',
+    fieldFrom: 'From address',
+    fieldWebhook: 'Webhook URL',
+    fieldSecret: 'Signing secret (optional)',
+    fieldPpToken: 'PushPlus Token',
+    fieldPpTopic: 'Topic code (optional)',
+    phHost: 'smtp.example.com',
+    phPort: '465 / 587 / 25',
+    phEmailAccount: 'Sender email account',
+    phSmtpSecret: 'SMTP authorization code / password',
+    phFrom: 'no-reply@example.com',
+    phWebhookWecom: 'https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=…',
+    phWebhookDingtalk: 'https://oapi.dingtalk.com/robot/send?access_token=…',
+    phWebhookFeishu: 'https://open.feishu.cn/open-apis/bot/v2/hook/…',
+    phSecret: 'SEC… (leave empty if signing is disabled)',
+    phPpToken: 'Token from https://www.pushplus.plus',
+    phPpTopic: 'PushPlus topic code, delivers to a group',
+    selectType: 'Select type',
+    namePlaceholder: 'A memorable name for the channel',
+    nameRequired: 'Enter the channel name',
+    typeRequired: 'Select a channel type',
+    enabledHint: 'Disabled channels no longer participate in delivery',
+    testConnection: 'Test connection',
+    testPass: 'Connection test passed',
+    testPassNamed: '"{name}" connection test passed',
+    testFail: 'Connection test failed: {msg}',
+    checkConfig: 'Please check the configuration',
+    copySuffix: ' (copy)',
+    deleteConfirmTitle: 'Delete Channel',
+    deleteConfirmMsg: 'Delete channel "{name}"? This cannot be undone.',
+    batchDeleteConfirmMsg: 'Delete {n} selected item(s)?',
+    createdOk: 'Channel created',
+    updatedOk: 'Channel updated',
+    deletedOk: 'Channel deleted',
+    batchDeletedOk: 'Deleted {n} channels',
+    loadFailed: 'Failed to load channels',
   },
   login: {
     username: 'Username',

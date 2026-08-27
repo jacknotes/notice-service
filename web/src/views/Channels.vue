@@ -3,10 +3,10 @@
     <div class="page-head">
       <div>
         <div class="title-row">
-          <h1 class="grad-text">渠道管理</h1>
-          <el-tag v-if="!isAdmin" type="info" effect="plain" size="small">只读模式</el-tag>
+          <h1 class="grad-text">{{ t('nav.channels') }}</h1>
+          <el-tag v-if="!isAdmin" type="info" effect="plain" size="small">{{ t('channels.readOnlyMode') }}</el-tag>
         </div>
-        <p class="sub">配置通知投递渠道：SMTP 邮件、企业微信、钉钉、飞书、PushPlus</p>
+        <p class="sub">{{ t('channels.subtitle') }}</p>
       </div>
       <div class="actions">
         <el-input
@@ -14,7 +14,7 @@
           class="search-input"
           clearable
           :prefix-icon="Search"
-          placeholder="搜索名称或类型…"
+          :placeholder="t('channels.searchPlaceholder')"
         />
         <el-button
           v-if="isAdmin"
@@ -24,10 +24,10 @@
           :disabled="!selectedRows.length"
           @click="batchDelete"
         >
-          批量删除
+          {{ t('common.batchDelete') }}
         </el-button>
         <el-button v-if="isAdmin" type="primary" :icon="Plus" @click="openCreate">
-          新建渠道
+          {{ t('channels.createTitle') }}
         </el-button>
       </div>
     </div>
@@ -37,7 +37,7 @@
         ref="tableRef"
         :data="paged"
         style="width: 100%"
-        empty-text="暂无渠道，点击右上角「新建渠道」开始"
+        :empty-text="t('channels.emptyTable')"
         @selection-change="onSelectionChange"
         @sort-change="onSortChange"
       >
@@ -48,13 +48,13 @@
           </template>
         </el-table-column>
 
-        <el-table-column prop="name" label="名称" min-width="160" sortable="custom">
+        <el-table-column prop="name" :label="t('common.name')" min-width="160" sortable="custom">
           <template #default="{ row }">
             <span class="ch-name">{{ row.name }}</span>
           </template>
         </el-table-column>
 
-        <el-table-column prop="type" label="类型" width="150" sortable="custom">
+        <el-table-column prop="type" :label="t('common.type')" width="150" sortable="custom">
           <template #default="{ row }">
             <el-tag :style="typeTagStyle(row.type)" effect="plain" size="small">
               {{ typeLabel(row.type) }}
@@ -62,34 +62,34 @@
           </template>
         </el-table-column>
 
-        <el-table-column label="状态" width="110" align="center" sortable="custom" prop="enabled">
+        <el-table-column :label="t('common.status')" width="110" align="center" sortable="custom" prop="enabled">
           <template #default="{ row }">
             <el-tag :type="row.enabled ? 'success' : 'info'" effect="light" size="small">
-              {{ row.enabled ? '启用' : '停用' }}
+              {{ row.enabled ? t('common.enabled') : t('common.disabled') }}
             </el-tag>
           </template>
         </el-table-column>
 
-        <el-table-column label="创建时间" min-width="150" sortable="custom" prop="created_at">
+        <el-table-column :label="t('channels.createdAt')" min-width="150" sortable="custom" prop="created_at">
           <template #default="{ row }">
             <span class="mono time-cell">{{ row.created_at || '—' }}</span>
           </template>
         </el-table-column>
 
-        <el-table-column label="操作" width="250" align="center" fixed="right">
+        <el-table-column :label="t('common.action')" width="250" align="center" fixed="right">
           <template #default="{ row }">
             <template v-if="isAdmin">
               <el-button link type="primary" size="small" :loading="testingId === row.id" @click="testChannel(row)">
-                测试
+                {{ t('channels.testAction') }}
               </el-button>
               <el-button link type="primary" size="small" @click="openEdit(row)">
-                编辑
+                {{ t('common.edit') }}
               </el-button>
               <el-button link type="success" size="small" @click="duplicateChannel(row)">
-                复制
+                {{ t('channels.duplicateAction') }}
               </el-button>
               <el-button link type="danger" size="small" @click="removeChannel(row)">
-                删除
+                {{ t('common.delete') }}
               </el-button>
             </template>
             <span v-else class="text-muted">—</span>
@@ -113,45 +113,45 @@
     <!-- ── Create / Edit dialog ────────────────────────────────────── -->
     <el-dialog
       v-model="dialogVisible"
-      :title="form.id ? '编辑渠道' : '新建渠道'"
+      :title="form.id ? t('channels.editTitle') : t('channels.createTitle')"
       width="520px"
       :close-on-click-modal="false"
       destroy-on-close
     >
       <el-form ref="formRef" :model="form" :rules="rules" label-position="top">
         <div class="form-row">
-          <el-form-item label="名称" prop="name" class="grow">
-            <el-input v-model="form.name" placeholder="给渠道起个易记的名字" />
+          <el-form-item :label="t('common.name')" prop="name" class="grow">
+            <el-input v-model="form.name" :placeholder="t('channels.namePlaceholder')" />
           </el-form-item>
 
-          <el-form-item label="类型" prop="type" class="shrink">
-            <el-select v-model="form.type" placeholder="选择类型" style="width: 160px" @change="onTypeChange">
-              <el-option v-for="t in typeOptions" :key="t.value" :label="t.label" :value="t.value" />
+          <el-form-item :label="t('common.type')" prop="type" class="shrink">
+            <el-select v-model="form.type" :placeholder="t('channels.selectType')" style="width: 160px" @change="onTypeChange">
+              <el-option v-for="o in typeOptions" :key="o.value" :label="t(o.labelKey)" :value="o.value" />
             </el-select>
           </el-form-item>
         </div>
 
         <template v-for="field in currentFields" :key="field.key">
-          <el-form-item :label="field.label" :prop="`config.${field.key}`">
+          <el-form-item :label="t(field.labelKey)" :prop="`config.${field.key}`">
             <el-input
               v-model="form.config[field.key]"
               :type="field.type"
-              :placeholder="field.placeholder"
+              :placeholder="t(field.placeholderKey)"
               :show-password="field.type === 'password'"
               clearable
             />
           </el-form-item>
         </template>
 
-        <el-form-item label="状态">
+        <el-form-item :label="t('common.status')">
           <div class="enabled-row">
             <el-switch
               v-model="form.enabled"
               inline-prompt
-              active-text="启用"
-              inactive-text="停用"
+              :active-text="t('common.enabled')"
+              :inactive-text="t('common.disabled')"
             />
-            <span class="enabled-hint">停用后该渠道不再参与投递</span>
+            <span class="enabled-hint">{{ t('channels.enabledHint') }}</span>
           </div>
         </el-form-item>
       </el-form>
@@ -159,12 +159,12 @@
       <template #footer>
         <div class="dialog-footer">
           <el-button :loading="testing" :icon="Promotion" @click="testForm">
-            测试连接
+            {{ t('channels.testConnection') }}
           </el-button>
           <span class="footer-grow"></span>
-          <el-button @click="dialogVisible = false">取消</el-button>
+          <el-button @click="dialogVisible = false">{{ t('common.cancel') }}</el-button>
           <el-button type="primary" :loading="saving" @click="saveChannel">
-            {{ form.id ? '保存' : '创建' }}
+            {{ form.id ? t('common.save') : t('common.create') }}
           </el-button>
         </div>
       </template>
@@ -177,10 +177,13 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { FormInstance, FormRules, TableInstance } from 'element-plus'
 import { Plus, Edit, Delete, Promotion, Search } from '@element-plus/icons-vue'
+import { useI18n } from 'vue-i18n'
 import client from '@/api/client'
 import { channelApi } from '@/api'
 import { useAuthStore } from '@/stores/auth'
 import { useTablePaging } from '@/composables/useTablePaging'
+
+const { t } = useI18n()
 
 interface ChannelRow {
   id: number
@@ -193,48 +196,48 @@ interface ChannelRow {
 
 interface ConfigField {
   key: string
-  label: string
-  placeholder: string
+  labelKey: string
+  placeholderKey: string
   type: 'text' | 'password'
 }
 
 const typeOptions = [
-  { value: 'email', label: 'SMTP 邮件' },
-  { value: 'wecom', label: '企业微信' },
-  { value: 'dingtalk', label: '钉钉' },
-  { value: 'feishu', label: '飞书' },
-  { value: 'wechat', label: 'PushPlus' },
+  { value: 'email', labelKey: 'channels.type.email' },
+  { value: 'wecom', labelKey: 'channels.type.wecom' },
+  { value: 'dingtalk', labelKey: 'channels.type.dingtalk' },
+  { value: 'feishu', labelKey: 'channels.type.feishu' },
+  { value: 'wechat', labelKey: 'channels.type.wechat' },
 ]
 
-const typeMeta: Record<string, { label: string; color: string }> = {
-  email: { label: 'SMTP 邮件', color: '#818cf8' },
-  wecom: { label: '企业微信', color: '#38bdf8' },
-  dingtalk: { label: '钉钉', color: '#8b5cf6' },
-  feishu: { label: '飞书', color: '#34d399' },
-  wechat: { label: 'PushPlus', color: '#fbbf24' },
+const typeMeta: Record<string, { key: string; color: string }> = {
+  email: { key: 'channels.type.email', color: '#818cf8' },
+  wecom: { key: 'channels.type.wecom', color: '#38bdf8' },
+  dingtalk: { key: 'channels.type.dingtalk', color: '#8b5cf6' },
+  feishu: { key: 'channels.type.feishu', color: '#34d399' },
+  wechat: { key: 'channels.type.wechat', color: '#fbbf24' },
 }
 
 const configFields: Record<string, ConfigField[]> = {
   email: [
-    { key: 'host', label: 'SMTP 服务器', placeholder: 'smtp.example.com', type: 'text' },
-    { key: 'port', label: '端口', placeholder: '465 / 587 / 25', type: 'text' },
-    { key: 'username', label: '用户名', placeholder: '发件邮箱账号', type: 'text' },
-    { key: 'password', label: '授权码', placeholder: 'SMTP 授权码 / 密码', type: 'password' },
-    { key: 'from', label: '发件人', placeholder: 'no-reply@example.com', type: 'text' },
+    { key: 'host', labelKey: 'channels.fieldHost', placeholderKey: 'channels.phHost', type: 'text' },
+    { key: 'port', labelKey: 'channels.fieldPort', placeholderKey: 'channels.phPort', type: 'text' },
+    { key: 'username', labelKey: 'channels.fieldUsername', placeholderKey: 'channels.phEmailAccount', type: 'text' },
+    { key: 'password', labelKey: 'channels.fieldPassword', placeholderKey: 'channels.phSmtpSecret', type: 'password' },
+    { key: 'from', labelKey: 'channels.fieldFrom', placeholderKey: 'channels.phFrom', type: 'text' },
   ],
   wecom: [
-    { key: 'webhook_url', label: 'Webhook 地址', placeholder: 'https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=…', type: 'text' },
+    { key: 'webhook_url', labelKey: 'channels.fieldWebhook', placeholderKey: 'channels.phWebhookWecom', type: 'text' },
   ],
   dingtalk: [
-    { key: 'webhook_url', label: 'Webhook 地址', placeholder: 'https://oapi.dingtalk.com/robot/send?access_token=…', type: 'text' },
-    { key: 'secret', label: '加签密钥（可选）', placeholder: 'SEC…（未启用加签可留空）', type: 'text' },
+    { key: 'webhook_url', labelKey: 'channels.fieldWebhook', placeholderKey: 'channels.phWebhookDingtalk', type: 'text' },
+    { key: 'secret', labelKey: 'channels.fieldSecret', placeholderKey: 'channels.phSecret', type: 'text' },
   ],
   feishu: [
-    { key: 'webhook_url', label: 'Webhook 地址', placeholder: 'https://open.feishu.cn/open-apis/bot/v2/hook/…', type: 'text' },
+    { key: 'webhook_url', labelKey: 'channels.fieldWebhook', placeholderKey: 'channels.phWebhookFeishu', type: 'text' },
   ],
   wechat: [
-    { key: 'pushplus_token', label: 'PushPlus Token', placeholder: 'https://www.pushplus.plus 获取的 token', type: 'password' },
-    { key: 'pushplus_topic', label: '群组编码(可选)', placeholder: 'PushPlus 群组 code，发送到群组', type: 'text' },
+    { key: 'pushplus_token', labelKey: 'channels.fieldPpToken', placeholderKey: 'channels.phPpToken', type: 'password' },
+    { key: 'pushplus_topic', labelKey: 'channels.fieldPpTopic', placeholderKey: 'channels.phPpTopic', type: 'text' },
   ],
 }
 
@@ -253,7 +256,7 @@ function onSelectionChange(rows: ChannelRow[]) {
 
 const keyword = ref('')
 
-// 按名称或类型（原始值 / 中文标签）做客户端过滤
+// 按名称或类型（原始值 / 本地化标签）做客户端过滤
 const filteredChannels = computed<ChannelRow[]>(() => {
   const kw = keyword.value.trim().toLowerCase()
   if (!kw) return channels.value
@@ -286,19 +289,21 @@ const form = reactive<{
   config: {},
 })
 
-const rules: FormRules = {
-  name: [{ required: true, message: '请输入渠道名称', trigger: 'blur' }],
-  type: [{ required: true, message: '请选择渠道类型', trigger: 'change' }],
-}
+// 校验消息随语言切换（与 Login 的 computed 规则同一约定）
+const rules = computed<FormRules>(() => ({
+  name: [{ required: true, message: t('channels.nameRequired'), trigger: 'blur' }],
+  type: [{ required: true, message: t('channels.typeRequired'), trigger: 'change' }],
+}))
 
 const currentFields = computed<ConfigField[]>(() => configFields[form.type] || [])
 
-function typeLabel(t: string) {
-  return typeMeta[t]?.label || t
+function typeLabel(type: string) {
+  const m = typeMeta[type]
+  return m ? t(m.key) : type
 }
 
-function typeTagStyle(t: string) {
-  const c = typeMeta[t]?.color || '#94a3b8'
+function typeTagStyle(type: string) {
+  const c = typeMeta[type]?.color || '#94a3b8'
   return { color: c, borderColor: `${c}55`, backgroundColor: `${c}1a` }
 }
 
@@ -311,7 +316,7 @@ async function load() {
   try {
     channels.value = await channelApi.list()
   } catch (e: any) {
-    ElMessage.error(errMsg(e, '渠道列表加载失败'))
+    ElMessage.error(errMsg(e, t('channels.loadFailed')))
   } finally {
     loading.value = false
   }
@@ -336,10 +341,10 @@ function openEdit(row: ChannelRow) {
   dialogVisible.value = true
 }
 
-// 复制渠道：打开「新建渠道」并预填源渠道配置（名称加「（副本）」），id=0 走创建路径。
+// 复制渠道：打开「新建渠道」并预填源渠道配置（名称加副本后缀），id=0 走创建路径。
 function duplicateChannel(row: ChannelRow) {
   form.id = 0
-  form.name = `${row.name}（副本）`
+  form.name = `${row.name}${t('channels.copySuffix')}`
   form.type = row.type
   form.enabled = row.enabled
   form.config = { ...(row.config || {}) }
@@ -360,15 +365,15 @@ async function saveChannel() {
     const payload = { type: form.type, name: form.name, config: form.config, enabled: form.enabled }
     if (form.id) {
       await channelApi.update(form.id, payload)
-      ElMessage.success('渠道已更新')
+      ElMessage.success(t('channels.updatedOk'))
     } else {
       await channelApi.create(payload)
-      ElMessage.success('渠道已创建')
+      ElMessage.success(t('channels.createdOk'))
     }
     dialogVisible.value = false
     await load()
   } catch (e: any) {
-    ElMessage.error(errMsg(e, '保存失败'))
+    ElMessage.error(errMsg(e, t('common.saveFailed')))
   } finally {
     saving.value = false
   }
@@ -379,9 +384,9 @@ async function testChannel(row: ChannelRow) {
   testingId.value = row.id
   try {
     await channelApi.test(row.id)
-    ElMessage.success(`「${row.name}」连接测试通过`)
+    ElMessage.success(t('channels.testPassNamed', { name: row.name }))
   } catch (e: any) {
-    ElMessage.error(`连接测试失败：${errMsg(e, '请检查配置')}`)
+    ElMessage.error(t('channels.testFail', { msg: errMsg(e, t('channels.checkConfig')) }))
   } finally {
     testingId.value = null
   }
@@ -394,9 +399,9 @@ async function testForm() {
   testing.value = true
   try {
     await client.post('/channels/0/test', { type: form.type, config: form.config })
-    ElMessage.success('连接测试通过')
+    ElMessage.success(t('channels.testPass'))
   } catch (e: any) {
-    ElMessage.error(`连接测试失败：${errMsg(e, '请检查配置')}`)
+    ElMessage.error(t('channels.testFail', { msg: errMsg(e, t('channels.checkConfig')) }))
   } finally {
     testing.value = false
   }
@@ -406,19 +411,19 @@ async function testForm() {
 async function removeChannel(row: ChannelRow) {
   try {
     await ElMessageBox.confirm(
-      `确定删除渠道「${row.name}」吗？删除后不可恢复。`,
-      '删除渠道',
-      { confirmButtonText: '删除', cancelButtonText: '取消', type: 'warning' }
+      t('channels.deleteConfirmMsg', { name: row.name }),
+      t('channels.deleteConfirmTitle'),
+      { confirmButtonText: t('common.delete'), cancelButtonText: t('common.cancel'), type: 'warning' }
     )
   } catch {
     return
   }
   try {
     await channelApi.remove(row.id)
-    ElMessage.success('渠道已删除')
+    ElMessage.success(t('channels.deletedOk'))
     await load()
   } catch (e: any) {
-    ElMessage.error(errMsg(e, '删除失败'))
+    ElMessage.error(errMsg(e, t('common.deleteFailed')))
   }
 }
 
@@ -428,20 +433,20 @@ async function batchDelete() {
   if (!rows.length) return
   try {
     await ElMessageBox.confirm(
-      `确认删除选中的 ${rows.length} 项？`,
-      '批量删除',
-      { confirmButtonText: '删除', cancelButtonText: '取消', type: 'warning' }
+      t('channels.batchDeleteConfirmMsg', { n: rows.length }),
+      t('common.batchDelete'),
+      { confirmButtonText: t('common.delete'), cancelButtonText: t('common.cancel'), type: 'warning' }
     )
   } catch {
     return
   }
   try {
     await channelApi.batchRemove(rows.map((r) => r.id))
-    ElMessage.success(`已删除 ${rows.length} 个渠道`)
+    ElMessage.success(t('channels.batchDeletedOk', { n: rows.length }))
     tableRef.value?.clearSelection()
     await load()
   } catch (e: any) {
-    ElMessage.error(errMsg(e, '批量删除失败'))
+    ElMessage.error(errMsg(e, t('common.batchDeleteFailed')))
   }
 }
 
