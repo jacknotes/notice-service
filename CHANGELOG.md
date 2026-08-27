@@ -6,6 +6,11 @@
 
 ## [Unreleased]
 
+### 已实现
+- **前端自动化测试（R9）**：引入 Vitest + Vue Test Utils，覆盖 auth store / api 客户端与接口封装 / useTablePaging / useTheme / MarkdownPreview；CI 前端 job 追加 `npm run test`
+- **前端国际化（i18n）**：vue-i18n（zh-CN/en-US，默认中文），顶栏 + 个人设置双入口切换，Element Plus 内置文案同步；后端错误消息保持原样
+- **限流优化**：Webhook 限流 Allow 改为单轮往返（INSERT+LAST_INSERT_ID），并新增「拒绝方向」本地缓存（fail-safe，不放松限流）
+
 ## [1.4.0] - 2026-08-25
 
 ### 已实现

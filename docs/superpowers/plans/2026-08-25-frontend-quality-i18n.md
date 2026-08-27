@@ -27,7 +27,7 @@
 - Create: `web/src/test/setup.ts`
 - Modify: `.github/workflows/ci.yml`
 
-- [ ] **Step 1: 安装前端测试依赖**
+- [x] **Step 1: 安装前端测试依赖**
 
 ```bash
 cd web && npm install -D vitest@^2 @vue/test-utils@^2 jsdom
@@ -35,7 +35,7 @@ cd web && npm install -D vitest@^2 @vue/test-utils@^2 jsdom
 
 Expected: 安装成功，`web/package.json` devDependencies 新增上述三项，`package-lock.json` 更新。
 
-- [ ] **Step 2: 新增 `web/vitest.config.ts`**
+- [x] **Step 2: 新增 `web/vitest.config.ts`**
 
 ```ts
 import { defineConfig } from 'vitest/config'
@@ -52,7 +52,7 @@ export default defineConfig({
 })
 ```
 
-- [ ] **Step 3: 新增 `web/src/test/setup.ts`**
+- [x] **Step 3: 新增 `web/src/test/setup.ts`**
 
 ```ts
 // 全局测试环境兜底：jsdom 缺口的 window 能力在此补齐，避免组件挂载即崩。
@@ -74,7 +74,7 @@ if (!window.matchMedia) {
 }
 ```
 
-- [ ] **Step 4: `web/package.json` 增加 test 脚本**
+- [x] **Step 4: `web/package.json` 增加 test 脚本**
 
 在 `"scripts"` 中新增：
 
@@ -83,7 +83,7 @@ if (!window.matchMedia) {
 "test:watch": "vitest"
 ```
 
-- [ ] **Step 5: CI 前端 job 追加测试步骤**
+- [x] **Step 5: CI 前端 job 追加测试步骤**
 
 在 `.github/workflows/ci.yml` 的 `frontend` job 中，`Type check` 与 `Build` 之间插入：
 
@@ -93,7 +93,7 @@ if (!window.matchMedia) {
         run: npm run test
 ```
 
-- [ ] **Step 6: 冒烟验证基建**
+- [x] **Step 6: 冒烟验证基建**
 
 ```bash
 cd web && npx vitest run --reporter=dot
@@ -101,7 +101,7 @@ cd web && npx vitest run --reporter=dot
 
 Expected: 无测试文件时报 `No test files found`（或 0 通过），但配置本身无报错、能正常启动 runner。
 
-- [ ] **Step 7: 提交**
+- [x] **Step 7: 提交**
 
 ```bash
 git add web/package.json web/package-lock.json web/vitest.config.ts web/src/test/setup.ts .github/workflows/ci.yml
@@ -116,7 +116,7 @@ git commit -m "test(web): R9 引入 Vitest 测试基建（config/setup/scripts/C
 - Create: `web/src/composables/useTheme.test.ts`
 - （无源码改动——该模块已可测）
 
-- [ ] **Step 1: 写测试 `web/src/composables/useTheme.test.ts`**
+- [x] **Step 1: 写测试 `web/src/composables/useTheme.test.ts`**
 
 ```ts
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -179,7 +179,7 @@ describe('useTheme', () => {
 })
 ```
 
-- [ ] **Step 2: 跑测试确认通过**
+- [x] **Step 2: 跑测试确认通过**
 
 ```bash
 cd web && npx vitest run src/composables/useTheme.test.ts
@@ -187,7 +187,7 @@ cd web && npx vitest run src/composables/useTheme.test.ts
 
 Expected: 5 个用例全过。
 
-- [ ] **Step 3: 提交**
+- [x] **Step 3: 提交**
 
 ```bash
 git add web/src/composables/useTheme.test.ts
@@ -202,7 +202,7 @@ git commit -m "test(web): useTheme 初始解析/切换/持久化/降级用例"
 - Create: `web/src/composables/useTablePaging.test.ts`
 - （无源码改动）
 
-- [ ] **Step 1: 写测试 `web/src/composables/useTablePaging.test.ts`**
+- [x] **Step 1: 写测试 `web/src/composables/useTablePaging.test.ts`**
 
 ```ts
 import { describe, expect, it } from 'vitest'
@@ -260,7 +260,7 @@ describe('useTablePaging', () => {
 })
 ```
 
-- [ ] **Step 2: 跑测试确认通过**
+- [x] **Step 2: 跑测试确认通过**
 
 ```bash
 cd web && npx vitest run src/composables/useTablePaging.test.ts
@@ -268,7 +268,7 @@ cd web && npx vitest run src/composables/useTablePaging.test.ts
 
 Expected: 6 个用例全过。
 
-- [ ] **Step 3: 提交**
+- [x] **Step 3: 提交**
 
 ```bash
 git add web/src/composables/useTablePaging.test.ts
@@ -283,7 +283,7 @@ git commit -m "test(web): useTablePaging 排序/分页/翻页重置用例"
 - Create: `web/src/stores/auth.test.ts`
 - （无源码改动）
 
-- [ ] **Step 1: 写测试 `web/src/stores/auth.test.ts`**
+- [x] **Step 1: 写测试 `web/src/stores/auth.test.ts`**
 
 ```ts
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -356,7 +356,7 @@ describe('auth store', () => {
 })
 ```
 
-- [ ] **Step 2: 跑测试确认通过**
+- [x] **Step 2: 跑测试确认通过**
 
 ```bash
 cd web && npx vitest run src/stores/auth.test.ts
@@ -364,7 +364,7 @@ cd web && npx vitest run src/stores/auth.test.ts
 
 Expected: 5 个用例全过。
 
-- [ ] **Step 3: 提交**
+- [x] **Step 3: 提交**
 
 ```bash
 git add web/src/stores/auth.test.ts
@@ -379,7 +379,7 @@ git commit -m "test(web): auth store 登录/登出/持久化/容错用例"
 - Create: `web/src/api/client.test.ts`
 - （无源码改动）
 
-- [ ] **Step 1: 写测试 `web/src/api/client.test.ts`**
+- [x] **Step 1: 写测试 `web/src/api/client.test.ts`**
 
 ```ts
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -476,7 +476,7 @@ describe('api/client 拦截器', () => {
 })
 ```
 
-- [ ] **Step 2: 跑测试确认通过**
+- [x] **Step 2: 跑测试确认通过**
 
 ```bash
 cd web && npx vitest run src/api/client.test.ts
@@ -486,7 +486,7 @@ Expected: 8 个用例全过。
 
 > 说明：401 跳转用 `location.href = '/login'` 完整赋值触发页面跳转语义；jsdom 下 `window.location.href = '/login'` 会把 href 规范化为绝对地址（`http://localhost/login`），故断言用 `/login`（无协议前缀场景）与绝对地址（已在登录页场景）两种写法，具体以实际跑通为准，若断言不符按实际 href 值调整断言。
 
-- [ ] **Step 3: 提交**
+- [x] **Step 3: 提交**
 
 ```bash
 git add web/src/api/client.test.ts
@@ -501,7 +501,7 @@ git commit -m "test(web): api client token 注入/401 跳转/透传用例"
 - Create: `web/src/api/index.test.ts`
 - （无源码改动）
 
-- [ ] **Step 1: 写测试 `web/src/api/index.test.ts`**
+- [x] **Step 1: 写测试 `web/src/api/index.test.ts`**
 
 ```ts
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -611,7 +611,7 @@ describe('api/index 各接口封装', () => {
 })
 ```
 
-- [ ] **Step 2: 跑测试确认通过**
+- [x] **Step 2: 跑测试确认通过**
 
 ```bash
 cd web && npx vitest run src/api/index.test.ts
@@ -619,7 +619,7 @@ cd web && npx vitest run src/api/index.test.ts
 
 Expected: 8 个用例全过。
 
-- [ ] **Step 3: 提交**
+- [x] **Step 3: 提交**
 
 ```bash
 git add web/src/api/index.test.ts
@@ -634,7 +634,7 @@ git commit -m "test(web): api 各接口 URL/方法/参数/query 断言用例"
 - Create: `web/src/components/MarkdownPreview.test.ts`
 - （无源码改动）
 
-- [ ] **Step 1: 写测试 `web/src/components/MarkdownPreview.test.ts`**
+- [x] **Step 1: 写测试 `web/src/components/MarkdownPreview.test.ts`**
 
 ```ts
 import { describe, expect, it } from 'vitest'
@@ -671,7 +671,7 @@ describe('MarkdownPreview', () => {
 })
 ```
 
-- [ ] **Step 2: 跑测试确认通过**
+- [x] **Step 2: 跑测试确认通过**
 
 ```bash
 cd web && npx vitest run src/components/MarkdownPreview.test.ts
@@ -679,7 +679,7 @@ cd web && npx vitest run src/components/MarkdownPreview.test.ts
 
 Expected: 5 个用例全过。
 
-- [ ] **Step 3: 提交**
+- [x] **Step 3: 提交**
 
 ```bash
 git add web/src/components/MarkdownPreview.test.ts
@@ -692,7 +692,7 @@ git commit -m "test(web): MarkdownPreview 渲染/转义/空内容用例"
 
 **Files:**（无新增）
 
-- [ ] **Step 1: 全量跑前端测试 + 构建 + 类型检查**
+- [x] **Step 1: 全量跑前端测试 + 构建 + 类型检查**
 
 ```bash
 cd web && npm run test && npm run build && npx vue-tsc --noEmit
@@ -700,7 +700,7 @@ cd web && npm run test && npm run build && npx vue-tsc --noEmit
 
 Expected: 全部测试通过；`npm run build` 成功产出 `web/dist`；`vue-tsc --noEmit` 无类型错误。
 
-- [ ] **Step 2: 回归后端（确认未受影响）**
+- [x] **Step 2: 回归后端（确认未受影响）**
 
 ```bash
 make vet && make test
@@ -708,7 +708,7 @@ make vet && make test
 
 Expected: 全绿。
 
-- [ ] **Step 3: 提交（若有遗留未提交项）**
+- [x] **Step 3: 提交（若有遗留未提交项）**
 
 ```bash
 git status --short
@@ -730,7 +730,7 @@ git status --short
 - Modify: `web/src/main.ts`
 - Modify: `web/src/App.vue`
 
-- [ ] **Step 1: 安装 vue-i18n**
+- [x] **Step 1: 安装 vue-i18n**
 
 ```bash
 cd web && npm install vue-i18n@^9
@@ -738,7 +738,7 @@ cd web && npm install vue-i18n@^9
 
 Expected: `web/package.json` dependencies 新增 `vue-i18n`（^9.x）。
 
-- [ ] **Step 2: 新建 `web/src/locales/zh-CN.ts`（骨架，后续任务逐视图扩充）**
+- [x] **Step 2: 新建 `web/src/locales/zh-CN.ts`（骨架，后续任务逐视图扩充）**
 
 ```ts
 // 基准文案表（中文）。key 为扁平点号命名空间；en-US 必须与之键完全一致（类型约束见 en-US.ts）。
@@ -796,7 +796,7 @@ export type MessageSchema = typeof zhCN
 export default zhCN
 ```
 
-- [ ] **Step 3: 新建 `web/src/locales/en-US.ts`（与 zh 键严格一致）**
+- [x] **Step 3: 新建 `web/src/locales/en-US.ts`（与 zh 键严格一致）**
 
 ```ts
 import type { MessageSchema } from './zh-CN'
@@ -856,7 +856,7 @@ const enUS: MessageSchema = {
 export default enUS
 ```
 
-- [ ] **Step 4: 新建 `web/src/i18n/index.ts`（含 `t()` 键类型增强）**
+- [x] **Step 4: 新建 `web/src/i18n/index.ts`（含 `t()` 键类型增强）**
 
 ```ts
 import { createI18n } from 'vue-i18n'
@@ -887,7 +887,7 @@ declare module 'vue-i18n' {
 }
 ```
 
-- [ ] **Step 5: 新建 `web/src/i18n/locale.ts`（切换 + 持久化 + Element Plus 语言映射）**
+- [x] **Step 5: 新建 `web/src/i18n/locale.ts`（切换 + 持久化 + Element Plus 语言映射）**
 
 ```ts
 import { i18n } from './index'
@@ -910,7 +910,7 @@ export function currentLocale(): SupportedLocale {
 }
 ```
 
-- [ ] **Step 6: 修改 `web/src/main.ts` 挂载 i18n**
+- [x] **Step 6: 修改 `web/src/main.ts` 挂载 i18n**
 
 将：
 
@@ -956,7 +956,7 @@ app.use(i18n)
 app.mount('#app')
 ```
 
-- [ ] **Step 7: 修改 `web/src/App.vue` 同步 Element Plus 语言**
+- [x] **Step 7: 修改 `web/src/App.vue` 同步 Element Plus 语言**
 
 将：
 
@@ -990,7 +990,7 @@ const elementLocale = computed(() => (locale.value === 'zh-CN' ? zhCn : en))
 </script>
 ```
 
-- [ ] **Step 8: 冒烟构建 + 类型检查**
+- [x] **Step 8: 冒烟构建 + 类型检查**
 
 ```bash
 cd web && npx vue-tsc --noEmit && npm run build
@@ -998,7 +998,7 @@ cd web && npx vue-tsc --noEmit && npm run build
 
 Expected: 无类型错误、构建成功。`App.vue` 里 `el-config-provider` 需在 Element Plus 全局注册下可用（`app.use(ElementPlus)` 已全量注册）。
 
-- [ ] **Step 9: 提交**
+- [x] **Step 9: 提交**
 
 ```bash
 git add web/package.json web/package-lock.json web/src/locales web/src/i18n web/src/main.ts web/src/App.vue
@@ -1023,7 +1023,7 @@ git commit -m "feat(web): i18n 基建（vue-i18n/locales/el-config-provider 同�
 4. **不翻译**：后端返回的错误串（`e?.response?.data?.error` 保持原样）、纯英文标识（`SIGNAL RELAY · CONTROL ROOM`、`NOTICE-SERVICE / WEB CONSOLE`、`Notice` 品牌名）。
 5. 动态拼接如 `'密码至少 12 位，且需包含大小写字母、数字、特殊字符'` 整体作为一个 key。
 
-- [ ] **Step 1: 在 `zh-CN.ts` / `en-US.ts` 追加 `login` 命名空间**
+- [x] **Step 1: 在 `zh-CN.ts` / `en-US.ts` 追加 `login` 命名空间**
 
 `zh-CN.ts` 在 `nav` 之后加：
 
@@ -1103,7 +1103,7 @@ git commit -m "feat(web): i18n 基建（vue-i18n/locales/el-config-provider 同�
   },
 ```
 
-- [ ] **Step 2: 改造 `web/src/views/Login.vue`**
+- [x] **Step 2: 改造 `web/src/views/Login.vue`**
 
 脚本区新增：
 
@@ -1139,7 +1139,7 @@ const rules: FormRules = {
 
 `theme-toggle` 的 `:aria-label` 与 el-tooltip 同理（Login 页只有 theme-toggle 一处，用 `t('login.switchToDay')` / `t('login.switchToNight')`）。
 
-- [ ] **Step 3: 验证**
+- [x] **Step 3: 验证**
 
 ```bash
 cd web && npx vue-tsc --noEmit && npm run build && npm run test
@@ -1147,7 +1147,7 @@ cd web && npx vue-tsc --noEmit && npm run build && npm run test
 
 Expected: 无类型错误、构建成功、全部测试仍通过。
 
-- [ ] **Step 4: 提交**
+- [x] **Step 4: 提交**
 
 ```bash
 git add web/src/views/Login.vue web/src/locales/zh-CN.ts web/src/locales/en-US.ts
@@ -1164,7 +1164,7 @@ git commit -m "feat(web): Login 页文案 i18n 抽取（范式任务）"
 - Modify: `web/src/locales/zh-CN.ts`
 - Modify: `web/src/locales/en-US.ts`
 
-- [ ] **Step 1: `zh-CN.ts` / `en-US.ts` 追加 `appShell` 命名空间**
+- [x] **Step 1: `zh-CN.ts` / `en-US.ts` 追加 `appShell` 命名空间**
 
 `zh-CN.ts`：
 
@@ -1242,7 +1242,7 @@ git commit -m "feat(web): Login 页文案 i18n 抽取（范式任务）"
   },
 ```
 
-- [ ] **Step 2: 改 `web/src/router/index.ts`：meta 存 titleKey + afterEach 设 document.title**
+- [x] **Step 2: 改 `web/src/router/index.ts`：meta 存 titleKey + afterEach 设 document.title**
 
 ```ts
 import { createRouter, createWebHistory } from 'vue-router'
@@ -1282,7 +1282,7 @@ export default router
 
 > 需要 `logs` 命名空间有 `detailTitle`（如 `logs: { detailTitle: '日志详情' / 'Log Detail' }`），在 Task 16 会补，此处先留占位会在后续任务填上；如先行会类型报错，可在本任务把 `logs.detailTitle` 一并加进 zh/en（`detailTitle: '日志详情'` / `'Log Detail'`）。
 
-- [ ] **Step 3: 改 `web/src/components/AppLayout.vue`：nav 标签、标题、下拉、弹窗文案、顶栏语言切换**
+- [x] **Step 3: 改 `web/src/components/AppLayout.vue`：nav 标签、标题、下拉、弹窗文案、顶栏语言切换**
 
 关键改动（脚本区）：
 
@@ -1363,7 +1363,7 @@ const signalLabel = computed(() => {
 
 > `setLocale` 会写 `i18n.global.locale.value`，`App.vue` 的 `el-config-provider` computed 依赖 `locale` 会自动跟随；路由 `afterEach` 下次导航刷新 `document.title`；当前页面上未抽到 key 的文案由后续 Task 12-18 补齐。
 
-- [ ] **Step 4: 验证**
+- [x] **Step 4: 验证**
 
 ```bash
 cd web && npx vue-tsc --noEmit && npm run build && npm run test
@@ -1371,7 +1371,7 @@ cd web && npx vue-tsc --noEmit && npm run build && npm run test
 
 Expected: 通过。`logs.detailTitle` 若尚未定义导致类型错误，按 Step 2 备注先补上。
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 git add web/src/router/index.ts web/src/components/AppLayout.vue web/src/locales/zh-CN.ts web/src/locales/en-US.ts
@@ -1390,15 +1390,15 @@ git commit -m "feat(web): 外壳层 i18n（router 标题/AppLayout/顶栏语言�
 
 `发送量` `成功率` `成功送达的通知` `需要关注的失败回执` `任务数` `渠道数` `区间累计投递请求` `区间内使用的渠道` `区间内有投递的任务` `成功` `失败` `暂无数据` `开始日期` `结束日期` `至` `近 7 天` `近 14 天` `近 30 天` + script：`'仪表盘数据加载失败，请稍后重试'` `'暂无数据'` `'成功'` `'失败'`
 
-- [ ] **Step 1: 在 zh/en 追加 `dashboard` 命名空间**
+- [x] **Step 1: 在 zh/en 追加 `dashboard` 命名空间**
 
 按上述清单逐条建立 `dashboard.*` key（如 `dashboard.sendCount: '发送量' / 'Messages sent'`、`dashboard.successRate: '成功率' / 'Success rate'`、`dashboard.successDelivered: '成功送达的通知' / 'Notifications delivered'`、`dashboard.failedAttention: '需要关注的失败回执' / 'Failed deliveries to watch'`、`dashboard.taskCount: '任务数' / 'Tasks'`、`dashboard.channelCount: '渠道数' / 'Channels'`、`dashboard.totalRequests: '区间累计投递请求' / 'Total delivery requests'`、`dashboard.channelsUsed: '区间内使用的渠道' / 'Channels used'`、`dashboard.tasksDelivered: '区间内有投递的任务' / 'Tasks with deliveries'`、`dashboard.near7: '近 7 天' / 'Last 7 days'`、`dashboard.near14: '近 14 天' / 'Last 14 days'`、`dashboard.near30: '近 30 天' / 'Last 30 days'`、`dashboard.loadFailed: '仪表盘数据加载失败，请稍后重试' / 'Failed to load dashboard, please retry'`；`成功/失败/暂无数据/日期` 复用 `common.*`）。
 
-- [ ] **Step 2: 改造 `Dashboard.vue`**
+- [x] **Step 2: 改造 `Dashboard.vue`**
 
 脚本区 `const { t } = useI18n()`；template/script 中按 key 替换；日期快捷按钮文案 `近 7 天` 等、统计卡标题、趋势图空态用 key。
 
-- [ ] **Step 3: 验证 + 中文残留检查**
+- [x] **Step 3: 验证 + 中文残留检查**
 
 ```bash
 cd web && npx vue-tsc --noEmit && npm run build && npm run test
@@ -1408,7 +1408,7 @@ grep -nP "[\x{4e00}-\x{9fff}]" src/views/Dashboard.vue | grep -vP "^\s*\d+:\s*(/
 
 Expected: 构建/测试通过；残留检查仅剩 CSS 注释中的中文（`/* ── ... ── */`），无 UI 文案。
 
-- [ ] **Step 4: 提交**
+- [x] **Step 4: 提交**
 
 ```bash
 git add web/src/views/Dashboard.vue web/src/locales/zh-CN.ts web/src/locales/en-US.ts
@@ -1425,20 +1425,20 @@ git commit -m "feat(web): Dashboard 文案 i18n 抽取"
 
 **必须覆盖文案清单：** `新建渠道` `编辑渠道` `名称` `类型` `状态` `启用` `停用` `操作` `创建时间` `搜索名称或类型…` `暂无渠道，点击右上角「新建渠道」开始` `给渠道起个易记的名字` `选择类型` `SMTP 邮件` `企业微信` `钉钉` `飞书` `PushPlus 群组 code，发送到群组` `https://www.pushplus.plus 获取的 token` `SMTP 服务器` `端口` `发件邮箱账号` `发件人` `授权码` `SMTP 授权码 / 密码` `加签密钥（可选）` `SEC…（未启用加签可留空）` `Webhook 地址` `用户名` `群组编码(可选)` + script：`'请选择渠道类型'` `'请输入渠道名称'` `'保存'` `'保存失败'` `'创建'` `'取消'` `'删除'` `'删除失败'` `'删除渠道'` `'批量删除'` `'批量删除失败'` `'渠道已创建'` `'渠道已更新'` `'渠道已删除'` `'连接测试通过'` `'请检查配置'` `'渠道列表加载失败'`
 
-- [ ] **Step 1: 在 zh/en 追加 `channels` 命名空间**（含渠道类型名 `channels.type.email: 'SMTP 邮件' / 'Email (SMTP)'`、`channels.type.wecom: '企业微信' / 'WeCom'`、`channels.type.dingtalk: '钉钉' / 'DingTalk'`、`channels.type.feishu: '飞书' / 'Feishu'`、`channels.type.pushplus: 'PushPlus'`；表单字段与按钮按 `channels.*`；通用按钮/状态复用 `common.*`）。
+- [x] **Step 1: 在 zh/en 追加 `channels` 命名空间**（含渠道类型名 `channels.type.email: 'SMTP 邮件' / 'Email (SMTP)'`、`channels.type.wecom: '企业微信' / 'WeCom'`、`channels.type.dingtalk: '钉钉' / 'DingTalk'`、`channels.type.feishu: '飞书' / 'Feishu'`、`channels.type.pushplus: 'PushPlus'`；表单字段与按钮按 `channels.*`；通用按钮/状态复用 `common.*`）。
 
-- [ ] **Step 2: 改造 `Channels.vue`**
+- [x] **Step 2: 改造 `Channels.vue`**
 
 脚本区 `const { t } = useI18n()`；弹窗标题 `form.id ? t('channels.edit') : t('channels.create')`；渠道类型下拉选项 label 用 key（注意下拉是循环还是硬编码）；`ElMessage` 全部 key 化。
 
-- [ ] **Step 3: 验证 + 中文残留检查**
+- [x] **Step 3: 验证 + 中文残留检查**
 
 ```bash
 cd web && npx vue-tsc --noEmit && npm run build && npm run test
 grep -nP "[\x{4e00}-\x{9fff}]" src/views/Channels.vue | grep -vP "^\s*\d+:\s*(/\*|//|\*)" || echo "clean"
 ```
 
-- [ ] **Step 4: 提交**
+- [x] **Step 4: 提交**
 
 ```bash
 git add web/src/views/Channels.vue web/src/locales/zh-CN.ts web/src/locales/en-US.ts
@@ -1455,13 +1455,13 @@ git commit -m "feat(web): Channels 文案 i18n 抽取"
 
 **必须覆盖文案清单：** `新建模板` `编辑模板` `名称` `标题` `内容（Markdown）` `变量` `默认值` `变量名，如 username` `更新时间` `搜索名称或标题…` `暂无模板，点击右上角「新建模板」开始` `给模板起个易记的名字` `邮件 / 卡片标题，支持 {{变量}}` `{{变量}} 会在发送时被替换` `支持 Markdown 语法，例如：## 标题...`（整段提示）`已按当前变量值渲染` + script：`'请输入模板名称'` `'请输入标题'` `'请输入内容'` `'保存'` `'保存失败'` `'创建'` `'取消'` `'删除'` `'删除失败'` `'删除模板'` `'批量删除'` `'批量删除失败'` `'模板已创建'` `'模板已更新'` `'模板已删除'` `'模板列表加载失败'` `'预览生成失败'` + 变量占位动态 `v.default ? \`默认：${v.default}\` : '发送时替换为实际值'`
 
-- [ ] **Step 1: 在 zh/en 追加 `templates` 命名空间**（`templates.markdownHint` 整段作为单个 key；变量默认值前缀 `templates.varDefaultPrefix: '默认：' / 'Default: '`、`templates.varPlaceholderHint: '发送时替换为实际值' / 'Replaced with the actual value on send'`）。
+- [x] **Step 1: 在 zh/en 追加 `templates` 命名空间**（`templates.markdownHint` 整段作为单个 key；变量默认值前缀 `templates.varDefaultPrefix: '默认：' / 'Default: '`、`templates.varPlaceholderHint: '发送时替换为实际值' / 'Replaced with the actual value on send'`）。
 
-- [ ] **Step 2: 改造 `Templates.vue`**：脚本 `useI18n`；模板示例提示块、变量列表、弹窗、ElMessage 全部 key 化。
+- [x] **Step 2: 改造 `Templates.vue`**：脚本 `useI18n`；模板示例提示块、变量列表、弹窗、ElMessage 全部 key 化。
 
-- [ ] **Step 3: 验证 + 残留检查**（同 Task 12 Step 3，文件换成 `src/views/Templates.vue`）。
+- [x] **Step 3: 验证 + 残留检查**（同 Task 12 Step 3，文件换成 `src/views/Templates.vue`）。
 
-- [ ] **Step 4: 提交**
+- [x] **Step 4: 提交**
 
 ```bash
 git add web/src/views/Templates.vue web/src/locales/zh-CN.ts web/src/locales/en-US.ts
@@ -1478,13 +1478,13 @@ git commit -m "feat(web): Templates 文案 i18n 抽取"
 
 **必须覆盖文案清单：** `新建任务` `编辑任务` `名称` `触发方式` `触发` `通知模板` `选择模板` `选择通知模板` `投递渠道` `选择渠道（可多选，将向全部所选渠道投递）` `请至少选择一个投递渠道` `接收地址` `请至少填写一个接收地址` `每行一个接收地址，例如：...`（整段）`模板变量` `支持 {{变量}}，例如 {{email}} 会在发送时被替换` `Cron 表达式` `请输入 Cron 表达式` `例如：0 */30 * * * *` `IP 白名单（可选）` `每行一个 IP 或 CIDR，留空表示不限制` `需要 HMAC 签名` `HMAC 签名校验` `开` `关` `启用` `停用` `状态` `操作` `搜索名称或渠道 / 模板…` `暂无任务，点击右上角「新建任务」开始` `给任务起个易记的名字` `发送预览` `预览生成失败` `立即发送` `发送` `发送失败` `请先选择通知模板` `SMTP 邮件` `企业微信` `钉钉` `飞书` `渠道` `渠道 / 模板列表加载失败` `状态切换失败` + script：`'任务已创建'` `'任务已更新'` `'任务已删除'` `'任务已启用'` `'任务已停用'` `'已加入发送队列'` `'API Key 已复制'` `'复制失败，请手动选择复制'` `'批量删除'` `'批量删除失败'` + HMAC 签名说明 `'<timestamp>\n<原始请求体>'` 与示例 `'{"variables":{"name":"张三"}}'`
 
-- [ ] **Step 1: 在 zh/en 追加 `tasks` 命名空间**（`tasks.triggerType.cron: '定时' / 'Scheduled'`、`tasks.triggerType.api: 'Webhook API'`、`tasks.signatureHint` 整段、`tasks.receiversPlaceholder` 整段、`tasks.signatureSample` 示例体等）。
+- [x] **Step 1: 在 zh/en 追加 `tasks` 命名空间**（`tasks.triggerType.cron: '定时' / 'Scheduled'`、`tasks.triggerType.api: 'Webhook API'`、`tasks.signatureHint` 整段、`tasks.receiversPlaceholder` 整段、`tasks.signatureSample` 示例体等）。
 
-- [ ] **Step 2: 改造 `Tasks.vue`**（本文件最大，脚本 `useI18n`；表单字段、触发方式单选、HMAC 说明块、示例、ElMessage 全部 key 化）。
+- [x] **Step 2: 改造 `Tasks.vue`**（本文件最大，脚本 `useI18n`；表单字段、触发方式单选、HMAC 说明块、示例、ElMessage 全部 key 化）。
 
-- [ ] **Step 3: 验证 + 残留检查**（文件换 `src/views/Tasks.vue`）。
+- [x] **Step 3: 验证 + 残留检查**（文件换 `src/views/Tasks.vue`）。
 
-- [ ] **Step 4: 提交**
+- [x] **Step 4: 提交**
 
 ```bash
 git add web/src/views/Tasks.vue web/src/locales/zh-CN.ts web/src/locales/en-US.ts
@@ -1503,13 +1503,13 @@ git commit -m "feat(web): Tasks 文案 i18n 抽取"
 
 **LogDetail.vue 文案清单：** `日志不存在` `任务` `渠道` `状态` `标题`(如有) `时间` `触发方式` `触发人` `触发 IP` `重试次数` `错误信息` `；零值/非法显示 ` + script：`'成功'` `'失败'` `'定时'` `'手动'` `'重试'` `'已重试'` `'重试失败'` `'加载失败，请稍后再试'`
 
-- [ ] **Step 1: 在 zh/en 追加 `logs` 命名空间**（`logs.detailTitle: '日志详情' / 'Log Detail'`、`logs.triggerScheduled: '定时' / 'Scheduled'`、`logs.triggerManual: '手动' / 'Manual'`、`logs.triggerWebhook: 'Webhook'`、列表页字段、筛选、空态、导出与重试相关文案；状态复用 `common.success/failed`）。
+- [x] **Step 1: 在 zh/en 追加 `logs` 命名空间**（`logs.detailTitle: '日志详情' / 'Log Detail'`、`logs.triggerScheduled: '定时' / 'Scheduled'`、`logs.triggerManual: '手动' / 'Manual'`、`logs.triggerWebhook: 'Webhook'`、列表页字段、筛选、空态、导出与重试相关文案；状态复用 `common.success/failed`）。
 
-- [ ] **Step 2: 改造 `Logs.vue` 与 `LogDetail.vue`**（脚本 `useI18n`；触发方式展示映射：scheduler→定时、manual→手动、webhook→Webhook；重试按钮/确认/ElMessage key 化）。
+- [x] **Step 2: 改造 `Logs.vue` 与 `LogDetail.vue`**（脚本 `useI18n`；触发方式展示映射：scheduler→定时、manual→手动、webhook→Webhook；重试按钮/确认/ElMessage key 化）。
 
-- [ ] **Step 3: 验证 + 残留检查**（两个文件都查）。
+- [x] **Step 3: 验证 + 残留检查**（两个文件都查）。
 
-- [ ] **Step 4: 提交**
+- [x] **Step 4: 提交**
 
 ```bash
 git add web/src/views/Logs.vue web/src/views/LogDetail.vue web/src/locales/zh-CN.ts web/src/locales/en-US.ts
@@ -1528,13 +1528,13 @@ git commit -m "feat(web): Logs/LogDetail 文案 i18n 抽取"
 
 **Users.vue 文案清单：** `新建用户` `编辑用户` `用户名` `登录用户名` `显示名` `显示名/昵称` `显示名/昵称（可选）` `密码` `新密码` `邮箱` `联系邮箱` `联系邮箱（可选）` `角色` `管理员` `普通用户` `状态` `创建时间` `操作` `2FA 二维码` `强制开启双因子认证` `强制关闭双因子认证` `重置密码（一次性令牌）` `暂无用户，点击右上角「新建用户」开始` `内置 admin 账号密码不可由管理员重置` `请用个人设置修改` `留空则不修改；填写需至少 12 位，含大小写字母、数字、特殊字符` `至少 12 位，含大小写字母、数字、特殊字符` + script：`'请输入用户名'` `'请输入密码'` `'请选择角色'` `'邮箱格式不正确'` `'密码至少 12 位，且需包含大小写字母、数字、特殊字符'` `'创建失败'` `'更新失败'` `'删除'` `'删除失败'` `'删除用户'` `'批量删除'` `'批量删除失败'` `'取消'` `'操作失败'` `'复制失败，请手动选择复制'` `'令牌已复制'` `'已复制'` `'生成重置令牌失败'` `'禁用'` `'禁用用户'` `'启用'` `'启用用户'` `'强制开启'` `'强制关闭'` `'强制开启失败'` `'强制关闭失败'` `'用户列表加载失败'` `'用户已创建'` `'用户已更新'` `'用户已删除'` `'正常'` `'已启用'` `'已禁用'` `'未开启'` `'已开启'` `'仅内置 admin 可删除管理员账号'` `'仅内置 admin 可禁用/启用管理员账号'` `'内置 admin 账号不可删除'` `'内置 admin 账号不可禁用'` `'不能删除当前登录账号'` `'不能禁用/启用当前登录账号'`
 
-- [ ] **Step 1: 在 zh/en 追加 `audit` 与 `users` 命名空间**（audit 的操作枚举按后端 action 值映射为 `audit.action.<action>`，前端把后端返回的 action/模块名翻译显示；users 的用户状态/角色/字段/校验/权限提示按 `users.*`，状态复用 `common.*`）。
+- [x] **Step 1: 在 zh/en 追加 `audit` 与 `users` 命名空间**（audit 的操作枚举按后端 action 值映射为 `audit.action.<action>`，前端把后端返回的 action/模块名翻译显示；users 的用户状态/角色/字段/校验/权限提示按 `users.*`，状态复用 `common.*`）。
 
-- [ ] **Step 2: 改造 `Audit.vue` 与 `Users.vue`**（脚本 `useI18n`；操作/模块列、状态 tag、2FA 弹窗、权限提示 ElMessage 全部 key 化）。
+- [x] **Step 2: 改造 `Audit.vue` 与 `Users.vue`**（脚本 `useI18n`；操作/模块列、状态 tag、2FA 弹窗、权限提示 ElMessage 全部 key 化）。
 
-- [ ] **Step 3: 验证 + 残留检查**（两个文件都查）。
+- [x] **Step 3: 验证 + 残留检查**（两个文件都查）。
 
-- [ ] **Step 4: 提交**
+- [x] **Step 4: 提交**
 
 ```bash
 git add web/src/views/Audit.vue web/src/views/Users.vue web/src/locales/zh-CN.ts web/src/locales/en-US.ts
@@ -1551,11 +1551,11 @@ git commit -m "feat(web): Audit/Users 文案 i18n 抽取"
 
 **必须覆盖文案清单：** `显示名/昵称（可选）` `编辑显示名` `用于接收通知的邮箱（可选）` `编辑邮箱` `原密码` `新密码` `确认新密码` `再次输入新密码` `至少 12 位，含大小写字母、数字、特殊字符` `请输入当前密码` `请输入新密码` `请再次输入新密码` `修改密码` `双因子认证二维码` `开启双因子认证` `关闭双因子认证` `6 位动态码` `6 位动态码或备用码` `请输入 6 位动态码` `请输入动态码或备用码` + script：`'资料已更新'` `'更新失败，请重试'` `'密码已修改，请重新登录'` `'修改失败，请检查原密码'` `'密码至少 12 位，且需包含大小写字母、数字、特殊字符'` `'两次输入的密码不一致'` `'邮箱格式不正确'` `'双因子认证已开启'` `'双因子认证已关闭'` `'启用失败，请检查验证码'` `'关闭失败，请检查验证码'` `'生成密钥失败'` `'提交中…'` `'备份已导出，请妥善保管'` `'导出失败，请重试'` `'读取备份文件失败'` `'备份文件解析失败，请确认为有效的 JSON 备份'` `'导入失败，请重试'` `'已复制'` `'复制失败，请手动选择复制'` `'已开启'` `'未开启'` `'管理员'` `'普通用户'` + 导入结果摘要 `')}${skippedList.length > 5 ? ` 等 ${skippedList.length} 项` : '`
 
-- [ ] **Step 1: 在 zh/en 追加 `settings` 命名空间**（profile/密码/2FA/备份四块；`settings.roleAdmin/roleUser` 复用 `appShell.roleAdmin/roleUser` 或独立 `settings.*`，二选一保持一致；导入跳过摘要用插值 `settings.importSkippedMore: '等 {n} 项' / 'and {n} more'`）。
+- [x] **Step 1: 在 zh/en 追加 `settings` 命名空间**（profile/密码/2FA/备份四块；`settings.roleAdmin/roleUser` 复用 `appShell.roleAdmin/roleUser` 或独立 `settings.*`，二选一保持一致；导入跳过摘要用插值 `settings.importSkippedMore: '等 {n} 项' / 'and {n} more'`）。
 
-- [ ] **Step 2: 改造 `Settings.vue`**（脚本 `useI18n`；个人资料、改密、2FA 二维码与动态码、数据备份导出/导入、结果提示全部 key 化）。
+- [x] **Step 2: 改造 `Settings.vue`**（脚本 `useI18n`；个人资料、改密、2FA 二维码与动态码、数据备份导出/导入、结果提示全部 key 化）。
 
-- [ ] **Step 3: 新增「界面语言」选择器**（个人设置页加一张卡片或在现有卡片内加一行）：
+- [x] **Step 3: 新增「界面语言」选择器**（个人设置页加一张卡片或在现有卡片内加一行）：
 
 ```html
 <el-form-item :label="t('settings.interfaceLang')">
@@ -1568,9 +1568,9 @@ git commit -m "feat(web): Audit/Users 文案 i18n 抽取"
 
 脚本加 `import { setLocale, currentLocale } from '@/i18n/locale'`；zh/en 追加 `settings.interfaceLang: '界面语言' / 'Interface language'`。
 
-- [ ] **Step 4: 验证 + 残留检查**（`src/views/Settings.vue`）。
+- [x] **Step 4: 验证 + 残留检查**（`src/views/Settings.vue`）。
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 git add web/src/views/Settings.vue web/src/locales/zh-CN.ts web/src/locales/en-US.ts
@@ -1583,7 +1583,7 @@ git commit -m "feat(web): Settings 文案 i18n 抽取 + 界面语言选择入口
 
 **Files:**（无新增；可能补 key）
 
-- [ ] **Step 1: 全前端扫描残留 UI 中文**
+- [x] **Step 1: 全前端扫描残留 UI 中文**
 
 ```bash
 cd web && for f in src/views/*.vue src/components/*.vue src/stores/*.ts src/api/*.ts src/router/*.ts; do
@@ -1594,7 +1594,7 @@ done
 
 Expected: 除 CSS 注释与用户数据/示例字符串（如 `'{"variables":{"name":"张三"}}'`、渠道配置示例）外，**UI 文案不得残留中文**。若有残留，补抽到对应命名空间后继续。
 
-- [ ] **Step 2: 全量回归**
+- [x] **Step 2: 全量回归**
 
 ```bash
 cd web && npx vue-tsc --noEmit && npm run build && npm run test
@@ -1603,7 +1603,7 @@ make vet && make test
 
 Expected: 全绿。前端构建产物 `web/dist` 正常生成。
 
-- [ ] **Step 3: 手工冒烟（可选但推荐）**
+- [x] **Step 3: 手工冒烟（可选但推荐）**
 
 ```bash
 make dev   # 或已在跑则直接开 http://127.0.0.1:5173
@@ -1611,7 +1611,7 @@ make dev   # 或已在跑则直接开 http://127.0.0.1:5173
 
 Expected: 登录 → 顶栏出现语言切换，切 English 后界面文案全部变英文、Element Plus 组件文案（如分页/日期面板）同步英文；切回中文恢复。个人设置页也有「界面语言」选择器。
 
-- [ ] **Step 4: 提交（若有补抽）**
+- [x] **Step 4: 提交（若有补抽）**
 
 ```bash
 git status --short
@@ -1633,7 +1633,7 @@ git status --short
 - 拒绝方向缓存：bucket 被判超限后，把 `bucket|windowStart → windowEnd` 记入本地内存，窗口内后续调用直接返回 false，不落 DB。fail-safe：只缓存「拒绝」，绝不缓存「放行」。
 - **砍掉**登录锁定缓存（设计文档 §4.2 后半段的「已锁定短缓存」）：登录路径 QPS 极低且 `LoginLocked` 含「到期清零」副作用，缓存收益趋近于零、引入时序复杂度，按设计文档「允许整体砍掉」的退出开关处理——`LoginLocked` 保持每次都查 DB。
 
-- [ ] **Step 1: 改写 `internal/repository/rate_limit_repo.go`**
+- [x] **Step 1: 改写 `internal/repository/rate_limit_repo.go`**
 
 将整个文件替换为：
 
@@ -1782,7 +1782,7 @@ func (r *RateLimitRepo) Cleanup(keepDuration time.Duration) (int64, error) {
 }
 ```
 
-- [ ] **Step 2: 先跑既有限流测试回归（TDD：老测试必须仍全过）**
+- [x] **Step 2: 先跑既有限流测试回归（TDD：老测试必须仍全过）**
 
 ```bash
 env GOCACHE=.dev/go-cache GOMODCACHE=.dev/gomodcache GOPATH=/tmp/dsh-gopath go test -p 1 ./internal/repository/ -run 'TestRateLimit' -count=1 -v
@@ -1790,7 +1790,7 @@ env GOCACHE=.dev/go-cache GOMODCACHE=.dev/gomodcache GOPATH=/tmp/dsh-gopath go t
 
 Expected: `TestRateLimitAllowCountsAndBlocks`、`TestRateLimitLoginLock`、`TestRateLimitLockExpiryResetsCount`、`TestRateLimitCleanup` 全部 PASS。若 `TestRateLimitAllowCountsAndBlocks` 失败，说明 `LastInsertId` 语义不符，回退方案见 Step 5。
 
-- [ ] **Step 3: 新增 `internal/repository/rate_limit_cache_test.go`（拒绝缓存短路用例）**
+- [x] **Step 3: 新增 `internal/repository/rate_limit_cache_test.go`（拒绝缓存短路用例）**
 
 ```go
 package repository
@@ -1859,7 +1859,7 @@ func TestRateLimitDenyCacheShortCircuits(t *testing.T) {
 }
 ```
 
-- [ ] **Step 4: 跑新用例 + 全量限流用例**
+- [x] **Step 4: 跑新用例 + 全量限流用例**
 
 ```bash
 env GOCACHE=.dev/go-cache GOMODCACHE=.dev/gomodcache GOPATH=/tmp/dsh-gopath go test -p 1 ./internal/repository/ -run 'TestRateLimit|TestRateLimitDenyCache' -count=1 -v
@@ -1867,7 +1867,7 @@ env GOCACHE=.dev/go-cache GOMODCACHE=.dev/gomodcache GOPATH=/tmp/dsh-gopath go t
 
 Expected: 全部 PASS。
 
-- [ ] **Step 5（兜底，仅当 Step 2 失败时执行）：回退方案**
+- [x] **Step 5（兜底，仅当 Step 2 失败时执行）：回退方案**
 
 若 `TestRateLimitAllowCountsAndBlocks` 失败（`LastInsertId` 未返回新计数），把 `Allow` 改回两轮查询、但保留拒绝缓存：
 
@@ -1891,7 +1891,7 @@ Expected: 全部 PASS。
 
 > 已在本地 MariaDB + go-sql-driver 实证 `res.LastInsertId()` 返回新计数（1/2/3），正常情况下不会走到这里。
 
-- [ ] **Step 6: 全量后端回归**
+- [x] **Step 6: 全量后端回归**
 
 ```bash
 make vet && make test
@@ -1899,7 +1899,7 @@ make vet && make test
 
 Expected: 全绿。
 
-- [ ] **Step 7: 提交**
+- [x] **Step 7: 提交**
 
 ```bash
 git add internal/repository/rate_limit_repo.go internal/repository/rate_limit_cache_test.go
@@ -1915,7 +1915,7 @@ git commit -m "perf(repo): 限流 Allow 单轮往返 + 拒绝方向缓存（fail
 - Modify: `README.md`（如需）
 - Modify: `docs/superpowers/specs/2026-08-25-frontend-quality-i18n-design.md`（状态改为已实现，如惯例）
 
-- [ ] **Step 1: 更新 `CHANGELOG.md` 的 `[Unreleased]`**
+- [x] **Step 1: 更新 `CHANGELOG.md` 的 `[Unreleased]`**
 
 按既有风格新增三块：
 
@@ -1928,11 +1928,11 @@ git commit -m "perf(repo): 限流 Allow 单轮往返 + 拒绝方向缓存（fail
 - **限流优化**：Webhook 限流 Allow 改为单轮往返（INSERT+LAST_INSERT_ID），并新增「拒绝方向」本地缓存（fail-safe，不放松限流）
 ```
 
-- [ ] **Step 2: 更新 `README.md`**
+- [x] **Step 2: 更新 `README.md`**
 
 在「功能特性 → 前端」补一句国际化；环境变量表无需新增（无新配置）。若 README 有「测试」相关说明，补充前端 `npm run test`。
 
-- [ ] **Step 3: 全量回归 + 提交**
+- [x] **Step 3: 全量回归 + 提交**
 
 ```bash
 make vet && make test && cd web && npm run test && npm run build && npx vue-tsc --noEmit
