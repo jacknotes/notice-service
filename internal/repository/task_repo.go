@@ -17,10 +17,10 @@ func NewTaskRepo(db *sql.DB) *TaskRepo { return &TaskRepo{db: db} }
 
 func (r *TaskRepo) Create(t *model.Task) error {
 	res, err := r.db.Exec(
-		`INSERT INTO tasks (user_id, name, channel_id, channel_ids, template_id, trigger_type, receivers, cron_expr, api_key, require_signature, allowed_ips, variables, enabled)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		`INSERT INTO tasks (user_id, name, channel_id, channel_ids, template_id, trigger_type, receivers, cron_expr, api_key, hmac_secret, require_signature, allowed_ips, variables, enabled)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		t.UserID, t.Name, t.ChannelID, varsJSON(t.ChannelIDsJSON), t.TemplateID, t.TriggerType, t.ReceiversJSON,
-		t.CronExpr, nullableKey(t.APIKey), t.RequireSignature, t.AllowedIPsJSON, varsJSON(t.VariablesJSON), t.Enabled)
+		t.CronExpr, nullableKey(t.APIKey), t.HMACSecret, t.RequireSignature, t.AllowedIPsJSON, varsJSON(t.VariablesJSON), t.Enabled)
 	if err != nil {
 		return err
 	}
@@ -31,10 +31,10 @@ func (r *TaskRepo) Create(t *model.Task) error {
 
 func (r *TaskRepo) Update(t *model.Task) error {
 	_, err := r.db.Exec(
-		`UPDATE tasks SET name=?, channel_id=?, channel_ids=?, template_id=?, trigger_type=?, receivers=?, cron_expr=?, api_key=?, require_signature=?, allowed_ips=?, variables=?, enabled=?
+		`UPDATE tasks SET name=?, channel_id=?, channel_ids=?, template_id=?, trigger_type=?, receivers=?, cron_expr=?, api_key=?, hmac_secret=?, require_signature=?, allowed_ips=?, variables=?, enabled=?
 		 WHERE id=? AND user_id=?`,
 		t.Name, t.ChannelID, varsJSON(t.ChannelIDsJSON), t.TemplateID, t.TriggerType, t.ReceiversJSON, t.CronExpr,
-		nullableKey(t.APIKey), t.RequireSignature, t.AllowedIPsJSON, varsJSON(t.VariablesJSON), t.Enabled, t.ID, t.UserID)
+		nullableKey(t.APIKey), t.HMACSecret, t.RequireSignature, t.AllowedIPsJSON, varsJSON(t.VariablesJSON), t.Enabled, t.ID, t.UserID)
 	return err
 }
 
@@ -92,17 +92,18 @@ func (r *TaskRepo) ListEnabledCron() ([]*model.Task, error) {
 }
 
 const taskCols = `id, user_id, name, channel_id, channel_ids, template_id, trigger_type, receivers, cron_expr,
-	api_key, require_signature, allowed_ips, variables, locked_by, locked_at, enabled, last_run_at, next_run_at, created_at, updated_at, deleted_at`
+	api_key, hmac_secret, require_signature, allowed_ips, variables, locked_by, locked_at, enabled, last_run_at, next_run_at, created_at, updated_at, deleted_at`
 
 func (r *TaskRepo) scanOne(where string, args ...interface{}) (*model.Task, error) {
 	t := &model.Task{}
 	var recv, allowed, vars, chanIDs sql.NullString
 	var apiKey sql.NullString
+	var hmacSecret sql.NullString
 	var lockedBy sql.NullString
 	var lockedAt, lastRun, nextRun, deletedAt sql.NullTime
 	err := r.db.QueryRow("SELECT "+taskCols+" FROM tasks "+where, args...).Scan(
 		&t.ID, &t.UserID, &t.Name, &t.ChannelID, &chanIDs, &t.TemplateID, &t.TriggerType, &recv,
-		&t.CronExpr, &apiKey, &t.RequireSignature, &allowed, &vars, &lockedBy, &lockedAt, &t.Enabled, &lastRun, &nextRun,
+		&t.CronExpr, &apiKey, &hmacSecret, &t.RequireSignature, &allowed, &vars, &lockedBy, &lockedAt, &t.Enabled, &lastRun, &nextRun,
 		&t.CreatedAt, &t.UpdatedAt, &deletedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
@@ -112,6 +113,7 @@ func (r *TaskRepo) scanOne(where string, args ...interface{}) (*model.Task, erro
 	}
 	t.ReceiversJSON = recv.String
 	t.APIKey = apiKey.String
+	t.HMACSecret = hmacSecret.String
 	t.AllowedIPsJSON = allowed.String
 	t.VariablesJSON = vars.String
 	t.ChannelIDsJSON = chanIDs.String
@@ -142,15 +144,17 @@ func (r *TaskRepo) scanMany(where string, args ...interface{}) ([]*model.Task, e
 		t := &model.Task{}
 		var recv, allowed, vars, chanIDs sql.NullString
 		var apiKey sql.NullString
+		var hmacSecret sql.NullString
 		var lockedBy sql.NullString
 		var lockedAt, lastRun, nextRun, deletedAt sql.NullTime
 		if err := rows.Scan(&t.ID, &t.UserID, &t.Name, &t.ChannelID, &chanIDs, &t.TemplateID, &t.TriggerType, &recv,
-			&t.CronExpr, &apiKey, &t.RequireSignature, &allowed, &vars, &lockedBy, &lockedAt, &t.Enabled, &lastRun, &nextRun,
+			&t.CronExpr, &apiKey, &hmacSecret, &t.RequireSignature, &allowed, &vars, &lockedBy, &lockedAt, &t.Enabled, &lastRun, &nextRun,
 			&t.CreatedAt, &t.UpdatedAt, &deletedAt); err != nil {
 			return nil, err
 		}
 		t.ReceiversJSON = recv.String
 		t.APIKey = apiKey.String
+		t.HMACSecret = hmacSecret.String
 		t.AllowedIPsJSON = allowed.String
 		t.VariablesJSON = vars.String
 		t.ChannelIDsJSON = chanIDs.String
@@ -208,6 +212,12 @@ func (r *TaskRepo) UpdateSchedule(taskID int64, lastRun, nextRun *time.Time) err
 // SetAPIKey 覆盖任务 api_key（导入备份用）。
 func (r *TaskRepo) SetAPIKey(taskID int64, key string) error {
 	_, err := r.db.Exec("UPDATE tasks SET api_key=? WHERE id=?", nullableKey(key), taskID)
+	return err
+}
+
+// SetHMACSecret 覆盖任务 HMAC 签名密钥（导入备份用）。
+func (r *TaskRepo) SetHMACSecret(taskID int64, secret string) error {
+	_, err := r.db.Exec("UPDATE tasks SET hmac_secret=? WHERE id=?", secret, taskID)
 	return err
 }
 

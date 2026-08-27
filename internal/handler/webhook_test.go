@@ -129,7 +129,6 @@ func TestWebhookTriggerAndIPWhitelist(t *testing.T) {
 	if apiKey == "" {
 		t.Fatal("api key empty")
 	}
-
 	// 触发：无白名单，异步入队成功 → 202 且返回 job_id
 	// （httptest 默认 RemoteAddr=192.0.2.1，显式设置以便 ClientIP 走可信代理判定）
 	req, _ := http.NewRequest("POST", "/api/webhook/"+apiKey, bytes.NewBufferString(`{"variables":{"name":"李四"}}`))
@@ -349,6 +348,11 @@ func TestWebhookSignatureRequired(t *testing.T) {
 	if apiKey == "" {
 		t.Fatal("api key empty")
 	}
+	// 签名密钥独立于 api_key（013 迁移后分离生成）：校验须用 hmac_secret。
+	hmacSecret := tk["hmac_secret"].(string)
+	if hmacSecret == "" || hmacSecret == apiKey {
+		t.Fatal("hmac secret should be generated and independent of api key")
+	}
 
 	body := `{"variables":{"name":"李四"}}`
 	ts := strconv.FormatInt(time.Now().Unix(), 10)
@@ -390,7 +394,7 @@ func TestWebhookSignatureRequired(t *testing.T) {
 	req4, _ := http.NewRequest("POST", "/api/webhook/"+apiKey, bytes.NewBufferString(body))
 	req4.Header.Set("Content-Type", "application/json")
 	req4.Header.Set("X-Timestamp", ts)
-	req4.Header.Set("X-Signature", hmacSig(apiKey, ts, body))
+	req4.Header.Set("X-Signature", hmacSig(hmacSecret, ts, body))
 	r.ServeHTTP(w4, req4)
 	if w4.Code != http.StatusAccepted {
 		t.Fatalf("valid signature = %d, want 202 body=%s", w4.Code, w4.Body.String())

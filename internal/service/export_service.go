@@ -147,6 +147,7 @@ func (s *ExportService) Import(userID int64, b *ExportBundle) (*ImportResult, er
 			continue
 		}
 		oldKey := t.APIKey
+		oldSecret := t.HMACSecret
 		if err := s.tasks.Create(userID, nt); err != nil {
 			return nil, fmt.Errorf("导入任务 %q 失败: %w", t.Name, err)
 		}
@@ -155,6 +156,11 @@ func (s *ExportService) Import(userID int64, b *ExportBundle) (*ImportResult, er
 				res.TasksCreated++
 				res.Skipped = append(res.Skipped, fmt.Sprintf("任务 %s（已创建，但 api_key 保留失败，将使用新生成的 key）", nt.Name))
 				continue
+			}
+			if oldSecret != "" {
+				if err := s.tasks.SetHMACSecret(nt.ID, oldSecret); err != nil {
+					res.Skipped = append(res.Skipped, fmt.Sprintf("任务 %s（已保留 api_key，但 hmac_secret 保留失败，调用方需更新签名密钥）", nt.Name))
+				}
 			}
 		}
 		res.TasksCreated++

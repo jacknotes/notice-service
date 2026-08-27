@@ -336,10 +336,17 @@
       <p class="api-key-desc">{{ t('tasks.apiKeyDesc') }}</p>
       <div class="api-key-box">
         <code class="mono api-key-value">{{ apiKeyValue || '—' }}</code>
-        <el-button size="small" type="primary" :icon="CopyDocument" @click="copyApiKey">
+        <el-button size="small" type="primary" :icon="CopyDocument" @click="copyCredential(apiKeyValue, 'tasks.apiKeyCopied')">
           {{ t('common.copy') }}
         </el-button>
       </div>
+      <div class="api-key-box">
+        <code class="mono api-key-value">{{ hmacValue || '—' }}</code>
+        <el-button size="small" type="primary" :icon="CopyDocument" @click="copyCredential(hmacValue, 'common.copied')">
+          {{ t('tasks.copySignatureBtn') }}
+        </el-button>
+      </div>
+      <p class="api-key-desc">{{ t('tasks.signatureSecretHint') }}</p>
       <p class="api-key-endpoint mono">POST /api/webhook/{{ apiKeyValue || '&lt;api_key&gt;' }}</p>
       <pre class="api-key-curl mono">curl -X POST https://your-host/api/webhook/{{ apiKeyValue || '&lt;api_key&gt;' }} \
   -H 'Content-Type: application/json' \
@@ -375,6 +382,7 @@ interface TaskRow {
   receivers: string[]
   cron_expr: string
   api_key?: string
+  hmac_secret?: string
   allowed_ips: string[]
   require_signature?: boolean
   variables?: Record<string, string>
@@ -552,20 +560,21 @@ function channelNames(row: TaskRow): string {
 /* ── API Key dialog ────────────────────────────────────────────────── */
 const apiKeyVisible = ref(false)
 const apiKeyValue = ref('')
+const hmacValue = ref('')
 const apiKeyTaskId = ref<number | null>(null)
 
 function showApiKey(row: TaskRow) {
   apiKeyTaskId.value = row.id
   apiKeyValue.value = row.api_key || ''
+  hmacValue.value = row.hmac_secret || ''
   apiKeyVisible.value = true
 }
 
-async function copyApiKey() {
-  const key = apiKeyValue.value
-  if (!key) return
+async function copyCredential(value: string, okMsgKey: string) {
+  if (!value) return
   try {
-    await navigator.clipboard.writeText(key)
-    ElMessage.success(t('tasks.apiKeyCopied'))
+    await navigator.clipboard.writeText(value)
+    ElMessage.success(t(okMsgKey))
   } catch {
     // Clipboard API may be blocked (non-secure context) — select manually.
     ElMessage.warning(t('common.copyFailed'))
@@ -761,6 +770,7 @@ async function saveTask() {
       const fresh = tasks.value.find((t) => t.id === savedId)
       if (fresh?.api_key) {
         apiKeyValue.value = fresh.api_key
+        hmacValue.value = fresh.hmac_secret || ''
         apiKeyTaskId.value = fresh.id
         apiKeyVisible.value = true
       }

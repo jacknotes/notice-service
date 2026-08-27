@@ -90,8 +90,10 @@ func (s *TaskService) Create(userID int64, in *model.Task) error {
 	}
 	in.UserID = userID
 	in.APIKey = ""
+	in.HMACSecret = ""
 	if in.TriggerType == "api" {
 		in.APIKey = generateAPIKey()
+		in.HMACSecret = generateAPIKey() // 签名密钥与触发凭据独立生成、独立轮换
 	}
 	normalizeChannels(in)
 	s.toJSON(in)
@@ -124,8 +126,14 @@ func (s *TaskService) Update(userID, id int64, in *model.Task) error {
 		} else {
 			in.APIKey = generateAPIKey()
 		}
+		if ex.HMACSecret != "" {
+			in.HMACSecret = ex.HMACSecret
+		} else {
+			in.HMACSecret = generateAPIKey()
+		}
 	case "cron":
 		in.APIKey = ""
+		in.HMACSecret = "" // 与 API Key 同生命周期：切回 cron 立即失效
 	}
 	if (ex.TriggerType == "cron" || in.TriggerType == "cron") && s.sched != nil {
 		s.sched.UnregisterTask(id)
@@ -181,6 +189,11 @@ func (s *TaskService) BatchDelete(ids []int64) error {
 // SetAPIKey 覆盖任务的 api_key（导入备份时保留 webhook URL）。
 func (s *TaskService) SetAPIKey(taskID int64, key string) error {
 	return s.repo.SetAPIKey(taskID, key)
+}
+
+// SetHMACSecret 覆盖任务的 HMAC 签名密钥（导入备份用）。
+func (s *TaskService) SetHMACSecret(taskID int64, secret string) error {
+	return s.repo.SetHMACSecret(taskID, secret)
 }
 
 func (s *TaskService) Toggle(userID, id int64, enabled bool) error {

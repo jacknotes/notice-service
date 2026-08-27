@@ -85,9 +85,14 @@ func (h *WebhookHandler) Trigger(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "请求体读取失败"})
 		return
 	}
-	// 可选 HMAC 签名认证：require_signature=1 时校验（密钥 = 任务 api_key）。
+	// 可选 HMAC 签名认证：require_signature=1 时校验。密钥为独立 hmac_secret
+	// （与触发凭据 api_key 分离，可各自轮换）；空值兜底 api_key 仅兼容极旧数据。
+	sigKey := task.HMACSecret
+	if sigKey == "" {
+		sigKey = task.APIKey
+	}
 	if task.RequireSignature {
-		if err := verifyWebhookSignature(c, task.APIKey, raw); err != nil {
+		if err := verifyWebhookSignature(c, sigKey, raw); err != nil {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": sanitizeErr(err)})
 			return
 		}
