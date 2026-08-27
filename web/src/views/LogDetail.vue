@@ -3,10 +3,10 @@
     <div class="page-head">
       <div>
         <router-link class="back-link" to="/logs">
-          <span class="back-arrow">←</span> 返回日志列表
+          <span class="back-arrow">←</span> {{ t('logs.backToList') }}
         </router-link>
-        <h1 class="grad-text">{{ log?.subject || `发送日志 #${id}` }}</h1>
-        <p class="sub">单条投递记录详情</p>
+        <h1 class="grad-text">{{ log?.subject || t('logs.fallbackTitle', { id }) }}</h1>
+        <p class="sub">{{ t('logs.detailSubtitle') }}</p>
       </div>
       <div class="actions">
         <el-button
@@ -15,7 +15,7 @@
           :loading="retrying"
           @click="retryLog"
         >
-          重试发送
+          {{ t('logs.sendRetryTitle') }}
         </el-button>
       </div>
     </div>
@@ -26,30 +26,30 @@
           <el-descriptions-item label="ID">
             <span class="mono">#{{ log.id }}</span>
           </el-descriptions-item>
-          <el-descriptions-item label="时间">
+          <el-descriptions-item :label="t('common.time')">
             <span class="mono">{{ fmtTime(log.sent_at) }}</span>
           </el-descriptions-item>
-          <el-descriptions-item label="任务">
+          <el-descriptions-item :label="t('logs.taskCol')">
             <span class="name-cell">{{ taskName }}</span>
             <span class="mono name-id">#{{ log.task_id }}</span>
           </el-descriptions-item>
-          <el-descriptions-item label="渠道">
+          <el-descriptions-item :label="t('logs.channelCol')">
             <span class="name-cell">{{ channelName }}</span>
             <span class="mono name-id">#{{ log.channel_id }}</span>
           </el-descriptions-item>
-          <el-descriptions-item label="状态">
+          <el-descriptions-item :label="t('common.status')">
             <el-tag
               :type="log.status === 'success' ? 'success' : 'danger'"
               effect="light"
               size="small"
             >
-              {{ log.status === 'success' ? '成功' : '失败' }}
+              {{ log.status === 'success' ? t('common.success') : t('common.failed') }}
             </el-tag>
           </el-descriptions-item>
-          <el-descriptions-item label="重试次数">
+          <el-descriptions-item :label="t('logs.retryCountLabel')">
             <span class="mono">{{ log.retry_count ?? 0 }}</span>
           </el-descriptions-item>
-          <el-descriptions-item label="触发方式">
+          <el-descriptions-item :label="t('logs.triggerTypeLabel')">
             <el-tag
               v-if="log.trigger_type"
               :style="triggerTagStyle(log.trigger_type)"
@@ -60,37 +60,37 @@
             </el-tag>
             <span v-else class="faint">—</span>
           </el-descriptions-item>
-          <el-descriptions-item label="触发人">
+          <el-descriptions-item :label="t('logs.triggerByLabel')">
             <span class="mono">{{ log.trigger_by || '—' }}</span>
           </el-descriptions-item>
-          <el-descriptions-item label="触发 IP">
+          <el-descriptions-item :label="t('logs.triggerIpLabel')">
             <span class="mono">{{ log.trigger_ip || '—' }}</span>
           </el-descriptions-item>
-          <el-descriptions-item label="错误信息" :span="2">
+          <el-descriptions-item :label="t('logs.errorMsgLabel')" :span="2">
             <pre v-if="log.error_msg" class="desc-error mono">{{ log.error_msg }}</pre>
             <span v-else class="faint">—</span>
           </el-descriptions-item>
         </el-descriptions>
 
         <div v-if="log.content" class="detail-block">
-          <span class="detail-label">发送内容</span>
+          <span class="detail-label">{{ t('logs.contentLabel') }}</span>
           <div class="content-panel">
             <MarkdownPreview :content="log.content" />
           </div>
         </div>
 
         <div v-if="log.request" class="detail-block">
-          <span class="detail-label">请求</span>
+          <span class="detail-label">{{ t('logs.requestLabel') }}</span>
           <pre class="detail-code mono">{{ prettyJson(log.request) }}</pre>
         </div>
 
         <div v-if="log.response" class="detail-block">
-          <span class="detail-label">响应</span>
+          <span class="detail-label">{{ t('logs.responseLabel') }}</span>
           <pre class="detail-code mono">{{ prettyJson(log.response) }}</pre>
         </div>
       </template>
 
-      <el-empty v-else-if="!loading" description="日志不存在" class="detail-empty" />
+      <el-empty v-else-if="!loading" :description="t('logs.notFound')" class="detail-empty" />
     </div>
   </div>
 </template>
@@ -99,8 +99,11 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
+import { useI18n } from 'vue-i18n'
 import { channelApi, logApi, taskApi } from '@/api'
 import MarkdownPreview from '@/components/MarkdownPreview.vue'
+
+const { t } = useI18n()
 
 interface LogDetail {
   id: number
@@ -132,25 +135,33 @@ const channels = ref<{ id: number; name: string }[]>([])
 
 const taskName = computed(() => {
   if (!log.value) return ''
-  return tasks.value.find((t) => t.id === log.value!.task_id)?.name || `任务 #${log.value!.task_id}`
+  return tasks.value.find((x) => x.id === log.value!.task_id)?.name || t('logs.taskFallback', { id: log.value!.task_id })
 })
 const channelName = computed(() => {
   if (!log.value) return ''
-  return channels.value.find((c) => c.id === log.value!.channel_id)?.name || `渠道 #${log.value!.channel_id}`
+  return channels.value.find((x) => x.id === log.value!.channel_id)?.name || t('logs.channelFallback', { id: log.value!.channel_id })
 })
 
-// 触发方式 → 中文标签 / 标签配色（与列表页一致）
-const TRIGGER_META: Record<string, { label: string; color: string }> = {
-  cron: { label: '定时', color: '#38bdf8' },
-  webhook: { label: 'Webhook', color: '#8b5cf6' },
-  manual: { label: '手动', color: '#fbbf24' },
-  retry: { label: '重试', color: '#f87171' },
+// 触发方式 → 本地化标签 / 标签配色（与列表页一致）
+const TRIGGER_KEY: Record<string, string> = {
+  cron: 'logs.triggerType.cron',
+  webhook: 'logs.triggerType.webhook',
+  manual: 'logs.triggerType.manual',
+  retry: 'logs.triggerType.retry',
 }
-function triggerLabel(t?: string) {
-  return (t && TRIGGER_META[t]?.label) || t || '—'
+const TRIGGER_COLOR: Record<string, string> = {
+  cron: '#38bdf8',
+  webhook: '#8b5cf6',
+  manual: '#fbbf24',
+  retry: '#f87171',
 }
-function triggerTagStyle(t?: string) {
-  const c = (t && TRIGGER_META[t]?.color) || '#94a3b8'
+function triggerLabel(type?: string) {
+  if (!type) return '—'
+  const key = TRIGGER_KEY[type]
+  return key ? t(key) : type
+}
+function triggerTagStyle(type?: string) {
+  const c = (type && TRIGGER_COLOR[type]) || '#94a3b8'
   return { color: c, borderColor: `${c}55`, backgroundColor: `${c}1a` }
 }
 
@@ -183,7 +194,7 @@ async function loadDetail() {
       log.value = null
     } else {
       // 其它错误（网络/500/参数错误）→ 提示 + 空状态，避免误报「日志不存在」
-      ElMessage.error(e?.response?.data?.error || '加载失败，请稍后再试')
+      ElMessage.error(e?.response?.data?.error || t('logs.loadFailedDetail'))
       log.value = null
     }
   } finally {
@@ -195,9 +206,9 @@ async function retryLog() {
   retrying.value = true
   try {
     await logApi.retry(id.value)
-    ElMessage.success('已重试')
+    ElMessage.success(t('logs.retriedOk'))
   } catch (e: any) {
-    ElMessage.error(e?.response?.data?.error || e?.message || '重试失败')
+    ElMessage.error(e?.response?.data?.error || e?.message || t('logs.retryFailed'))
   } finally {
     retrying.value = false
   }

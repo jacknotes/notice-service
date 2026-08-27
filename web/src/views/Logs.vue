@@ -2,8 +2,8 @@
   <div class="page">
     <div class="page-head">
       <div>
-        <h1 class="grad-text">发送日志</h1>
-        <p class="sub">查看所有任务的投递记录与失败回执</p>
+        <h1 class="grad-text">{{ t('nav.logs') }}</h1>
+        <p class="sub">{{ t('logs.subtitle') }}</p>
       </div>
       <div class="actions">
         <el-button
@@ -12,50 +12,50 @@
           :loading="exporting"
           @click="exportCsv"
         >
-          导出 CSV
+          {{ t('logs.exportCsv') }}
         </el-button>
       </div>
     </div>
 
     <div class="filters">
       <div class="filter-item">
-        <span class="filter-label">任务</span>
+        <span class="filter-label">{{ t('logs.taskCol') }}</span>
         <el-select
           v-model="taskFilter"
           clearable
-          placeholder="全部任务"
+          :placeholder="t('logs.allTasks')"
           style="width: 220px"
         >
           <el-option
-            v-for="t in tasks"
-            :key="t.id"
-            :label="t.name"
-            :value="t.id"
+            v-for="tk in tasks"
+            :key="tk.id"
+            :label="tk.name"
+            :value="tk.id"
           />
         </el-select>
       </div>
 
       <div class="filter-item">
-        <span class="filter-label">状态</span>
-        <el-select v-model="statusFilter" clearable placeholder="全部状态" style="width: 150px">
-          <el-option label="成功" value="success" />
-          <el-option label="失败" value="failed" />
+        <span class="filter-label">{{ t('common.status') }}</span>
+        <el-select v-model="statusFilter" clearable :placeholder="t('logs.allStatus')" style="width: 150px">
+          <el-option :label="t('common.success')" value="success" />
+          <el-option :label="t('common.failed')" value="failed" />
         </el-select>
       </div>
 
       <div class="filter-item">
-        <span class="filter-label">关键词</span>
+        <span class="filter-label">{{ t('logs.keywordLabel') }}</span>
         <el-input
           v-model="keyword"
           class="search-input"
           clearable
           :prefix-icon="Search"
-          placeholder="搜索任务 / 渠道 / 标题 / 内容 / 错误…"
+          :placeholder="t('logs.searchPlaceholder')"
         />
       </div>
 
       <div class="filter-item date-filter">
-        <span class="filter-label">日期</span>
+        <span class="filter-label">{{ t('common.date') }}</span>
         <div class="date-quick">
           <el-button
             v-for="p in quickPresets"
@@ -65,15 +65,15 @@
             plain
             @click="applyQuickPreset(p)"
           >
-            {{ p.label }}
+            {{ t(p.labelKey) }}
           </el-button>
         </div>
         <el-date-picker
           v-model="dateRange"
           type="daterange"
-          range-separator="至"
-          start-placeholder="开始日期"
-          end-placeholder="结束日期"
+          :range-separator="t('common.to')"
+          :start-placeholder="t('common.startDate')"
+          :end-placeholder="t('common.endDate')"
           value-format="YYYY-MM-DD"
           :clearable="true"
           style="width: 240px"
@@ -82,7 +82,7 @@
       </div>
 
       <div class="filter-meta mono">
-        {{ filteredLogs.length }} 条记录
+        {{ t('logs.recordCount', { n: filteredLogs.length }) }}
       </div>
     </div>
 
@@ -91,14 +91,14 @@
         v-if="logs.length > 0"
         :data="filteredLogs"
         style="width: 100%"
-        empty-text="没有符合条件的日志，试试调整筛选条件"
+        :empty-text="t('logs.emptyFiltered')"
         @sort-change="onSortChange"
       >
         <el-table-column type="expand">
           <template #default="{ row }">
             <div class="log-detail">
               <div v-if="row.trigger_type || row.trigger_by || row.trigger_ip" class="detail-block detail-trigger">
-                <span class="detail-label">触发来源</span>
+                <span class="detail-label">{{ t('logs.triggerSource') }}</span>
                 <div class="trigger-line">
                   <el-tag
                     v-if="row.trigger_type"
@@ -108,38 +108,38 @@
                   >
                     {{ triggerLabel(row.trigger_type) }}
                   </el-tag>
-                  <span class="mono detail-value-text">人：{{ row.trigger_by || '—' }}</span>
-                  <span class="mono detail-value-text">IP：{{ row.trigger_ip || '—' }}</span>
+                  <span class="mono detail-value-text">{{ t('logs.byPerson') }}{{ row.trigger_by || '—' }}</span>
+                  <span class="mono detail-value-text">{{ t('logs.byIp') }}{{ row.trigger_ip || '—' }}</span>
                 </div>
               </div>
 
               <div v-if="row.subject" class="detail-block">
-                <span class="detail-label">标题</span>
+                <span class="detail-label">{{ t('logs.subjectCol') }}</span>
                 <p class="detail-subject">{{ row.subject }}</p>
               </div>
 
               <div v-if="row.content" class="detail-block">
-                <span class="detail-label">发送内容</span>
+                <span class="detail-label">{{ t('logs.contentLabel') }}</span>
                 <pre class="detail-code mono">{{ row.content }}</pre>
               </div>
 
               <div v-if="row.request" class="detail-block">
-                <span class="detail-label">请求</span>
+                <span class="detail-label">{{ t('logs.requestLabel') }}</span>
                 <pre class="detail-code mono">{{ row.request }}</pre>
               </div>
 
               <div v-if="row.response" class="detail-block">
-                <span class="detail-label">响应</span>
+                <span class="detail-label">{{ t('logs.responseLabel') }}</span>
                 <pre class="detail-code mono">{{ row.response }}</pre>
               </div>
 
               <div v-if="row.error_msg" class="detail-block">
-                <span class="detail-label">错误信息</span>
+                <span class="detail-label">{{ t('logs.errorMsgLabel') }}</span>
                 <pre class="detail-code mono detail-error">{{ row.error_msg }}</pre>
               </div>
 
               <div v-if="row.retry_count" class="detail-block">
-                <span class="detail-label">重试次数</span>
+                <span class="detail-label">{{ t('logs.retryCountLabel') }}</span>
                 <span class="mono detail-value-text">{{ row.retry_count }}</span>
               </div>
             </div>
@@ -152,44 +152,44 @@
           </template>
         </el-table-column>
 
-        <el-table-column label="标题" min-width="180" show-overflow-tooltip>
+        <el-table-column :label="t('logs.subjectCol')" min-width="180" show-overflow-tooltip>
           <template #default="{ row }">
             <span v-if="row.subject" class="subject-cell">{{ row.subject }}</span>
             <span v-else class="ok-cell">—</span>
           </template>
         </el-table-column>
 
-        <el-table-column label="任务" min-width="160" sortable="custom" prop="task_id">
+        <el-table-column :label="t('logs.taskCol')" min-width="160" sortable="custom" prop="task_id">
           <template #default="{ row }">
             <span class="task-name-cell">{{ taskName(row.task_id) }}</span>
             <span class="mono task-id-cell">#{{ row.task_id }}</span>
           </template>
         </el-table-column>
 
-        <el-table-column label="渠道" min-width="150" sortable="custom" prop="channel_id">
+        <el-table-column :label="t('logs.channelCol')" min-width="150" sortable="custom" prop="channel_id">
           <template #default="{ row }">
             <span class="task-name-cell">{{ channelName(row.channel_id) }}</span>
             <span class="mono task-id-cell">#{{ row.channel_id }}</span>
           </template>
         </el-table-column>
 
-        <el-table-column label="状态" width="100" align="center" sortable="custom" prop="status">
+        <el-table-column :label="t('common.status')" width="100" align="center" sortable="custom" prop="status">
           <template #default="{ row }">
             <el-tag :type="row.status === 'success' ? 'success' : 'danger'" effect="light" size="small">
-              {{ row.status === 'success' ? '成功' : '失败' }}
+              {{ row.status === 'success' ? t('common.success') : t('common.failed') }}
             </el-tag>
           </template>
         </el-table-column>
 
-        <el-table-column label="时间" min-width="170" sortable="custom" prop="sent_at">
+        <el-table-column :label="t('common.time')" min-width="170" sortable="custom" prop="sent_at">
           <template #default="{ row }">
             <span class="mono time-cell">{{ fmtTime(row.sent_at) }}</span>
           </template>
         </el-table-column>
 
-        <el-table-column label="操作" width="140" align="center">
+        <el-table-column :label="t('common.action')" width="140" align="center">
           <template #default="{ row }">
-            <el-button link type="primary" size="small" @click="goDetail(row)">详情</el-button>
+            <el-button link type="primary" size="small" @click="goDetail(row)">{{ t('logs.detailAction') }}</el-button>
             <el-button
               v-if="row.status === 'failed'"
               link
@@ -198,7 +198,7 @@
               :loading="retryingId === row.id"
               @click="retryLog(row)"
             >
-              重试
+              {{ t('logs.retryAction') }}
             </el-button>
           </template>
         </el-table-column>
@@ -231,8 +231,11 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Download, Search } from '@element-plus/icons-vue'
+import { useI18n } from 'vue-i18n'
 import { channelApi, logApi, taskApi } from '@/api'
 import { useAuthStore } from '@/stores/auth'
+
+const { t } = useI18n()
 
 interface LogRow {
   id: number
@@ -284,18 +287,26 @@ function onSortChange({ prop, order }: { prop: string; order: string | null }) {
   loadLogs()
 }
 
-// 触发方式 → 中文标签 / 标签配色
-const TRIGGER_META: Record<string, { label: string; color: string }> = {
-  cron: { label: '定时', color: '#38bdf8' },
-  webhook: { label: 'Webhook', color: '#8b5cf6' },
-  manual: { label: '手动', color: '#fbbf24' },
-  retry: { label: '重试', color: '#f87171' },
+// 触发方式 → 本地化标签 / 标签配色
+const TRIGGER_KEY: Record<string, string> = {
+  cron: 'logs.triggerType.cron',
+  webhook: 'logs.triggerType.webhook',
+  manual: 'logs.triggerType.manual',
+  retry: 'logs.triggerType.retry',
 }
-function triggerLabel(t?: string) {
-  return (t && TRIGGER_META[t]?.label) || t || '—'
+const TRIGGER_COLOR: Record<string, string> = {
+  cron: '#38bdf8',
+  webhook: '#8b5cf6',
+  manual: '#fbbf24',
+  retry: '#f87171',
 }
-function triggerTagStyle(t?: string) {
-  const c = (t && TRIGGER_META[t]?.color) || '#94a3b8'
+function triggerLabel(type?: string) {
+  if (!type) return '—'
+  const key = TRIGGER_KEY[type]
+  return key ? t(key) : type
+}
+function triggerTagStyle(type?: string) {
+  const c = (type && TRIGGER_COLOR[type]) || '#94a3b8'
   return { color: c, borderColor: `${c}55`, backgroundColor: `${c}1a` }
 }
 
@@ -303,9 +314,9 @@ function triggerTagStyle(t?: string) {
    默认展示最近一个月（不展示全部）；快捷按钮 + 自定义日期范围；
    最大跨度 1 年。dateRange 为 ['YYYY-MM-DD', 'YYYY-MM-DD')，结束日期排他。 */
 const quickPresets = [
-  { key: 'today', label: '今天', days: 0 },
-  { key: 'week', label: '最近一周', days: 7 },
-  { key: 'month', label: '最近一个月', days: 30 },
+  { key: 'today', labelKey: 'common.today', days: 0 },
+  { key: 'week', labelKey: 'common.lastWeek', days: 7 },
+  { key: 'month', labelKey: 'common.lastMonth', days: 30 },
 ]
 const MAX_RANGE_DAYS = 366 // 1 年（含闰年）
 const quickPreset = ref('month')
@@ -316,7 +327,7 @@ function fmtDate(d: Date) {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
 }
 
-function applyQuickPreset(p: { key: string; label: string; days: number }) {
+function applyQuickPreset(p: { key: string; labelKey: string; days: number }) {
   quickPreset.value = p.key
   const now = new Date()
   const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1) // 结束排他
@@ -344,12 +355,12 @@ function onDateRangeChange() {
   if (spanDays > MAX_RANGE_DAYS) {
     const capped = new Date(new Date(s).getTime() + MAX_RANGE_DAYS * 86400000)
     dateRange.value = [s, fmtDate(capped)]
-    ElMessage.warning('日期范围最大跨度 1 年，已自动收窄')
+    ElMessage.warning(t('logs.rangeCapWarn'))
   }
 }
 
-const taskName = (id: number) => tasks.value.find((t) => t.id === id)?.name || `任务 #${id}`
-const channelName = (id: number) => channels.value.find((c) => c.id === id)?.name || `渠道 #${id}`
+const taskName = (id: number) => tasks.value.find((x) => x.id === id)?.name || t('logs.taskFallback', { id })
+const channelName = (id: number) => channels.value.find((x) => x.id === id)?.name || t('logs.channelFallback', { id })
 
 // 把 ISO 时间格式化为本地 "YYYY-MM-DD HH:mm:ss"；零值/非法显示 "—"
 function fmtTime(iso?: string) {
@@ -380,8 +391,8 @@ const filteredLogs = computed<LogRow[]>(() => {
 
 const emptyDescription = computed(() => {
   if (taskFilter.value !== undefined || statusFilter.value || keyword.value.trim() || dateRange.value)
-    return '没有符合条件的日志，试试调整筛选条件'
-  return '暂无发送日志，任务触发投递后这里会实时记录'
+    return t('logs.emptyFiltered')
+  return t('logs.emptyAll')
 })
 
 function errMsg(e: any, fallback: string) {
@@ -399,9 +410,9 @@ const retryingId = ref<number | null>(null)
 async function retryLog(row: LogRow) {
   try {
     await ElMessageBox.confirm(
-      `重试发送该条失败记录？\n任务：${taskName(row.task_id)} → 渠道：${channelName(row.channel_id)}。将重新尝试该条投递。`,
-      '重试发送',
-      { confirmButtonText: '重试', cancelButtonText: '取消', type: 'warning' }
+      t('logs.sendRetryMsg', { task: taskName(row.task_id), channel: channelName(row.channel_id) }),
+      t('logs.sendRetryTitle'),
+      { confirmButtonText: t('logs.retryBtn'), cancelButtonText: t('common.cancel'), type: 'warning' }
     )
   } catch {
     return
@@ -409,10 +420,10 @@ async function retryLog(row: LogRow) {
   retryingId.value = row.id
   try {
     await logApi.retry(row.id)
-    ElMessage.success('已加入重试队列')
+    ElMessage.success(t('logs.queuedOk'))
     await loadLogs()
   } catch (e: any) {
-    ElMessage.error(errMsg(e, '重试失败'))
+    ElMessage.error(errMsg(e, t('logs.retryFailed')))
   } finally {
     retryingId.value = null
   }
@@ -445,20 +456,20 @@ async function exportCsv() {
     a.click()
     document.body.removeChild(a)
     URL.revokeObjectURL(url)
-    ElMessage.success('日志已导出')
+    ElMessage.success(t('logs.exportedOk'))
   } catch (e: any) {
     // blob 响应下错误也是 Blob，先尝试解析其中的 {error}
     const raw = e?.response?.data
     if (raw instanceof Blob) {
       try {
         const parsed = JSON.parse(await raw.text())
-        ElMessage.error(parsed?.error || '导出失败，请重试')
+        ElMessage.error(parsed?.error || t('logs.exportFailed'))
         return
       } catch {
         /* 非 JSON 错误体，走默认文案 */
       }
     }
-    ElMessage.error(errMsg(e, '导出失败，请重试'))
+    ElMessage.error(errMsg(e, t('logs.exportFailed')))
   } finally {
     exporting.value = false
   }
@@ -488,7 +499,7 @@ async function loadLogs() {
     logs.value = (data?.items || []) as LogRow[]
     total.value = data?.total || 0
   } catch (e: any) {
-    ElMessage.error(errMsg(e, '日志加载失败'))
+    ElMessage.error(errMsg(e, t('logs.loadFailed')))
   } finally {
     loading.value = false
     tasksLoaded.value = true
@@ -501,7 +512,7 @@ async function loadMeta() {
     tasks.value = list || []
     channels.value = chList || []
   } catch (e: any) {
-    ElMessage.error(errMsg(e, '任务 / 渠道加载失败'))
+    ElMessage.error(errMsg(e, t('logs.metaLoadFailed')))
   }
 }
 
