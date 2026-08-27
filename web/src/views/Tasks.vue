@@ -3,10 +3,10 @@
     <div class="page-head">
       <div>
         <div class="title-row">
-          <h1 class="grad-text">任务管理</h1>
-          <el-tag v-if="!isAdmin" type="info" effect="plain" size="small">只读模式</el-tag>
+          <h1 class="grad-text">{{ t('nav.tasks') }}</h1>
+          <el-tag v-if="!isAdmin" type="info" effect="plain" size="small">{{ t('common.readOnlyMode') }}</el-tag>
         </div>
-        <p class="sub">配置定时 / Webhook 投递任务，绑定渠道与模板</p>
+        <p class="sub">{{ t('tasks.subtitle') }}</p>
       </div>
       <div class="actions">
         <el-input
@@ -14,7 +14,7 @@
           class="search-input"
           clearable
           :prefix-icon="Search"
-          placeholder="搜索名称或渠道 / 模板…"
+          :placeholder="t('tasks.searchPlaceholder')"
         />
         <el-button
           v-if="isAdmin"
@@ -24,9 +24,9 @@
           :disabled="!selectedRows.length"
           @click="batchDelete"
         >
-          批量删除
+          {{ t('common.batchDelete') }}
         </el-button>
-        <el-button v-if="isAdmin" type="primary" :icon="Plus" @click="openCreate">新建任务</el-button>
+        <el-button v-if="isAdmin" type="primary" :icon="Plus" @click="openCreate">{{ t('tasks.createTitle') }}</el-button>
       </div>
     </div>
 
@@ -35,7 +35,7 @@
         ref="tableRef"
         :data="paged"
         style="width: 100%"
-        empty-text="暂无任务，点击右上角「新建任务」开始"
+        :empty-text="t('tasks.emptyTable')"
         @selection-change="onSelectionChange"
         @sort-change="onSortChange"
       >
@@ -46,13 +46,13 @@
           </template>
         </el-table-column>
 
-        <el-table-column prop="name" label="名称" min-width="150" sortable="custom">
+        <el-table-column prop="name" :label="t('common.name')" min-width="150" sortable="custom">
           <template #default="{ row }">
             <span class="task-name">{{ row.name }}</span>
           </template>
         </el-table-column>
 
-        <el-table-column label="触发" width="170">
+        <el-table-column :label="t('tasks.trigger')" width="170">
           <template #default="{ row }">
             <el-tag
               v-if="row.trigger_type === 'api'"
@@ -68,33 +68,33 @@
           </template>
         </el-table-column>
 
-        <el-table-column label="投递渠道" min-width="170">
+        <el-table-column :label="t('tasks.channels')" min-width="170">
           <template #default="{ row }">
             <span class="channels-cell">{{ channelNames(row) || '—' }}</span>
           </template>
         </el-table-column>
 
-        <el-table-column label="接收地址" min-width="200" show-overflow-tooltip>
+        <el-table-column :label="t('tasks.receivers')" min-width="200" show-overflow-tooltip>
           <template #default="{ row }">
             <span class="mono receivers-cell">{{ (row.receivers || []).join(', ') || '—' }}</span>
           </template>
         </el-table-column>
 
-        <el-table-column label="状态" width="96" align="center" sortable="custom" prop="enabled">
+        <el-table-column :label="t('common.status')" width="96" align="center" sortable="custom" prop="enabled">
           <template #default="{ row }">
             <el-switch
               :model-value="row.enabled"
               :loading="togglingId === row.id"
               :disabled="!isAdmin"
               inline-prompt
-              active-text="开"
-              inactive-text="关"
+              :active-text="t('tasks.on')"
+              :inactive-text="t('tasks.off')"
               @change="(v: boolean) => toggleTask(row, v)"
             />
           </template>
         </el-table-column>
 
-        <el-table-column label="操作" width="340" align="center" fixed="right">
+        <el-table-column :label="t('common.action')" width="340" align="center" fixed="right">
           <template #default="{ row }">
             <el-button
               v-if="row.trigger_type === 'api'"
@@ -113,13 +113,13 @@
               :loading="sendingId === row.id"
               @click="sendNow(row)"
             >
-              立即发送
+              {{ t('tasks.sendNow') }}
             </el-button>
-            <el-button link type="primary" size="small" @click="goLogs(row)">日志</el-button>
+            <el-button link type="primary" size="small" @click="goLogs(row)">{{ t('tasks.logsAction') }}</el-button>
             <template v-if="isAdmin">
-              <el-button link type="primary" size="small" @click="openEdit(row)">编辑</el-button>
-              <el-button link type="success" size="small" @click="duplicateTask(row)">复制</el-button>
-              <el-button link type="danger" size="small" @click="removeTask(row)">删除</el-button>
+              <el-button link type="primary" size="small" @click="openEdit(row)">{{ t('common.edit') }}</el-button>
+              <el-button link type="success" size="small" @click="duplicateTask(row)">{{ t('tasks.duplicateAction') }}</el-button>
+              <el-button link type="danger" size="small" @click="removeTask(row)">{{ t('common.delete') }}</el-button>
             </template>
           </template>
         </el-table-column>
@@ -141,24 +141,24 @@
     <!-- ── Create / Edit dialog ─────────────────────────────────────── -->
     <el-dialog
       v-model="dialogVisible"
-      :title="form.id ? '编辑任务' : '新建任务'"
+      :title="form.id ? t('tasks.editTitle') : t('tasks.createTitle')"
       width="620px"
       :close-on-click-modal="false"
       destroy-on-close
     >
       <el-form ref="formRef" :model="form" :rules="rules" label-position="top">
-        <el-form-item label="名称" prop="name">
-          <el-input v-model="form.name" placeholder="给任务起个易记的名字" />
+        <el-form-item :label="t('common.name')" prop="name">
+          <el-input v-model="form.name" :placeholder="t('tasks.namePlaceholder')" />
         </el-form-item>
 
         <div class="form-row">
-          <el-form-item label="投递渠道" prop="channel_ids" class="grow">
+          <el-form-item :label="t('tasks.channels')" prop="channel_ids" class="grow">
             <el-select
               v-model="form.channel_ids"
               multiple
               collapse-tags
               collapse-tags-tooltip
-              placeholder="选择渠道（可多选，将向全部所选渠道投递）"
+              :placeholder="t('tasks.channelSelectPlaceholder')"
               style="width: 100%"
             >
               <el-option
@@ -170,62 +170,61 @@
             </el-select>
           </el-form-item>
 
-          <el-form-item label="通知模板" prop="template_id" class="grow">
+          <el-form-item :label="t('tasks.template')" prop="template_id" class="grow">
             <el-select
               v-model="form.template_id"
-              placeholder="选择模板"
+              :placeholder="t('tasks.templateSelectPlaceholder')"
               style="width: 100%"
               @change="onTemplateChange"
             >
               <el-option
-                v-for="t in templates"
-                :key="t.id"
-                :label="t.name"
-                :value="t.id"
+                v-for="tpl in templates"
+                :key="tpl.id"
+                :label="tpl.name"
+                :value="tpl.id"
               />
             </el-select>
           </el-form-item>
         </div>
 
-        <el-form-item label="触发方式" prop="trigger_type">
+        <el-form-item :label="t('tasks.triggerType')" prop="trigger_type">
           <el-radio-group v-model="form.trigger_type">
-            <el-radio-button value="cron">定时（Cron）</el-radio-button>
+            <el-radio-button value="cron">{{ t('tasks.triggerCron') }}</el-radio-button>
             <el-radio-button value="api">Webhook API</el-radio-button>
           </el-radio-group>
         </el-form-item>
 
-        <el-form-item v-if="form.trigger_type === 'cron'" label="Cron 表达式" prop="cron_expr">
-          <el-input v-model="form.cron_expr" placeholder="例如：0 */30 * * * *" class="mono" />
+        <el-form-item v-if="form.trigger_type === 'cron'" :label="t('tasks.cronExpr')" prop="cron_expr">
+          <el-input v-model="form.cron_expr" :placeholder="t('tasks.cronExprPlaceholder')" class="mono" />
         </el-form-item>
 
-        <el-form-item v-if="showReceivers" label="接收地址" prop="receivers">
+        <el-form-item v-if="showReceivers" :label="t('tasks.receivers')" prop="receivers">
           <el-input
             v-model="form.receivers"
             type="textarea"
             :rows="4"
-            :placeholder="RECEIVER_PLACEHOLDER"
+            :placeholder="t('tasks.receiversPlaceholder')"
           />
-          <div class="field-hint mono">{{ RECEIVER_HINT }}</div>
+          <div class="field-hint mono">{{ t('tasks.receiverVarHint') }}</div>
         </el-form-item>
 
         <div v-else-if="nonEmailChannel" class="receiver-note">
-          当前渠道为 <b class="receiver-note-strong">{{ channelTypeLabel }}</b>，
-          消息将发送到机器人 / token 绑定的目标
+          {{ t('tasks.nonEmailPrefix') }}<b class="receiver-note-strong">{{ channelTypeLabel }}</b>{{ t('tasks.nonEmailSuffix') }}
         </div>
 
-        <el-form-item v-if="form.trigger_type === 'api'" label="IP 白名单（可选）">
+        <el-form-item v-if="form.trigger_type === 'api'" :label="t('tasks.ipWhitelist')">
           <el-input
             v-model="form.allowed_ips"
             type="textarea"
             :rows="3"
-            placeholder="每行一个 IP 或 CIDR，留空表示不限制"
+            :placeholder="t('tasks.ipWhitelistPlaceholder')"
           />
         </el-form-item>
 
-        <el-form-item v-if="form.trigger_type === 'api'" label="HMAC 签名校验">
+        <el-form-item v-if="form.trigger_type === 'api'" :label="t('tasks.hmacTitle')">
           <div class="signature-row">
-            <el-switch v-model="form.require_signature" aria-label="需要 HMAC 签名" />
-            <span class="signature-label">需要 HMAC 签名</span>
+            <el-switch v-model="form.require_signature" :aria-label="t('tasks.requireHmac')" />
+            <span class="signature-label">{{ t('tasks.requireHmac') }}</span>
           </div>
           <el-alert
             v-if="form.require_signature"
@@ -234,16 +233,14 @@
             :closable="false"
             show-icon
           >
-            <pre class="signature-pre mono">X-Timestamp: &lt;unix 秒&gt;
-X-Signature: hex(HMAC-SHA256(key=任务APIKey, msg="&lt;timestamp&gt;\n&lt;原始请求体&gt;"))</pre>
+            <pre class="signature-pre mono">{{ t('tasks.hmacPre') }}</pre>
             <p class="signature-note">
-              时间戳偏差超过 ±300 秒会被拒绝；签名消息为 timestamp + 换行 + 原始请求体。
-              HMAC 密钥即该任务的 API Key。
+              {{ t('tasks.hmacNote') }}
             </p>
           </el-alert>
         </el-form-item>
 
-        <el-form-item v-if="selectedTemplateVariables.length" label="模板变量">
+        <el-form-item v-if="selectedTemplateVariables.length" :label="t('tasks.templateVars')">
           <div class="tpl-vars-list">
             <div v-for="v in selectedTemplateVariables" :key="v.name" class="tpl-var-item">
               <div class="tpl-var-meta">
@@ -252,17 +249,17 @@ X-Signature: hex(HMAC-SHA256(key=任务APIKey, msg="&lt;timestamp&gt;\n&lt;原�
               </div>
               <el-input
                 :model-value="form.variables[v.name] ?? v.default ?? ''"
-                :placeholder="v.default ? `默认：${v.default}` : '发送时替换为实际值'"
+                :placeholder="v.default ? `${t('tasks.varDefaultPrefix')}${v.default}` : t('tasks.varRuntimeReplace')"
                 @update:model-value="setVariable(v.name, $event)"
               />
             </div>
           </div>
         </el-form-item>
 
-        <el-form-item label="状态">
+        <el-form-item :label="t('common.status')">
           <div class="enabled-row">
-            <el-switch v-model="form.enabled" inline-prompt active-text="启用" inactive-text="停用" />
-            <span class="enabled-hint">停用后任务不再触发投递</span>
+            <el-switch v-model="form.enabled" inline-prompt :active-text="t('common.enabled')" :inactive-text="t('common.disabled')" />
+            <span class="enabled-hint">{{ t('tasks.enabledHint') }}</span>
           </div>
         </el-form-item>
       </el-form>
@@ -270,12 +267,12 @@ X-Signature: hex(HMAC-SHA256(key=任务APIKey, msg="&lt;timestamp&gt;\n&lt;原�
       <template #footer>
         <div class="dialog-footer">
           <el-button :icon="View" :loading="previewing" @click="openPreview">
-            预览
+            {{ t('tasks.previewAction') }}
           </el-button>
           <span class="footer-grow"></span>
-          <el-button @click="dialogVisible = false">取消</el-button>
+          <el-button @click="dialogVisible = false">{{ t('common.cancel') }}</el-button>
           <el-button type="primary" :loading="saving" @click="saveTask">
-            {{ form.id ? '保存' : '创建' }}
+            {{ form.id ? t('common.save') : t('common.create') }}
           </el-button>
         </div>
       </template>
@@ -284,7 +281,7 @@ X-Signature: hex(HMAC-SHA256(key=任务APIKey, msg="&lt;timestamp&gt;\n&lt;原�
     <!-- ── 发送预览 dialog：渲染最终效果（不落库、不发送） ───────────── -->
     <el-dialog
       v-model="previewVisible"
-      title="发送预览"
+      :title="t('tasks.previewTitle')"
       width="640px"
       top="6vh"
       :close-on-click-modal="false"
@@ -293,17 +290,17 @@ X-Signature: hex(HMAC-SHA256(key=任务APIKey, msg="&lt;timestamp&gt;\n&lt;原�
       <div v-loading="previewing" class="preview-panel">
         <template v-if="previewData">
           <div class="preview-block">
-            <span class="preview-label">标题</span>
+            <span class="preview-label">{{ t('tasks.subject') }}</span>
             <p class="preview-subject">{{ previewData.subject || '—' }}</p>
           </div>
           <div class="preview-block">
-            <span class="preview-label">内容（Markdown）</span>
+            <span class="preview-label">{{ t('tasks.content') }}</span>
             <div class="preview-md">
               <MarkdownPreview :content="previewData.content" />
             </div>
           </div>
           <div class="preview-block">
-            <span class="preview-label">接收地址（变量已替换）</span>
+            <span class="preview-label">{{ t('tasks.receiversReplaced') }}</span>
             <div v-if="previewData.receivers.length" class="preview-receivers">
               <el-tag
                 v-for="(r, i) in previewData.receivers"
@@ -318,12 +315,12 @@ X-Signature: hex(HMAC-SHA256(key=任务APIKey, msg="&lt;timestamp&gt;\n&lt;原�
             <span v-else class="preview-empty">—</span>
           </div>
         </template>
-        <div v-else class="preview-hint">填写模板变量后点击「预览」查看最终效果</div>
+        <div v-else class="preview-hint">{{ t('tasks.previewHint') }}</div>
       </div>
       <template #footer>
         <div class="dialog-footer">
           <span class="footer-grow"></span>
-          <el-button @click="previewVisible = false">关闭</el-button>
+          <el-button @click="previewVisible = false">{{ t('common.close') }}</el-button>
         </div>
       </template>
     </el-dialog>
@@ -336,11 +333,11 @@ X-Signature: hex(HMAC-SHA256(key=任务APIKey, msg="&lt;timestamp&gt;\n&lt;原�
       :close-on-click-modal="false"
       destroy-on-close
     >
-      <p class="api-key-desc">POST /api/webhook/&lt;api_key&gt;（把 api_key 放在 URL 路径中，无需登录，无需请求头）。</p>
+      <p class="api-key-desc">{{ t('tasks.apiKeyDesc') }}</p>
       <div class="api-key-box">
         <code class="mono api-key-value">{{ apiKeyValue || '—' }}</code>
         <el-button size="small" type="primary" :icon="CopyDocument" @click="copyApiKey">
-          复制
+          {{ t('common.copy') }}
         </el-button>
       </div>
       <p class="api-key-endpoint mono">POST /api/webhook/{{ apiKeyValue || '&lt;api_key&gt;' }}</p>
@@ -348,7 +345,7 @@ X-Signature: hex(HMAC-SHA256(key=任务APIKey, msg="&lt;timestamp&gt;\n&lt;原�
   -H 'Content-Type: application/json' \
   -d '{"variables":{"name":"张三"}}'</pre>
       <template #footer>
-        <el-button @click="apiKeyVisible = false">关闭</el-button>
+        <el-button @click="apiKeyVisible = false">{{ t('common.close') }}</el-button>
       </template>
     </el-dialog>
   </div>
@@ -360,10 +357,13 @@ import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { FormInstance, FormRules, TableInstance } from 'element-plus'
 import { Plus, CopyDocument, Search, Delete, View } from '@element-plus/icons-vue'
+import { useI18n } from 'vue-i18n'
 import { channelApi, taskApi, templateApi } from '@/api'
 import { useAuthStore } from '@/stores/auth'
 import { useTablePaging } from '@/composables/useTablePaging'
 import MarkdownPreview from '@/components/MarkdownPreview.vue'
+
+const { t } = useI18n()
 
 interface TaskRow {
   id: number
@@ -459,24 +459,25 @@ const form = reactive<{
   enabled: true,
 })
 
-const rules: FormRules = {
-  name: [{ required: true, message: '请输入任务名称', trigger: 'blur' }],
+// 校验消息随语言切换（与 Login 的 computed 规则同一约定）
+const rules = computed<FormRules>(() => ({
+  name: [{ required: true, message: t('tasks.nameRequired'), trigger: 'blur' }],
   channel_ids: [
     {
       validator: (_rule: any, value: number[], cb: any) => {
-        if (!value || !value.length) cb(new Error('请至少选择一个投递渠道'))
+        if (!value || !value.length) cb(new Error(t('tasks.channelRequired')))
         else cb()
       },
       trigger: 'change',
     },
   ],
-  template_id: [{ required: true, message: '请选择通知模板', trigger: 'change' }],
-  trigger_type: [{ required: true, message: '请选择触发方式', trigger: 'change' }],
+  template_id: [{ required: true, message: t('tasks.templateRequired'), trigger: 'change' }],
+  trigger_type: [{ required: true, message: t('tasks.triggerRequired'), trigger: 'change' }],
   cron_expr: [
     {
       required: true,
       validator: (_rule: any, value: string, cb: any) => {
-        if (form.trigger_type === 'cron' && !value.trim()) cb(new Error('请输入 Cron 表达式'))
+        if (form.trigger_type === 'cron' && !value.trim()) cb(new Error(t('tasks.cronRequired')))
         else cb()
       },
       trigger: 'blur',
@@ -486,25 +487,22 @@ const rules: FormRules = {
     {
       required: true,
       validator: (_rule: any, value: string, cb: any) => {
-        if (showReceivers.value && !value.trim()) cb(new Error('请至少填写一个接收地址'))
+        if (showReceivers.value && !value.trim()) cb(new Error(t('tasks.receiverRequired')))
         else cb()
       },
       trigger: 'blur',
     },
   ],
-}
-
-const RECEIVER_PLACEHOLDER = '每行一个接收地址，例如：\nuser@example.com\nalert@example.com'
-const RECEIVER_HINT = '支持 {{变量}}，例如 {{email}} 会在发送时被替换'
+}))
 
 /* ── Receiver field: only meaningful for the email channel ────────────
-   渠道类型 → 显示名（与 Channels.vue 保持一致）。 */
-const CHANNEL_TYPE_LABELS: Record<string, string> = {
-  email: 'SMTP 邮件',
-  wecom: '企业微信',
-  dingtalk: '钉钉',
-  feishu: '飞书',
-  wechat: 'PushPlus',
+   渠道类型 → 显示名 key（与 Channels.vue 的 channels.type.* 保持一致）。 */
+const TYPE_KEY: Record<string, string> = {
+  email: 'channels.type.email',
+  wecom: 'channels.type.wecom',
+  dingtalk: 'channels.type.dingtalk',
+  feishu: 'channels.type.feishu',
+  wechat: 'channels.type.wechat',
 }
 
 const selectedChannels = computed(() =>
@@ -522,8 +520,11 @@ const showReceivers = computed(
 )
 const channelTypeLabel = computed(() =>
   selectedChannels.value
-    .map((c) => CHANNEL_TYPE_LABELS[c.type] || c.type)
-    .join('、')
+    .map((c) => {
+      const key = TYPE_KEY[c.type]
+      return key ? t(key) : c.type
+    })
+    .join(t('tasks.listJoin'))
 )
 
 const selectedTemplate = computed(() =>
@@ -539,13 +540,13 @@ const webhookTagStyle = {
   backgroundColor: 'rgba(139, 92, 246, 0.14)',
 }
 
-// 任务绑定的渠道名（多选时逗号分隔）
+// 任务绑定的渠道名（多选时按语言分隔）
 function channelNames(row: TaskRow): string {
   const ids = row.channel_ids?.length ? row.channel_ids : [row.channel_id]
   return ids
     .map((id) => channels.value.find((c) => c.id === id)?.name || '')
     .filter(Boolean)
-    .join('、')
+    .join(t('tasks.listJoin'))
 }
 
 /* ── API Key dialog ────────────────────────────────────────────────── */
@@ -564,10 +565,10 @@ async function copyApiKey() {
   if (!key) return
   try {
     await navigator.clipboard.writeText(key)
-    ElMessage.success('API Key 已复制')
+    ElMessage.success(t('tasks.apiKeyCopied'))
   } catch {
     // Clipboard API may be blocked (non-secure context) — select manually.
-    ElMessage.warning('复制失败，请手动选择复制')
+    ElMessage.warning(t('common.copyFailed'))
   }
 }
 
@@ -580,7 +581,7 @@ async function load() {
   try {
     tasks.value = await taskApi.list()
   } catch (e: any) {
-    ElMessage.error(errMsg(e, '任务列表加载失败'))
+    ElMessage.error(errMsg(e, t('tasks.loadFailed')))
   } finally {
     loading.value = false
   }
@@ -592,7 +593,7 @@ async function loadOptions() {
     channels.value = chs || []
     templates.value = tpls || []
   } catch (e: any) {
-    ElMessage.error(errMsg(e, '渠道 / 模板列表加载失败'))
+    ElMessage.error(errMsg(e, t('tasks.optionsLoadFailed')))
   }
 }
 
@@ -602,9 +603,9 @@ async function toggleTask(row: TaskRow, enabled: boolean) {
   try {
     await taskApi.toggle(row.id, enabled)
     row.enabled = enabled
-    ElMessage.success(enabled ? '任务已启用' : '任务已停用')
+    ElMessage.success(enabled ? t('tasks.enabledOk') : t('tasks.disabledOk'))
   } catch (e: any) {
-    ElMessage.error(errMsg(e, '状态切换失败'))
+    ElMessage.error(errMsg(e, t('tasks.toggleFailed')))
   } finally {
     togglingId.value = null
   }
@@ -614,9 +615,9 @@ async function toggleTask(row: TaskRow, enabled: boolean) {
 async function sendNow(row: TaskRow) {
   try {
     await ElMessageBox.confirm(
-      `立即发送任务「${row.name}」？将向绑定的 ${channelNames(row) || '渠道'} 投递一次。`,
-      '立即发送',
-      { confirmButtonText: '发送', cancelButtonText: '取消', type: 'warning' }
+      t('tasks.sendNowConfirmMsg', { name: row.name, channels: channelNames(row) || t('tasks.channelWord') }),
+      t('tasks.sendNowConfirmTitle'),
+      { confirmButtonText: t('tasks.sendBtn'), cancelButtonText: t('common.cancel'), type: 'warning' }
     )
   } catch {
     return
@@ -624,9 +625,9 @@ async function sendNow(row: TaskRow) {
   sendingId.value = row.id
   try {
     await taskApi.sendNow(row.id)
-    ElMessage.success('已加入发送队列')
+    ElMessage.success(t('tasks.queuedOk'))
   } catch (e: any) {
-    ElMessage.error(errMsg(e, '发送失败'))
+    ElMessage.error(errMsg(e, t('tasks.sendFailed')))
   } finally {
     sendingId.value = null
   }
@@ -663,11 +664,11 @@ function openEdit(row: TaskRow) {
   dialogVisible.value = true
 }
 
-// 复制任务：打开「新建任务」并预填源任务的全部配置（名称加「（副本）」），
+// 复制任务：打开「新建任务」并预填源任务的全部配置（名称加副本后缀），
 // id=0 走创建路径；api_key 由后端创建时重新生成。
 function duplicateTask(row: TaskRow) {
   form.id = 0
-  form.name = `${row.name}（副本）`
+  form.name = `${row.name}${t('common.copySuffix')}`
   form.channel_ids = row.channel_ids?.length ? [...row.channel_ids] : [row.channel_id]
   form.template_id = row.template_id
   form.trigger_type = row.trigger_type
@@ -687,7 +688,7 @@ const previewData = ref<{ subject: string; content: string; receivers: string[] 
 
 async function openPreview() {
   if (!form.template_id) {
-    ElMessage.warning('请先选择通知模板')
+    ElMessage.warning(t('tasks.templateFirst'))
     return
   }
   previewing.value = true
@@ -701,7 +702,7 @@ async function openPreview() {
     })
     previewData.value = data || { subject: '', content: '', receivers: [] }
   } catch (e: any) {
-    ElMessage.error(errMsg(e, '预览生成失败'))
+    ElMessage.error(errMsg(e, t('tasks.previewFailed')))
   } finally {
     previewing.value = false
   }
@@ -747,11 +748,11 @@ async function saveTask() {
     let savedId = form.id
     if (form.id) {
       await taskApi.update(form.id, payload)
-      ElMessage.success('任务已更新')
+      ElMessage.success(t('tasks.updatedOk'))
     } else {
       const created = await taskApi.create(payload)
       savedId = created?.id ?? 0
-      ElMessage.success('任务已创建')
+      ElMessage.success(t('tasks.createdOk'))
     }
     dialogVisible.value = false
     await load()
@@ -765,7 +766,7 @@ async function saveTask() {
       }
     }
   } catch (e: any) {
-    ElMessage.error(errMsg(e, '保存失败'))
+    ElMessage.error(errMsg(e, t('common.saveFailed')))
   } finally {
     saving.value = false
   }
@@ -779,19 +780,19 @@ function goLogs(row: TaskRow) {
 async function removeTask(row: TaskRow) {
   try {
     await ElMessageBox.confirm(
-      `确定删除任务「${row.name}」吗？删除后不可恢复。`,
-      '删除任务',
-      { confirmButtonText: '删除', cancelButtonText: '取消', type: 'warning' }
+      t('tasks.deleteConfirmMsg', { name: row.name }),
+      t('tasks.deleteConfirmTitle'),
+      { confirmButtonText: t('common.delete'), cancelButtonText: t('common.cancel'), type: 'warning' }
     )
   } catch {
     return
   }
   try {
     await taskApi.remove(row.id)
-    ElMessage.success('任务已删除')
+    ElMessage.success(t('tasks.deletedOk'))
     await load()
   } catch (e: any) {
-    ElMessage.error(errMsg(e, '删除失败'))
+    ElMessage.error(errMsg(e, t('common.deleteFailed')))
   }
 }
 
@@ -801,20 +802,20 @@ async function batchDelete() {
   if (!rows.length) return
   try {
     await ElMessageBox.confirm(
-      `确认删除选中的 ${rows.length} 项？`,
-      '批量删除',
-      { confirmButtonText: '删除', cancelButtonText: '取消', type: 'warning' }
+      t('common.batchDeleteConfirmMsg', { n: rows.length }),
+      t('common.batchDelete'),
+      { confirmButtonText: t('common.delete'), cancelButtonText: t('common.cancel'), type: 'warning' }
     )
   } catch {
     return
   }
   try {
     await taskApi.batchRemove(rows.map((r) => r.id))
-    ElMessage.success(`已删除 ${rows.length} 个任务`)
+    ElMessage.success(t('tasks.batchDeletedOk', { n: rows.length }))
     tableRef.value?.clearSelection()
     await load()
   } catch (e: any) {
-    ElMessage.error(errMsg(e, '批量删除失败'))
+    ElMessage.error(errMsg(e, t('common.batchDeleteFailed')))
   }
 }
 
