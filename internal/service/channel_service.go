@@ -31,12 +31,19 @@ func (s *ChannelService) Name(id int64) (string, error) {
 }
 
 // List 返回全部未删除渠道（所有用户共享的数据集）；userID 参数仅为兼容保留，不再过滤。
-func (s *ChannelService) List(userID int64) ([]*model.Channel, error) {
+// includeConfig=false 时（非管理员的共享读）不解密也不回传明文配置，
+// 避免 SMTP 授权码 / bot token 等机密经列表接口泄漏给最低权限用户；
+// 管理员编辑所需配置走带解密的路径（含导出与按 id 取详情）。
+func (s *ChannelService) List(userID int64, includeConfig bool) ([]*model.Channel, error) {
 	list, err := s.repo.List()
 	if err != nil {
 		return nil, err
 	}
 	for _, c := range list {
+		if !includeConfig {
+			c.Config = nil
+			continue
+		}
 		cfg, err := s.decryptConfig(c.ConfigJSON)
 		if err != nil {
 			log.Printf("channel %d: decrypt config failed: %v", c.ID, err)

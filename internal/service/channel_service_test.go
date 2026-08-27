@@ -73,7 +73,7 @@ func TestChannelServiceEncryptRoundtrip(t *testing.T) {
 	if stored == "" || len(stored) < 40 {
 		t.Fatalf("config_json should be ciphertext, got %q", stored)
 	}
-	list, err := svc.List(uid)
+	list, err := svc.List(uid, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -111,7 +111,7 @@ func TestChannelServiceBatchDelete(t *testing.T) {
 	if err := svc.BatchDelete([]int64{c1.ID, c2.ID}); err != nil {
 		t.Fatal(err)
 	}
-	list, err := svc.List(uid)
+	list, err := svc.List(uid, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -136,7 +136,7 @@ func TestChannelServiceReadAllAndAdminManage(t *testing.T) {
 	}
 
 	// B 的列表包含 A 的渠道（读全部）
-	listB, err := svc.List(uidB)
+	listB, err := svc.List(uidB, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -163,5 +163,43 @@ func TestChannelServiceReadAllAndAdminManage(t *testing.T) {
 	}
 	if err := svc.Delete(uidB, ch.ID); err != nil {
 		t.Fatalf("admin deleting A's channel: %v", err)
+	}
+}
+
+// TestChannelListConfigHiddenWithoutIncludeFlag：includeConfig=false（非管理员共享读）
+// 不得携带明文配置，includeConfig=true 路径仍可解密——列表接口防泄漏回归。
+func TestChannelListConfigHiddenWithoutIncludeFlag(t *testing.T) {
+	db := testDB(t)
+	ciph, _ := crypto.New(key32())
+	svc := NewChannelService(db, ciph)
+	uid := seedServiceUser(t, db)
+
+	ch := &model.Channel{Type: "email", Name: "机密渠道", Config: map[string]string{"host": "smtp.x.com", "password": "p"}, Enabled: true}
+	if err := svc.Create(uid, ch); err != nil {
+		t.Fatal(err)
+	}
+
+	hidden, err := svc.List(uid, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range hidden {
+		if len(c.Config) > 0 {
+			t.Fatalf("non-admin list must not carry plaintext config: %+v", c.Config)
+		}
+	}
+
+	full, err := svc.List(uid, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ok := false
+	for _, c := range full {
+		if c.ID == ch.ID && c.Config["password"] == "p" {
+			ok = true
+		}
+	}
+	if !ok {
+		t.Fatal("includeConfig=true should still decrypt plaintext config")
 	}
 }

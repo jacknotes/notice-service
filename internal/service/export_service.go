@@ -39,7 +39,7 @@ func NewExportService(db *sql.DB, cipher *crypto.Cipher, sched Scheduler) *Expor
 
 // Export 导出全部未删除的渠道（明文 config）/模板/任务。
 func (s *ExportService) Export(userID int64) (*ExportBundle, error) {
-	chs, err := s.channels.List(userID) // List 内部解密 config 到 Config 字段
+	chs, err := s.channels.List(userID, true) // 备份需要明文 config，显式开启解密
 	if err != nil {
 		return nil, err
 	}

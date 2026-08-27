@@ -97,7 +97,7 @@
         <el-table-column :label="t('common.action')" width="340" align="center" fixed="right">
           <template #default="{ row }">
             <el-button
-              v-if="row.trigger_type === 'api'"
+              v-if="isAdmin && row.trigger_type === 'api'"
               link
               type="primary"
               size="small"

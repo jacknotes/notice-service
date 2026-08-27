@@ -28,7 +28,8 @@ func NewChannelHandler(db *sql.DB, cipher *crypto.Cipher) *ChannelHandler {
 // @Success 200 {array} map[string]interface{}
 // @Router /api/channels [get]
 func (h *ChannelHandler) List(c *gin.Context) {
-	list, err := h.svc.List(c.GetInt64("uid"))
+	isAdmin := c.GetString("role") == "admin"
+	list, err := h.svc.List(c.GetInt64("uid"), isAdmin)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return

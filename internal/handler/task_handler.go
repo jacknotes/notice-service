@@ -37,6 +37,12 @@ func (h *TaskHandler) List(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+	// api_key 是触发凭据：任务为共享读，最低权限用户不应拿到它去调 webhook。
+	if c.GetString("role") != "admin" {
+		for _, t := range list {
+			t.APIKey = ""
+		}
+	}
 	c.JSON(http.StatusOK, list)
 }
 
