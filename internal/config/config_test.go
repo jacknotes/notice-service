@@ -210,12 +210,16 @@ func clearEnv(t *testing.T) {
 func TestTrustedProxiesAndSwaggerDefaults(t *testing.T) {
 	clearEnv(t)
 	cfg := LoadFile(t.TempDir() + "/nope.yml")
-	// 默认信任环回（宿主 Nginx 反代形态）+ Docker 默认网桥网段（容器反代形态），且默认暴露 Swagger
+	// 默认信任环回（宿主 Nginx 反代形态）+ Docker 默认网桥网段（容器反代形态）；
+	// Swagger/Metrics 端点默认关闭（安全基线），需要时经 SWAGGER_ENABLED/METRICS_ENABLED 显式开启。
 	if len(cfg.TrustedProxies) != 3 || cfg.TrustedProxies[0] != "127.0.0.1" || cfg.TrustedProxies[2] != "172.16.0.0/12" {
 		t.Errorf("TrustedProxies default = %v, want [127.0.0.1 ::1 172.16.0.0/12]", cfg.TrustedProxies)
 	}
-	if !cfg.SwaggerEnabled {
-		t.Error("SwaggerEnabled should default true")
+	if cfg.SwaggerEnabled {
+		t.Error("SwaggerEnabled should default false")
+	}
+	if cfg.MetricsEnabled {
+		t.Error("MetricsEnabled should default false")
 	}
 }
 

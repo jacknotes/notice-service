@@ -84,7 +84,9 @@ func (s *AuthService) IssuePending2FAToken(userID int64) (string, error) {
 func (s *AuthService) VerifyPending2FAToken(token string) (int64, error) {
 	claims := &AuthClaims{}
 	if _, err := jwt.ParseWithClaims(token, claims, func(t *jwt.Token) (interface{}, error) {
-		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
+		// 固定仅接受签发端使用的 HS256：HMAC 家族其余变体（HS384/512）虽无
+		// alg-confusion 实害，但与签发端不一致即应拒绝，避免实现漂移。
+		if t.Method != jwt.SigningMethodHS256 {
 			return nil, errors.New("unexpected signing method")
 		}
 		return s.jwtSecret, nil
@@ -102,7 +104,9 @@ const twoFATokenTTL = 5 * time.Minute
 func (s *AuthService) VerifyToken(token string) (*AuthClaims, error) {
 	claims := &AuthClaims{}
 	_, err := jwt.ParseWithClaims(token, claims, func(t *jwt.Token) (interface{}, error) {
-		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
+		// 固定仅接受签发端使用的 HS256：HMAC 家族其余变体（HS384/512）虽无
+		// alg-confusion 实害，但与签发端不一致即应拒绝，避免实现漂移。
+		if t.Method != jwt.SigningMethodHS256 {
 			return nil, errors.New("unexpected signing method")
 		}
 		return s.jwtSecret, nil

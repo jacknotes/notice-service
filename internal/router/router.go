@@ -1,6 +1,7 @@
 package router
 
 import (
+	"crypto/subtle"
 	"database/sql"
 	"log"
 	"net/http"
@@ -200,7 +201,9 @@ func accessLogger() gin.HandlerFunc {
 func metricsBasicAuth(user, pass string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		u, p, ok := c.Request.BasicAuth()
-		if !ok || u != user || p != pass {
+		okUser := subtle.ConstantTimeCompare([]byte(u), []byte(user)) == 1
+		okPass := subtle.ConstantTimeCompare([]byte(p), []byte(pass)) == 1
+		if !ok || !okUser || !okPass {
 			c.Header("WWW-Authenticate", `Basic realm="metrics"`)
 			c.AbortWithStatus(http.StatusUnauthorized)
 			return

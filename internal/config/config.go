@@ -168,8 +168,8 @@ func loadFromPath(path string) *Config {
 		AuditRetentionDays:    firstInt("AUDIT_RETENTION_DAYS", f.AuditRetentionDays, 180),
 		TrustedProxies:        parseCSV(firstNonEmpty(os.Getenv("TRUSTED_PROXIES"), f.TrustedProxies, "127.0.0.1,::1,172.16.0.0/12")),
 		StaticDir:             firstNonEmpty(os.Getenv("STATIC_DIR"), f.StaticDir, "./web/dist"),
-		SwaggerEnabled:        firstBool("SWAGGER_ENABLED", f.SwaggerEnabled, true),
-		MetricsEnabled:        firstBool("METRICS_ENABLED", f.Metrics.Enabled, true),
+		SwaggerEnabled:        firstBool("SWAGGER_ENABLED", f.SwaggerEnabled, false),
+		MetricsEnabled:        firstBool("METRICS_ENABLED", f.Metrics.Enabled, false),
 		MetricsUser:           firstNonEmpty(os.Getenv("METRICS_USER"), f.Metrics.User, ""),
 		MetricsPassword:       firstNonEmpty(os.Getenv("METRICS_PASSWORD"), f.Metrics.Password, ""),
 	}
@@ -321,8 +321,10 @@ func loadDotEnv(path string) {
 
 func randomHex(n int) string {
 	b := make([]byte, n)
+	// crypto/rand 失败（熵源不可用）属系统级故障：回退到硬编码值会把可预测
+	// 密钥当安全密钥用，必须 fail-fast 暴露问题。
 	if _, err := rand.Read(b); err != nil {
-		return "0123456789abcdef0123456789abcdef"
+		panic("config: crypto/rand unavailable: " + err.Error())
 	}
 	return hex.EncodeToString(b)
 }
