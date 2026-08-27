@@ -2,8 +2,8 @@
   <div class="page">
     <div class="page-head">
       <div>
-        <h1 class="grad-text">仪表盘</h1>
-        <p class="sub">按日期查看投递状态与趋势（默认最近一周）</p>
+        <h1 class="grad-text">{{ t('nav.dashboard') }}</h1>
+        <p class="sub">{{ t('dashboard.subtitle') }}</p>
       </div>
     </div>
 
@@ -18,7 +18,7 @@
 
     <div class="filters">
       <div class="filter-item date-filter">
-        <span class="filter-label">日期</span>
+        <span class="filter-label">{{ t('common.date') }}</span>
         <div class="date-quick">
           <el-button
             v-for="p in quickPresets"
@@ -28,15 +28,15 @@
             plain
             @click="applyPreset(p)"
           >
-            {{ p.label }}
+            {{ t(p.labelKey) }}
           </el-button>
         </div>
         <el-date-picker
           v-model="dateRange"
           type="daterange"
-          range-separator="至"
-          start-placeholder="开始日期"
-          end-placeholder="结束日期"
+          :range-separator="t('common.to')"
+          :start-placeholder="t('common.startDate')"
+          :end-placeholder="t('common.endDate')"
           value-format="YYYY-MM-DD"
           :clearable="true"
           style="width: 240px"
@@ -46,19 +46,19 @@
     </div>
 
     <div v-loading="loading" class="stat-grid">
-      <StatCard label="发送量" :value="stats.today_total" color="#6366f1" hint="区间累计投递请求" :delay="0" />
-      <StatCard label="成功" :value="stats.today_success" color="#34d399" hint="成功送达的通知" :delay="1" />
-      <StatCard label="失败" :value="stats.today_failed" color="#f87171" hint="需要关注的失败回执" :delay="2" />
-      <StatCard label="成功率" :value="rateDisplay" suffix="%" color="#8b5cf6" hint="成功 ÷ 发送量" :delay="3" />
-      <StatCard label="任务数" :value="stats.task_count" color="#38bdf8" hint="区间内有投递的任务" :delay="4" />
-      <StatCard label="渠道数" :value="stats.channel_count" color="#f59e0b" hint="区间内使用的渠道" :delay="5" />
+      <StatCard :label="t('dashboard.sendCount')" :value="stats.today_total" color="#6366f1" :hint="t('dashboard.totalRequests')" :delay="0" />
+      <StatCard :label="t('common.success')" :value="stats.today_success" color="#34d399" :hint="t('dashboard.successDelivered')" :delay="1" />
+      <StatCard :label="t('common.failed')" :value="stats.today_failed" color="#f87171" :hint="t('dashboard.failedAttention')" :delay="2" />
+      <StatCard :label="t('dashboard.successRate')" :value="rateDisplay" suffix="%" color="#8b5cf6" :hint="t('dashboard.rateHint')" :delay="3" />
+      <StatCard :label="t('dashboard.taskCount')" :value="stats.task_count" color="#38bdf8" :hint="t('dashboard.tasksDelivered')" :delay="4" />
+      <StatCard :label="t('dashboard.channelCount')" :value="stats.channel_count" color="#f59e0b" :hint="t('dashboard.channelsUsed')" :delay="5" />
     </div>
 
     <div class="charts-row">
       <div v-loading="loading" class="card chart-card donut-card reveal d-1">
         <div class="chart-head">
           <div class="chart-title">
-            <h3>状态分布</h3>
+            <h3>{{ t('dashboard.statusMix') }}</h3>
             <span class="chart-sub mono">STATUS MIX</span>
           </div>
         </div>
@@ -68,7 +68,7 @@
       <div v-loading="loading" class="card chart-card reveal d-2">
         <div class="chart-head">
           <div class="chart-title">
-            <h3>发送趋势</h3>
+            <h3>{{ t('dashboard.trendTitle') }}</h3>
             <span class="chart-sub mono">DAILY THROUGHPUT</span>
           </div>
         </div>
@@ -80,29 +80,29 @@
       <div v-loading="loading" class="card list-card reveal d-3">
         <div class="chart-head">
           <div class="chart-title">
-            <h3>TOP 任务</h3>
+            <h3>{{ t('dashboard.topTasks') }}</h3>
             <span class="chart-sub mono">TOP TASKS</span>
           </div>
         </div>
         <div v-if="topTasks.length" class="rank-list">
-          <div v-for="(t, i) in topTasks" :key="t.task_id" class="rank-item">
+          <div v-for="(r, i) in topTasks" :key="r.task_id" class="rank-item">
             <span class="rank-no mono">{{ i + 1 }}</span>
             <div class="rank-main">
-              <span class="rank-name">{{ taskName(t.task_id) }}</span>
+              <span class="rank-name">{{ taskName(r.task_id) }}</span>
               <div class="rank-bar">
-                <span class="rank-bar-fill" :style="{ width: rankWidth(t) + '%' }"></span>
+                <span class="rank-bar-fill" :style="{ width: rankWidth(r) + '%' }"></span>
               </div>
             </div>
-            <span class="rank-num mono">{{ t.total }}<span class="rank-succ mono">/{{ t.success }} 成功</span></span>
+            <span class="rank-num mono">{{ r.total }}<span class="rank-succ mono">/{{ r.success }} {{ t('common.success') }}</span></span>
           </div>
         </div>
-        <el-empty v-else description="暂无数据" :image-size="56" />
+        <el-empty v-else :description="t('common.none')" :image-size="56" />
       </div>
 
       <div v-loading="loading" class="card list-card reveal d-4">
         <div class="chart-head">
           <div class="chart-title">
-            <h3>渠道分布</h3>
+            <h3>{{ t('dashboard.channelMix') }}</h3>
             <span class="chart-sub mono">CHANNEL MIX</span>
           </div>
         </div>
@@ -115,10 +115,10 @@
                 <span class="rank-bar-fill ch" :style="{ width: channelWidth(c) + '%' }"></span>
               </div>
             </div>
-            <span class="rank-num mono">{{ c.total }}<span class="rank-succ mono">/{{ c.success }} 成功</span></span>
+            <span class="rank-num mono">{{ c.total }}<span class="rank-succ mono">/{{ c.success }} {{ t('common.success') }}</span></span>
           </div>
         </div>
-        <el-empty v-else description="暂无数据" :image-size="56" />
+        <el-empty v-else :description="t('common.none')" :image-size="56" />
       </div>
     </div>
   </div>
@@ -128,10 +128,13 @@
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import * as echarts from 'echarts'
+import { useI18n } from 'vue-i18n'
 import { channelApi, dashboardApi, taskApi } from '@/api'
 import StatCard from '@/components/StatCard.vue'
 import TrendChart from '@/components/TrendChart.vue'
 import type { TrendPoint } from '@/components/TrendChart.vue'
+
+const { t } = useI18n()
 
 const loading = ref(false)
 const error = ref('')
@@ -155,14 +158,14 @@ const rateDisplay = computed(() =>
   Number.isFinite(stats.success_rate) ? Math.round(stats.success_rate * 10) / 10 : 0
 )
 
-const taskName = (id: number) => tasks.value.find((t) => t.id === id)?.name || `任务 #${id}`
-const channelName = (id: number) => channels.value.find((c) => c.id === id)?.name || `渠道 #${id}`
+const taskName = (id: number) => tasks.value.find((x) => x.id === id)?.name || t('dashboard.taskFallback', { id })
+const channelName = (id: number) => channels.value.find((x) => x.id === id)?.name || t('dashboard.channelFallback', { id })
 
 /* ── 日期范围（默认近 7 天） ─────────────────────────────────────────── */
 const quickPresets = [
-  { key: 'week', label: '近 7 天', days: 7 },
-  { key: '14d', label: '近 14 天', days: 14 },
-  { key: '30d', label: '近 30 天', days: 30 },
+  { key: 'week', labelKey: 'dashboard.near7', days: 7 },
+  { key: '14d', labelKey: 'dashboard.near14', days: 14 },
+  { key: '30d', labelKey: 'dashboard.near30', days: 30 },
 ]
 const quickPreset = ref('week')
 const dateRange = ref<[string, string] | null>(null)
@@ -217,10 +220,10 @@ function renderDonut() {
         emphasis: { label: { show: true, fontSize: 16, fontWeight: 700, color: '#e2e8f0' } },
         labelLine: { show: false },
         data: empty
-          ? [{ name: '暂无数据', value: 1, itemStyle: { color: 'rgba(148,163,184,0.15)' } }]
+          ? [{ name: t('common.none'), value: 1, itemStyle: { color: 'rgba(148,163,184,0.15)' } }]
           : [
-              { name: '成功', value: success, itemStyle: { color: '#34d399' } },
-              { name: '失败', value: failed, itemStyle: { color: '#f87171' } },
+              { name: t('common.success'), value: success, itemStyle: { color: '#34d399' } },
+              { name: t('common.failed'), value: failed, itemStyle: { color: '#f87171' } },
             ],
       },
     ],
@@ -274,7 +277,7 @@ async function load() {
     channelStats.value = Array.isArray(chs) ? chs : []
     renderDonut()
   } catch (e: any) {
-    error.value = e?.response?.data?.error || '仪表盘数据加载失败，请稍后重试'
+    error.value = e?.response?.data?.error || t('dashboard.loadFailed')
     ElMessage.error(error.value)
   } finally {
     loading.value = false
