@@ -88,7 +88,7 @@ func (h *WebhookHandler) Trigger(c *gin.Context) {
 	// 可选 HMAC 签名认证：require_signature=1 时校验（密钥 = 任务 api_key）。
 	if task.RequireSignature {
 		if err := verifyWebhookSignature(c, task.APIKey, raw); err != nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+			c.JSON(http.StatusUnauthorized, gin.H{"error": sanitizeErr(err)})
 			return
 		}
 	}
@@ -103,7 +103,7 @@ func (h *WebhookHandler) Trigger(c *gin.Context) {
 	jobID, err := h.queue.Enqueue(task.ID, req.Variables, "",
 		service.Trigger{Type: "webhook", By: "webhook", IP: c.ClientIP()})
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": sanitizeErr(err)})
 		return
 	}
 	c.JSON(http.StatusAccepted, gin.H{"ok": true, "job_id": jobID})

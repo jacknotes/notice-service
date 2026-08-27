@@ -31,7 +31,7 @@ func NewSystemHandler(db *sql.DB) *SystemHandler {
 func (h *SystemHandler) Instances(c *gin.Context) {
 	list, err := h.heartbeats.List(heartbeatHealthyWindow)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": sanitizeErr(err)})
 		return
 	}
 	healthy := 0

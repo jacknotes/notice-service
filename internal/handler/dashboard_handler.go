@@ -52,7 +52,7 @@ func (h *DashboardHandler) Stats(c *gin.Context) {
 	from, to := parseDateRange(c)
 	s, err := h.svc.StatsRange(from, to)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": sanitizeErr(err)})
 		return
 	}
 	c.JSON(http.StatusOK, s)
@@ -70,7 +70,7 @@ func (h *DashboardHandler) Trend(c *gin.Context) {
 	from, to := parseDateRange(c)
 	tr, err := h.svc.TrendRange(from, to)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": sanitizeErr(err)})
 		return
 	}
 	c.JSON(http.StatusOK, tr)
@@ -95,7 +95,7 @@ func (h *DashboardHandler) TopTasks(c *gin.Context) {
 	}
 	top, err := h.svc.TopTasks(from, to, limit)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": sanitizeErr(err)})
 		return
 	}
 	c.JSON(http.StatusOK, top)
@@ -113,7 +113,7 @@ func (h *DashboardHandler) ChannelStats(c *gin.Context) {
 	from, to := parseDateRange(c)
 	chs, err := h.svc.ChannelStats(from, to)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": sanitizeErr(err)})
 		return
 	}
 	c.JSON(http.StatusOK, chs)

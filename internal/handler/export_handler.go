@@ -28,7 +28,7 @@ func NewExportHandler(db *sql.DB, cipher *crypto.Cipher, sched service.Scheduler
 func (h *ExportHandler) Export(c *gin.Context) {
 	bundle, err := h.svc.Export(c.GetInt64("uid"))
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": sanitizeErr(err)})
 		return
 	}
 	auditf(c, h.db, "export.data", "导出数据备份（%d 渠道/%d 模板/%d 任务）",
@@ -52,7 +52,7 @@ func (h *ExportHandler) Import(c *gin.Context) {
 	}
 	res, err := h.svc.Import(c.GetInt64("uid"), &bundle)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": sanitizeErr(err)})
 		return
 	}
 	auditf(c, h.db, "import.data", "导入数据备份（+%d 渠道/+%d 模板/+%d 任务，跳过 %d）",

@@ -39,7 +39,7 @@ func (h *UserHandler) List(c *gin.Context) {
 	}
 	list, err := h.svc.List()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": sanitizeErr(err)})
 		return
 	}
 	c.JSON(http.StatusOK, list)
@@ -72,7 +72,7 @@ func (h *UserHandler) Create(c *gin.Context) {
 	}
 	u, err := h.svc.Create(req.Username, req.DisplayName, req.Email, req.Password, req.Role)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": sanitizeErr(err)})
 		return
 	}
 	auditf(c, h.db, "user.create", "创建用户 %s (显示名=%s 邮箱=%s role=%s)", u.Username, u.DisplayName, u.Email, u.Role)
@@ -106,7 +106,7 @@ func (h *UserHandler) Update(c *gin.Context) {
 		return
 	}
 	if err := h.svc.Update(c.GetInt64("uid"), c.GetString("role"), id, req.Role, req.Password, req.DisplayName, req.Email); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": sanitizeErr(err)})
 		return
 	}
 	auditf(c, h.db, "user.update", "更新用户 %s (role=%s display_name=%s email=%s)", auditRef(h.svc.Username(id), id), auditStr(req.Role), auditStr(req.DisplayName), auditStr(req.Email))
@@ -129,7 +129,7 @@ func (h *UserHandler) Delete(c *gin.Context) {
 	id, _ := strconv.ParseInt(c.Param("id"), 10, 64)
 	name := h.svc.Username(id) // 删除前取用户名，软删除后查不到
 	if err := h.svc.Delete(operatorFromCtx(c), id); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": sanitizeErr(err)})
 		return
 	}
 	auditf(c, h.db, "user.delete", "删除用户 %s", auditRef(name, id))
@@ -161,7 +161,7 @@ func (h *UserHandler) BatchDelete(c *gin.Context) {
 		names[i] = h.svc.Username(uid) // 批量删除前取用户名
 	}
 	if err := h.svc.BatchDelete(operatorFromCtx(c), req.IDs); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": sanitizeErr(err)})
 		return
 	}
 	auditf(c, h.db, "user.batch_delete", "批量删除用户 %s", auditRefs(names, req.IDs))
@@ -183,7 +183,7 @@ func (h *UserHandler) Disable(c *gin.Context) {
 	}
 	id, _ := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err := h.svc.DisableUser(operatorFromCtx(c), id); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": sanitizeErr(err)})
 		return
 	}
 	auditf(c, h.db, "user.disable", "禁用用户 %s", auditRef(h.svc.Username(id), id))
@@ -205,7 +205,7 @@ func (h *UserHandler) Enable(c *gin.Context) {
 	}
 	id, _ := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err := h.svc.EnableUser(operatorFromCtx(c), id); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": sanitizeErr(err)})
 		return
 	}
 	auditf(c, h.db, "user.enable", "启用用户 %s", auditRef(h.svc.Username(id), id))
@@ -228,7 +228,7 @@ func (h *UserHandler) ResetToken(c *gin.Context) {
 	id, _ := strconv.ParseInt(c.Param("id"), 10, 64)
 	token, expires, err := h.svc.GenerateResetToken(id)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": sanitizeErr(err)})
 		return
 	}
 	auditf(c, h.db, "user.reset_token", "为用户 %s 生成重置令牌（%s 过期）", auditRef(h.svc.Username(id), id), expires.Format("2006-01-02 15:04:05"))
@@ -251,7 +251,7 @@ func (h *UserHandler) ForceEnable2FA(c *gin.Context) {
 	id, _ := strconv.ParseInt(c.Param("id"), 10, 64)
 	secret, uri, codes, err := h.svc.ForceEnable2FA(id)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": sanitizeErr(err)})
 		return
 	}
 	auditf(c, h.db, "user.2fa_force_enable", "强制开启 %s 的双因子认证", auditRef(h.svc.Username(id), id))
@@ -273,7 +273,7 @@ func (h *UserHandler) ForceDisable2FA(c *gin.Context) {
 	}
 	id, _ := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err := h.svc.ForceDisable2FA(id); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": sanitizeErr(err)})
 		return
 	}
 	auditf(c, h.db, "user.2fa_force_disable", "强制关闭 %s 的双因子认证", auditRef(h.svc.Username(id), id))

@@ -39,7 +39,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	res, err := h.Svc.Login(req.Username, req.Password, c.ClientIP())
 	if err != nil {
 		auditActor(h.db, 0, req.Username, c.ClientIP(), "login.failed", "登录失败")
-		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		c.JSON(http.StatusUnauthorized, gin.H{"error": sanitizeErr(err)})
 		return
 	}
 	if res.Requires2FA {
@@ -60,7 +60,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 func (h *AuthHandler) Setup2FA(c *gin.Context) {
 	secret, uri, codes, err := h.Svc.Setup2FA(c.GetInt64("uid"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": sanitizeErr(err)})
 		return
 	}
 	auditf(c, h.db, "auth.2fa_setup", "重新生成双因子认证密钥与备用码")
@@ -84,7 +84,7 @@ func (h *AuthHandler) Enable2FA(c *gin.Context) {
 		return
 	}
 	if err := h.Svc.Enable2FA(c.GetInt64("uid"), req.Code); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": sanitizeErr(err)})
 		return
 	}
 	auditf(c, h.db, "auth.2fa_enable", "启用双因子认证")
@@ -108,7 +108,7 @@ func (h *AuthHandler) Disable2FA(c *gin.Context) {
 		return
 	}
 	if err := h.Svc.Disable2FA(c.GetInt64("uid"), req.Code); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": sanitizeErr(err)})
 		return
 	}
 	auditf(c, h.db, "auth.2fa_disable", "关闭双因子认证")
@@ -133,7 +133,7 @@ func (h *AuthHandler) Verify2FA(c *gin.Context) {
 	}
 	token, user, err := h.Svc.Verify2FA(req.Token, req.Code, c.ClientIP())
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		c.JSON(http.StatusUnauthorized, gin.H{"error": sanitizeErr(err)})
 		return
 	}
 	auditActor(h.db, user.ID, user.Username, c.ClientIP(), "login.success", "双因子验证通过，登录成功")
@@ -185,7 +185,7 @@ func (h *AuthHandler) UpdateProfile(c *gin.Context) {
 		return
 	}
 	if err := h.Svc.UpdateProfile(c.GetInt64("uid"), req.DisplayName, req.Email); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": sanitizeErr(err)})
 		return
 	}
 	auditf(c, h.db, "auth.profile_update", "更新个人资料（显示名/邮箱）")
@@ -210,7 +210,7 @@ func (h *AuthHandler) ChangePassword(c *gin.Context) {
 		return
 	}
 	if err := h.Svc.ChangePassword(c.GetInt64("uid"), req.OldPassword, req.NewPassword); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": sanitizeErr(err)})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"ok": true})
@@ -234,7 +234,7 @@ func (h *AuthHandler) ForgotPassword(c *gin.Context) {
 		return
 	}
 	if err := h.Svc.ResetPassword(req.Username, req.Token, req.NewPassword); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": sanitizeErr(err)})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"ok": true})

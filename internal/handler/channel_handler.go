@@ -31,7 +31,7 @@ func (h *ChannelHandler) List(c *gin.Context) {
 	isAdmin := c.GetString("role") == "admin"
 	list, err := h.svc.List(c.GetInt64("uid"), isAdmin)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": sanitizeErr(err)})
 		return
 	}
 	c.JSON(http.StatusOK, list)
@@ -52,7 +52,7 @@ func (h *ChannelHandler) Create(c *gin.Context) {
 		return
 	}
 	if err := h.svc.Create(c.GetInt64("uid"), &in); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": sanitizeErr(err)})
 		return
 	}
 	auditf(c, h.db, "channel.create", "创建渠道 %q (type=%s)", in.Name, in.Type)
@@ -76,7 +76,7 @@ func (h *ChannelHandler) Update(c *gin.Context) {
 		return
 	}
 	if err := h.svc.Update(c.GetInt64("uid"), id, &in); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": sanitizeErr(err)})
 		return
 	}
 	name, _ := h.svc.Name(id)
@@ -95,7 +95,7 @@ func (h *ChannelHandler) Delete(c *gin.Context) {
 	id, _ := strconv.ParseInt(c.Param("id"), 10, 64)
 	name, _ := h.svc.Name(id) // 删除前取名称
 	if err := h.svc.Delete(c.GetInt64("uid"), id); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": sanitizeErr(err)})
 		return
 	}
 	auditf(c, h.db, "channel.delete", "删除渠道 %s", auditRef(name, id))
@@ -123,7 +123,7 @@ func (h *ChannelHandler) BatchDelete(c *gin.Context) {
 		names[i], _ = h.svc.Name(cid)
 	}
 	if err := h.svc.BatchDelete(req.IDs); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": sanitizeErr(err)})
 		return
 	}
 	auditf(c, h.db, "channel.batch_delete", "批量删除渠道 %s", auditRefs(names, req.IDs))
@@ -145,7 +145,7 @@ func (h *ChannelHandler) Test(c *gin.Context) {
 	}
 	_ = c.ShouldBindJSON(&req)
 	if err := h.svc.Test(c.GetInt64("uid"), id, withType(req.Config, req.Type)); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": sanitizeErr(err)})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"ok": true})

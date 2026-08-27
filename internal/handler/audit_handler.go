@@ -68,7 +68,7 @@ func (h *AuditHandler) List(c *gin.Context) {
 	}
 	total, logs, err := h.repo.Query(f)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": sanitizeErr(err)})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"total": total, "items": logs})

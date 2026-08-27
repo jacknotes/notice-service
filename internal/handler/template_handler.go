@@ -30,7 +30,7 @@ func NewTemplateHandler(db *sql.DB) *TemplateHandler {
 func (h *TemplateHandler) List(c *gin.Context) {
 	list, err := h.svc.List(c.GetInt64("uid"))
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": sanitizeErr(err)})
 		return
 	}
 	c.JSON(http.StatusOK, list)
@@ -51,7 +51,7 @@ func (h *TemplateHandler) Create(c *gin.Context) {
 		return
 	}
 	if err := h.svc.Create(c.GetInt64("uid"), &in); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": sanitizeErr(err)})
 		return
 	}
 	auditf(c, h.db, "template.create", "创建模板 %q", in.Name)
@@ -75,7 +75,7 @@ func (h *TemplateHandler) Update(c *gin.Context) {
 		return
 	}
 	if err := h.svc.Update(c.GetInt64("uid"), id, &in); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": sanitizeErr(err)})
 		return
 	}
 	name, _ := h.svc.Name(id)
@@ -94,7 +94,7 @@ func (h *TemplateHandler) Delete(c *gin.Context) {
 	id, _ := strconv.ParseInt(c.Param("id"), 10, 64)
 	name, _ := h.svc.Name(id) // 删除前取名称
 	if err := h.svc.Delete(c.GetInt64("uid"), id); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": sanitizeErr(err)})
 		return
 	}
 	auditf(c, h.db, "template.delete", "删除模板 %s", auditRef(name, id))
@@ -122,7 +122,7 @@ func (h *TemplateHandler) BatchDelete(c *gin.Context) {
 		names[i], _ = h.svc.Name(tid)
 	}
 	if err := h.svc.BatchDelete(req.IDs); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": sanitizeErr(err)})
 		return
 	}
 	auditf(c, h.db, "template.batch_delete", "批量删除模板 %s", auditRefs(names, req.IDs))
@@ -152,7 +152,7 @@ func (h *TemplateHandler) Preview(c *gin.Context) {
 	if id > 0 {
 		saved, err := h.svc.Get(c.GetInt64("uid"), id)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			c.JSON(http.StatusBadRequest, gin.H{"error": sanitizeErr(err)})
 			return
 		}
 		if tpl.Subject == "" {
@@ -169,7 +169,7 @@ func (h *TemplateHandler) Preview(c *gin.Context) {
 	}
 	subject, content, err := h.svc.Preview(tpl, req.Variables)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": sanitizeErr(err)})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"subject": subject, "content": content})
