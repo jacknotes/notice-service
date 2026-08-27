@@ -1915,6 +1915,9 @@ const docTemplate = `{
                 "enabled": {
                     "type": "boolean"
                 },
+                "hmac_secret": {
+                    "type": "string"
+                },
                 "id": {
                     "type": "integer"
                 },
