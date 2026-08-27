@@ -2,7 +2,7 @@
   <div class="trend-chart">
     <div ref="chartEl" class="trend-chart__canvas"></div>
     <div v-if="!hasData" class="trend-chart__empty">
-      <el-empty description="暂无趋势数据" :image-size="64" />
+      <el-empty :description="t('dashboard.emptyTrend')" :image-size="64" />
     </div>
   </div>
 </template>
@@ -10,6 +10,9 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import * as echarts from 'echarts'
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 
 export interface TrendPoint {
   date: string
@@ -49,7 +52,7 @@ function render() {
       valueFormatter: (v: unknown) => String(v),
     },
     legend: {
-      data: ['发送量', '成功', '失败'],
+      data: [t('dashboard.sendCount'), t('common.success'), t('common.failed')],
       top: 0,
       right: 0,
       icon: 'roundRect',
@@ -74,7 +77,7 @@ function render() {
     },
     series: [
       {
-        name: '发送量',
+        name: t('dashboard.sendCount'),
         type: 'line',
         smooth: true,
         symbol: 'circle',
@@ -92,7 +95,7 @@ function render() {
         data: data.map((d) => d.total),
       },
       {
-        name: '成功',
+        name: t('common.success'),
         type: 'line',
         smooth: true,
         symbol: 'circle',
@@ -104,7 +107,7 @@ function render() {
         data: data.map((d) => d.success),
       },
       {
-        name: '失败',
+        name: t('common.failed'),
         type: 'line',
         smooth: true,
         symbol: 'circle',

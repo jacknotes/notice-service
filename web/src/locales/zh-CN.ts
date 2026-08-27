@@ -154,6 +154,7 @@ const zhCN = {
     near30: '近 30 天',
     statusMix: '状态分布',
     trendTitle: '发送趋势',
+    emptyTrend: '暂无趋势数据',
     topTasks: 'TOP 任务',
     channelMix: '渠道分布',
     taskFallback: '任务 #{id}',

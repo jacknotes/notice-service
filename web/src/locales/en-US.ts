@@ -161,6 +161,7 @@ const enUS: EnMessages = {
     near30: 'Last 30 days',
     statusMix: 'Status Mix',
     trendTitle: 'Send Trend',
+    emptyTrend: 'No trend data',
     topTasks: 'Top Tasks',
     channelMix: 'Channel Mix',
     taskFallback: 'Task #{id}',
