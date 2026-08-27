@@ -3,10 +3,10 @@
     <div class="page-head">
       <div>
         <div class="title-row">
-          <h1 class="grad-text">模板管理</h1>
-          <el-tag v-if="!isAdmin" type="info" effect="plain" size="small">只读模式</el-tag>
+          <h1 class="grad-text">{{ t('nav.templates') }}</h1>
+          <el-tag v-if="!isAdmin" type="info" effect="plain" size="small">{{ t('common.readOnlyMode') }}</el-tag>
         </div>
-        <p class="sub">维护通知模板：标题、Markdown 正文与可注入变量</p>
+        <p class="sub">{{ t('templates.subtitle') }}</p>
       </div>
       <div class="actions">
         <el-input
@@ -14,7 +14,7 @@
           class="search-input"
           clearable
           :prefix-icon="Search"
-          placeholder="搜索名称或标题…"
+          :placeholder="t('templates.searchPlaceholder')"
         />
         <el-button
           v-if="isAdmin"
@@ -24,9 +24,9 @@
           :disabled="!selectedRows.length"
           @click="batchDelete"
         >
-          批量删除
+          {{ t('common.batchDelete') }}
         </el-button>
-        <el-button v-if="isAdmin" type="primary" :icon="Plus" @click="openCreate">新建模板</el-button>
+        <el-button v-if="isAdmin" type="primary" :icon="Plus" @click="openCreate">{{ t('templates.createTitle') }}</el-button>
       </div>
     </div>
 
@@ -35,7 +35,7 @@
         ref="tableRef"
         :data="paged"
         style="width: 100%"
-        empty-text="暂无模板，点击右上角「新建模板」开始"
+        :empty-text="t('templates.emptyTable')"
         @selection-change="onSelectionChange"
         @sort-change="onSortChange"
       >
@@ -46,37 +46,37 @@
           </template>
         </el-table-column>
 
-        <el-table-column prop="name" label="名称" min-width="170" sortable="custom">
+        <el-table-column prop="name" :label="t('common.name')" min-width="170" sortable="custom">
           <template #default="{ row }">
             <span class="tpl-name">{{ row.name }}</span>
           </template>
         </el-table-column>
 
-        <el-table-column prop="subject" label="标题" min-width="220" show-overflow-tooltip sortable="custom">
+        <el-table-column prop="subject" :label="t('templates.subject')" min-width="220" show-overflow-tooltip sortable="custom">
           <template #default="{ row }">
             <span class="subject-cell">{{ row.subject || '—' }}</span>
           </template>
         </el-table-column>
 
-        <el-table-column label="变量" width="140" align="center">
+        <el-table-column :label="t('templates.variables')" width="140" align="center">
           <template #default="{ row }">
-            <span v-if="(row.variables || []).length" class="mono var-count">{{ row.variables.length }} 个</span>
+            <span v-if="(row.variables || []).length" class="mono var-count">{{ t('templates.varCount', { n: row.variables.length }) }}</span>
             <span v-else class="text-muted">—</span>
           </template>
         </el-table-column>
 
-        <el-table-column label="更新时间" min-width="150" sortable="custom" prop="updated_at">
+        <el-table-column :label="t('templates.updatedAt')" min-width="150" sortable="custom" prop="updated_at">
           <template #default="{ row }">
             <span class="mono time-cell">{{ row.updated_at || '—' }}</span>
           </template>
         </el-table-column>
 
-        <el-table-column label="操作" width="190" align="center" fixed="right">
+        <el-table-column :label="t('common.action')" width="190" align="center" fixed="right">
           <template #default="{ row }">
             <template v-if="isAdmin">
-              <el-button link type="primary" size="small" @click="openEdit(row)">编辑</el-button>
-              <el-button link type="success" size="small" @click="duplicateTemplate(row)">复制</el-button>
-              <el-button link type="danger" size="small" @click="removeTemplate(row)">删除</el-button>
+              <el-button link type="primary" size="small" @click="openEdit(row)">{{ t('common.edit') }}</el-button>
+              <el-button link type="success" size="small" @click="duplicateTemplate(row)">{{ t('templates.duplicateAction') }}</el-button>
+              <el-button link type="danger" size="small" @click="removeTemplate(row)">{{ t('common.delete') }}</el-button>
             </template>
             <span v-else class="text-muted">—</span>
           </template>
@@ -99,7 +99,7 @@
     <!-- ── Create / Edit dialog ─────────────────────────────────────── -->
     <el-dialog
       v-model="dialogVisible"
-      :title="form.id ? '编辑模板' : '新建模板'"
+      :title="form.id ? t('templates.editTitle') : t('templates.createTitle')"
       width="900px"
       top="4vh"
       :close-on-click-modal="false"
@@ -108,25 +108,25 @@
       <div class="tpl-split">
         <!-- Left: form -->
         <el-form ref="formRef" :model="form" :rules="rules" label-position="top" class="tpl-form">
-          <el-form-item label="名称" prop="name">
-            <el-input v-model="form.name" placeholder="给模板起个易记的名字" />
+          <el-form-item :label="t('common.name')" prop="name">
+            <el-input v-model="form.name" :placeholder="t('templates.namePlaceholder')" />
           </el-form-item>
 
-          <el-form-item label="标题" prop="subject">
-            <el-input v-model="form.subject" :placeholder="SUBJECT_PLACEHOLDER" />
-            <div class="field-hint mono">{{ VAR_HINT }}</div>
+          <el-form-item :label="t('templates.subject')" prop="subject">
+            <el-input v-model="form.subject" :placeholder="t('templates.subjectPlaceholder')" />
+            <div class="field-hint mono">{{ t('templates.varHint') }}</div>
           </el-form-item>
 
-          <el-form-item label="内容（Markdown）" prop="content_md">
+          <el-form-item :label="t('templates.content')" prop="content_md">
             <el-input
               v-model="form.content_md"
               type="textarea"
               :rows="10"
-              :placeholder="CONTENT_PLACEHOLDER"
+              :placeholder="t('templates.contentPlaceholder')"
             />
           </el-form-item>
 
-          <el-form-item label="变量">
+          <el-form-item :label="t('templates.variables')">
             <div class="var-editor">
               <div
                 v-for="(v, i) in form.variables"
@@ -135,12 +135,12 @@
               >
                 <el-input
                   v-model="v.name"
-                  placeholder="变量名，如 username"
+                  :placeholder="t('templates.varNamePlaceholder')"
                   class="grow mono"
                 />
                 <el-input
                   v-model="v.default"
-                  placeholder="默认值"
+                  :placeholder="t('templates.varDefaultPlaceholder')"
                   class="grow-2"
                   @input="onVarEdit"
                 />
@@ -151,7 +151,7 @@
                   @click="removeVar(i)"
                 />
               </div>
-              <el-button class="add-var" text :icon="Plus" @click="addVar">添加变量</el-button>
+              <el-button class="add-var" text :icon="Plus" @click="addVar">{{ t('templates.addVar') }}</el-button>
             </div>
           </el-form-item>
         </el-form>
@@ -160,7 +160,7 @@
         <div class="tpl-preview">
           <div class="preview-head">
             <div>
-              <h3>实时预览</h3>
+              <h3>{{ t('templates.livePreview') }}</h3>
               <span class="preview-sub mono">LIVE RENDER</span>
             </div>
             <el-button
@@ -169,12 +169,12 @@
               :loading="previewing"
               @click="useServerPreview"
             >
-              使用当前值预览
+              {{ t('templates.renderWithValues') }}
             </el-button>
           </div>
           <div v-loading="previewing" class="preview-body">
             <MarkdownPreview :content="previewMarkdown" />
-            <div v-if="!previewMarkdown" class="preview-empty">输入标题与内容后，这里会实时渲染 Markdown 效果</div>
+            <div v-if="!previewMarkdown" class="preview-empty">{{ t('templates.previewEmpty') }}</div>
           </div>
         </div>
       </div>
@@ -182,9 +182,9 @@
       <template #footer>
         <div class="dialog-footer">
           <span class="footer-grow"></span>
-          <el-button @click="dialogVisible = false">取消</el-button>
+          <el-button @click="dialogVisible = false">{{ t('common.cancel') }}</el-button>
           <el-button type="primary" :loading="saving" @click="saveTemplate">
-            {{ form.id ? '保存' : '创建' }}
+            {{ form.id ? t('common.save') : t('common.create') }}
           </el-button>
         </div>
       </template>
@@ -197,10 +197,13 @@ import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { FormInstance, FormRules, TableInstance } from 'element-plus'
 import { Plus, Delete, View, Search } from '@element-plus/icons-vue'
+import { useI18n } from 'vue-i18n'
 import { templateApi } from '@/api'
 import MarkdownPreview from '@/components/MarkdownPreview.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useTablePaging } from '@/composables/useTablePaging'
+
+const { t } = useI18n()
 
 interface TemplateVar { name: string; default: string }
 interface TemplateRow {
@@ -213,11 +216,7 @@ interface TemplateRow {
   updated_at?: string
 }
 
-// Literals containing `{{` must live in JS, not the template (Vue interpolation).
-const VAR_HINT = '{{变量}} 会在发送时被替换'
-const SUBJECT_PLACEHOLDER = '邮件 / 卡片标题，支持 {{变量}}'
-const CONTENT_PLACEHOLDER =
-  '支持 Markdown 语法，例如：\n## 标题\n**加粗** / `代码` / > 引用\n正文… 变量用 {{变量名}} 表示'
+// 含 {{ 的占位/提示文案改存 locale（templates.subjectPlaceholder 等），经 vue-i18n 转义后输出。
 
 const auth = useAuthStore()
 const isAdmin = computed(() => auth.user?.role === 'admin')
@@ -265,11 +264,12 @@ const form = reactive<{
   variables: [],
 })
 
-const rules: FormRules = {
-  name: [{ required: true, message: '请输入模板名称', trigger: 'blur' }],
-  subject: [{ required: true, message: '请输入标题', trigger: 'blur' }],
-  content_md: [{ required: true, message: '请输入内容', trigger: 'blur' }],
-}
+// 校验消息随语言切换（与 Login 的 computed 规则同一约定）
+const rules = computed<FormRules>(() => ({
+  name: [{ required: true, message: t('templates.nameRequired'), trigger: 'blur' }],
+  subject: [{ required: true, message: t('templates.subjectRequired'), trigger: 'blur' }],
+  content_md: [{ required: true, message: t('templates.contentRequired'), trigger: 'blur' }],
+}))
 
 /* ── Preview state ─────────────────────────────────────────────────── */
 // Server-rendered preview (variables substituted) overrides the live one.
@@ -299,7 +299,7 @@ async function load() {
   try {
     templates.value = await templateApi.list()
   } catch (e: any) {
-    ElMessage.error(errMsg(e, '模板列表加载失败'))
+    ElMessage.error(errMsg(e, t('templates.loadFailed')))
   } finally {
     loading.value = false
   }
@@ -326,10 +326,10 @@ function openEdit(row: TemplateRow) {
   dialogVisible.value = true
 }
 
-// 复制模板：打开「新建模板」并预填源模板内容（名称加「（副本）」），id=0 走创建路径。
+// 复制模板：打开「新建模板」并预填源模板内容（名称加副本后缀），id=0 走创建路径。
 function duplicateTemplate(row: TemplateRow) {
   form.id = 0
-  form.name = `${row.name}（副本）`
+  form.name = `${row.name}${t('common.copySuffix')}`
   form.subject = row.subject
   form.content_md = row.content_md
   form.variables = (row.variables || []).map((v) => ({ name: v.name, default: v.default ?? '' }))
@@ -363,15 +363,15 @@ async function saveTemplate() {
 
     if (form.id) {
       await templateApi.update(form.id, payload)
-      ElMessage.success('模板已更新')
+      ElMessage.success(t('templates.updatedOk'))
     } else {
       await templateApi.create(payload)
-      ElMessage.success('模板已创建')
+      ElMessage.success(t('templates.createdOk'))
     }
     dialogVisible.value = false
     await load()
   } catch (e: any) {
-    ElMessage.error(errMsg(e, '保存失败'))
+    ElMessage.error(errMsg(e, t('common.saveFailed')))
   } finally {
     saving.value = false
   }
@@ -392,9 +392,9 @@ async function useServerPreview() {
       variables: vars,
     })
     serverPreview.value = { subject: res?.subject ?? form.subject, content: res?.content ?? form.content_md }
-    ElMessage.success('已按当前变量值渲染')
+    ElMessage.success(t('templates.renderOk'))
   } catch (e: any) {
-    ElMessage.error(errMsg(e, '预览生成失败'))
+    ElMessage.error(errMsg(e, t('templates.previewFailed')))
   } finally {
     previewing.value = false
   }
@@ -404,19 +404,19 @@ async function useServerPreview() {
 async function removeTemplate(row: TemplateRow) {
   try {
     await ElMessageBox.confirm(
-      `确定删除模板「${row.name}」吗？删除后不可恢复。`,
-      '删除模板',
-      { confirmButtonText: '删除', cancelButtonText: '取消', type: 'warning' }
+      t('templates.deleteConfirmMsg', { name: row.name }),
+      t('templates.deleteConfirmTitle'),
+      { confirmButtonText: t('common.delete'), cancelButtonText: t('common.cancel'), type: 'warning' }
     )
   } catch {
     return
   }
   try {
     await templateApi.remove(row.id)
-    ElMessage.success('模板已删除')
+    ElMessage.success(t('templates.deletedOk'))
     await load()
   } catch (e: any) {
-    ElMessage.error(errMsg(e, '删除失败'))
+    ElMessage.error(errMsg(e, t('common.deleteFailed')))
   }
 }
 
@@ -426,20 +426,20 @@ async function batchDelete() {
   if (!rows.length) return
   try {
     await ElMessageBox.confirm(
-      `确认删除选中的 ${rows.length} 项？`,
-      '批量删除',
-      { confirmButtonText: '删除', cancelButtonText: '取消', type: 'warning' }
+      t('common.batchDeleteConfirmMsg', { n: rows.length }),
+      t('common.batchDelete'),
+      { confirmButtonText: t('common.delete'), cancelButtonText: t('common.cancel'), type: 'warning' }
     )
   } catch {
     return
   }
   try {
     await templateApi.batchRemove(rows.map((r) => r.id))
-    ElMessage.success(`已删除 ${rows.length} 个模板`)
+    ElMessage.success(t('templates.batchDeletedOk', { n: rows.length }))
     tableRef.value?.clearSelection()
     await load()
   } catch (e: any) {
-    ElMessage.error(errMsg(e, '批量删除失败'))
+    ElMessage.error(errMsg(e, t('common.batchDeleteFailed')))
   }
 }
 
