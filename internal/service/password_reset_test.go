@@ -45,7 +45,7 @@ func TestPasswordResetFlow(t *testing.T) {
 		t.Fatal("consumed token should fail")
 	}
 	// 新密码可登录
-	if _, err := authSvc.Login(u.Username, "Newpass123!x"); err != nil {
+	if _, err := authSvc.Login(u.Username, "Newpass123!x", svcTestIP); err != nil {
 		t.Fatalf("login with new password: %v", err)
 	}
 }
@@ -65,12 +65,12 @@ func TestLoginRateLimit(t *testing.T) {
 	}
 
 	for i := 0; i < 3; i++ {
-		if _, err := authSvc.Login(u.Username, "wrong"); err == nil {
+		if _, err := authSvc.Login(u.Username, "wrong", svcTestIP); err == nil {
 			t.Fatal("wrong password should fail")
 		}
 	}
 	// 达到上限后即使密码正确也被锁定
-	if _, err := authSvc.Login(u.Username, "Oldpass123!x"); err == nil {
+	if _, err := authSvc.Login(u.Username, "Oldpass123!x", svcTestIP); err == nil {
 		t.Fatal("should be locked after too many failures")
 	}
 	// 正确的登录应能解除锁定（换个未锁定的用户）
@@ -79,7 +79,7 @@ func TestLoginRateLimit(t *testing.T) {
 		t.Fatal(err)
 	}
 	ou, _ := authSvc.users.GetByID(other)
-	if _, err := authSvc.Login(ou.Username, "Other123!x"); err != nil {
+	if _, err := authSvc.Login(ou.Username, "Other123!x", svcTestIP); err != nil {
 		t.Fatalf("unrelated user should login fine: %v", err)
 	}
 }

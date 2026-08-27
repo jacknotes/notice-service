@@ -52,7 +52,7 @@ func TestForce2FA(t *testing.T) {
 	}
 
 	// 启用后登录需要第二步
-	res, err := authSvc.Login(u.Username, "Pass1234!x")
+	res, err := authSvc.Login(u.Username, "Pass1234!x", svcTestIP)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -60,7 +60,7 @@ func TestForce2FA(t *testing.T) {
 		t.Fatal("login should require 2FA after force enable")
 	}
 	// 用备用码可完成登录
-	if _, _, err := authSvc.Verify2FA(res.PendingToken, codes[0]); err != nil {
+	if _, _, err := authSvc.Verify2FA(res.PendingToken, codes[0], svcTestIP); err != nil {
 		t.Fatalf("recovery code login should work: %v", err)
 	}
 
@@ -72,7 +72,7 @@ func TestForce2FA(t *testing.T) {
 	if u.TOTPEnabled {
 		t.Fatal("2FA should be disabled after force disable")
 	}
-	res2, err := authSvc.Login(u.Username, "Pass1234!x")
+	res2, err := authSvc.Login(u.Username, "Pass1234!x", svcTestIP)
 	if err != nil {
 		t.Fatal(err)
 	}

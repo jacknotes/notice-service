@@ -36,7 +36,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "请输入用户名和密码"})
 		return
 	}
-	res, err := h.Svc.Login(req.Username, req.Password)
+	res, err := h.Svc.Login(req.Username, req.Password, c.ClientIP())
 	if err != nil {
 		auditActor(h.db, 0, req.Username, c.ClientIP(), "login.failed", "登录失败")
 		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
@@ -131,7 +131,7 @@ func (h *AuthHandler) Verify2FA(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "参数错误"})
 		return
 	}
-	token, user, err := h.Svc.Verify2FA(req.Token, req.Code)
+	token, user, err := h.Svc.Verify2FA(req.Token, req.Code, c.ClientIP())
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
 		return

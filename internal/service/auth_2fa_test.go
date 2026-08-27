@@ -50,13 +50,13 @@ func Test2FALifecycle(t *testing.T) {
 	}
 
 	// 4) 启用后登录第一步返回待验证令牌
-	res, err := authSvc.Login(u.Username, "wrongpass")
+	res, err := authSvc.Login(u.Username, "wrongpass", svcTestIP)
 	if err == nil {
 		t.Fatal("wrong password should fail")
 	}
 	// 直接重置密码便于登录（绕过密码强度/初始密码）
 	_ = authSvc.users.UpdatePassword(uid, hashOf("Pass1234!x"))
-	res, err = authSvc.Login(u.Username, "Pass1234!x")
+	res, err = authSvc.Login(u.Username, "Pass1234!x", svcTestIP)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -65,12 +65,12 @@ func Test2FALifecycle(t *testing.T) {
 	}
 
 	// 5) 第二步：错误验证码拒绝
-	if _, _, err := authSvc.Verify2FA(res.PendingToken, "000000"); err == nil {
+	if _, _, err := authSvc.Verify2FA(res.PendingToken, "000000", svcTestIP); err == nil {
 		t.Fatal("wrong 2FA code should be rejected")
 	}
 
 	// 6) 正确 TOTP → 完整 JWT
-	tok, _, err := authSvc.Verify2FA(res.PendingToken, totp.GenerateCode(secret))
+	tok, _, err := authSvc.Verify2FA(res.PendingToken, totp.GenerateCode(secret), svcTestIP)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -79,12 +79,12 @@ func Test2FALifecycle(t *testing.T) {
 	}
 
 	// 7) 备用码登录：再次登录拿待验证令牌，用备用码验证并消费
-	res2, err := authSvc.Login(u.Username, "Pass1234!x")
+	res2, err := authSvc.Login(u.Username, "Pass1234!x", svcTestIP)
 	if err != nil {
 		t.Fatal(err)
 	}
 	recovery := codes[2]
-	if _, _, err := authSvc.Verify2FA(res2.PendingToken, recovery); err != nil {
+	if _, _, err := authSvc.Verify2FA(res2.PendingToken, recovery, svcTestIP); err != nil {
 		t.Fatalf("recovery code should work: %v", err)
 	}
 	// 消费后该备用码不能再用于任何地方
@@ -105,7 +105,7 @@ func Test2FALifecycle(t *testing.T) {
 		t.Fatal("2FA should be disabled now")
 	}
 	// 关闭后登录直接返回完整令牌
-	res3, err := authSvc.Login(u.Username, "Pass1234!x")
+	res3, err := authSvc.Login(u.Username, "Pass1234!x", svcTestIP)
 	if err != nil {
 		t.Fatal(err)
 	}

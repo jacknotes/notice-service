@@ -62,3 +62,6 @@ func seedServiceTaskFull(t *testing.T, db *sql.DB, uid, chID, tplID int64, recei
 	t.Cleanup(func() { db.Exec("DELETE FROM tasks WHERE id=?", id) })
 	return id
 }
+
+// svcTestIP 服务层登录/2FA 限流测试的统一来源 IP（TEST-NET-3 文档段）。
+const svcTestIP = "203.0.113.10"

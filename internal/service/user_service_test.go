@@ -171,7 +171,7 @@ func TestUserServiceDisableEnable(t *testing.T) {
 	if err := svc.DisableUser(op, normal.ID); err != nil {
 		t.Fatalf("disable normal user: %v", err)
 	}
-	if _, err := auth.Login(normal.Username, "TestPass123!"); err == nil || !strings.Contains(err.Error(), "账号已被禁用") {
+	if _, err := auth.Login(normal.Username, "TestPass123!", svcTestIP); err == nil || !strings.Contains(err.Error(), "账号已被禁用") {
 		t.Fatalf("disabled user should not login, got %v", err)
 	}
 	if auth.UserActive(normal.ID) {
@@ -181,7 +181,7 @@ func TestUserServiceDisableEnable(t *testing.T) {
 	if err := svc.EnableUser(op, normal.ID); err != nil {
 		t.Fatalf("enable user: %v", err)
 	}
-	if _, err := auth.Login(normal.Username, "TestPass123!"); err != nil {
+	if _, err := auth.Login(normal.Username, "TestPass123!", svcTestIP); err != nil {
 		t.Fatalf("enabled user should login, got %v", err)
 	}
 
@@ -301,10 +301,10 @@ func TestUserServiceUpdate(t *testing.T) {
 	if err := svc.Update(adminOp.ID, "admin", normal.ID, nil, strPtr("Newpass456!x"), nil, nil); err != nil {
 		t.Fatalf("reset password: %v", err)
 	}
-	if _, err := auth.Login(normal.Username, "TestPass123!"); err == nil {
+	if _, err := auth.Login(normal.Username, "TestPass123!", svcTestIP); err == nil {
 		t.Error("old password should no longer work")
 	}
-	if _, err := auth.Login(normal.Username, "Newpass456!x"); err != nil {
+	if _, err := auth.Login(normal.Username, "Newpass456!x", svcTestIP); err != nil {
 		t.Error("new password should work")
 	}
 
@@ -354,7 +354,7 @@ func TestUserServiceDefaultAdminProtected(t *testing.T) {
 	if got.Role != "admin" {
 		t.Fatalf("builtin admin role changed to %q", got.Role)
 	}
-	if _, err := auth.Login("admin", "admin123"); err != nil {
+	if _, err := auth.Login("admin", "admin123", svcTestIP); err != nil {
 		t.Fatalf("builtin admin should still log in with original password: %v", err)
 	}
 

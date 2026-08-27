@@ -187,10 +187,19 @@ type LoginResult struct {
 	PendingToken string
 }
 
-func (s *AuthService) Login(username, password string) (*LoginResult, error) {
+// loginBucket 登录限流复合桶：username + client IP 双维度。
+// 仅按 username 计数时，任何知道用户名的人都能把该账号锁到无法登录
+// （拒绝服务：5 次错误即锁 15 分钟且可无限续锁）；叠加 IP 后攻击者只能
+// 锁住「自己 IP → 该账号」这一条路径，受害者本人不受影响。单一 IP 的
+// 爆破面仍由 maxFails/lockWindow 完整约束。
+func (s *AuthService) loginBucket(username, ip string) string {
+	return "login:" + username + "|" + ip
+}
+
+func (s *AuthService) Login(username, password, ip string) (*LoginResult, error) {
 	username = strings.TrimSpace(username) // 忽略首尾空格
 	password = strings.TrimSpace(password)
-	bucket := "login:" + username
+	bucket := s.loginBucket(username, ip)
 	// 锁定判定：DB 集中式（多实例共享）。DB 故障时 fail-open（登录本身依赖 DB）。
 	locked, err := s.rateLimit.LoginLocked(bucket)
 	if err != nil {
@@ -288,7 +297,9 @@ func (s *AuthService) Disable2FA(userID int64, code string) error {
 
 // Verify2FA 登录第二步：校验动态码或备用码，成功返回完整 JWT。
 // 使用备用码登录时该备用码被消费（从列表中移除）。
-func (s *AuthService) Verify2FA(pendingToken, code string) (string, *model.User, error) {
+// 失败计入与密码登录相同的复合限流桶（username+IP）：公开接口 + 无 bcrypt
+// 类慢函数兜底，不限流则持有 pending token（5 分钟 TTL）者可高速爆破 TOTP。
+func (s *AuthService) Verify2FA(pendingToken, code, ip string) (string, *model.User, error) {
 	uid, err := s.VerifyPending2FAToken(pendingToken)
 	if err != nil {
 		return "", nil, err
@@ -297,16 +308,24 @@ func (s *AuthService) Verify2FA(pendingToken, code string) (string, *model.User,
 	if err != nil || !u.TOTPEnabled {
 		return "", nil, errors.New("用户不存在或未启用双因子认证")
 	}
+	bucket := s.loginBucket(u.Username, ip)
+	if locked, err := s.rateLimit.LoginLocked(bucket); err != nil {
+		log.Printf("auth: rate limit check failed: %v", err)
+	} else if locked {
+		return "", nil, errors.New("登录失败次数过多，请稍后再试")
+	}
 	if !totp.Validate(code, u.TOTPSecret) {
 		// 备用码：命中则消费并从列表移除
 		idx := s.matchRecovery(u, code)
 		if idx < 0 {
+			_ = s.rateLimit.RecordLoginFailure(bucket, s.maxFails, s.lockWindow)
 			return "", nil, errors.New("验证码不正确")
 		}
 		if err := s.consumeRecovery(uid, idx); err != nil {
 			return "", nil, errors.New("备用码校验失败，请重试")
 		}
 	}
+	_ = s.rateLimit.Reset(bucket)
 	tok, err := s.IssueToken(u.ID, u.Role)
 	if err != nil {
 		return "", nil, err
