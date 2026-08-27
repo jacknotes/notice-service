@@ -547,6 +547,7 @@ const enUS: EnMessages = {
     importJoin: ', ',
   },
   login: {
+    pageTitle: 'Sign In',
     username: 'Username',
     password: 'Password',
     usernamePlaceholder: 'Enter username',

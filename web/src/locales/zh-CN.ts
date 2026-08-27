@@ -540,6 +540,7 @@ const zhCN = {
     },
   },
   login: {
+    pageTitle: '用户登录',
     username: '用户名',
     password: '密码',
     usernamePlaceholder: '请输入用户名',

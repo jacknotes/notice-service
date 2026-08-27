@@ -5,7 +5,7 @@ import { i18n } from '@/i18n'
 const router = createRouter({
   history: createWebHistory(),
   routes: [
-    { path: '/login', component: () => import('@/views/Login.vue'), meta: { public: true, titleKey: 'nav.dashboard' } },
+    { path: '/login', component: () => import('@/views/Login.vue'), meta: { public: true, titleKey: 'login.pageTitle' } },
     {
       path: '/',
       component: () => import('@/components/AppLayout.vue'),

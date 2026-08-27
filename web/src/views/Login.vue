@@ -2,13 +2,27 @@
   <div class="login-wrap">
     <div class="login-glow"></div>
 
-    <button
-      class="theme-toggle"
-      :aria-label="theme === 'dark' ? t('common.switchToDay') : t('common.switchToNight')"
-      @click="toggleTheme"
-    >
-      <el-icon :size="18"><component :is="theme === 'dark' ? Sunny : Moon" /></el-icon>
-    </button>
+    <div class="corner-actions">
+      <el-dropdown trigger="click" @command="(cmd: any) => setLocale(cmd as SupportedLocale)">
+        <button class="corner-toggle" :aria-label="t('appShell.switchLang')">
+          <el-icon :size="18"><Switch /></el-icon>
+        </button>
+        <template #dropdown>
+          <el-dropdown-menu>
+            <el-dropdown-item command="zh-CN">{{ t('appShell.languageZh') }}</el-dropdown-item>
+            <el-dropdown-item command="en-US">{{ t('appShell.languageEn') }}</el-dropdown-item>
+          </el-dropdown-menu>
+        </template>
+      </el-dropdown>
+
+      <button
+        class="corner-toggle"
+        :aria-label="theme === 'dark' ? t('common.switchToDay') : t('common.switchToNight')"
+        @click="toggleTheme"
+      >
+        <el-icon :size="18"><component :is="theme === 'dark' ? Sunny : Moon" /></el-icon>
+      </button>
+    </div>
 
     <div class="login-card reveal">
       <div class="brand">
@@ -140,9 +154,10 @@ import { computed, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
-import { User, Lock, WarningFilled, Sunny, Moon, Key } from '@element-plus/icons-vue'
+import { User, Lock, WarningFilled, Sunny, Moon, Key, Switch } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 import { theme, toggleTheme } from '@/composables/useTheme'
+import { setLocale, type SupportedLocale } from '@/i18n/locale'
 import { authApi } from '@/api'
 
 const router = useRouter()
@@ -300,12 +315,17 @@ async function submitForgot() {
   filter: blur(2px);
 }
 
-/* day / night toggle — pinned to the top-right corner */
-.theme-toggle {
+/* top-right corner actions（语言切换 + 日夜切换）— pinned together */
+.corner-actions {
   position: absolute;
   top: var(--space-5);
   right: var(--space-5);
   z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.corner-toggle {
   display: grid;
   place-items: center;
   width: 38px;
@@ -322,11 +342,17 @@ async function submitForgot() {
               box-shadow var(--dur-fast) var(--ease-out),
               transform var(--dur-fast) var(--ease-out);
 }
-.theme-toggle:hover {
-  color: var(--amber-400);
+.corner-toggle:hover {
   border-color: var(--border-accent);
   box-shadow: var(--shadow-glow);
   transform: translateY(-1px);
+}
+/* DOM：语言按钮被 el-dropdown 包裹，日夜按钮是容器直接子级 —— 用结构区分 hover 色 */
+.el-dropdown .corner-toggle:hover {
+  color: var(--indigo-400); /* 语言切换 */
+}
+.corner-actions > .corner-toggle:hover {
+  color: var(--amber-400); /* 日/夜切换，与原 theme-toggle 一致 */
 }
 
 /* soften the glow in daylight mode */
