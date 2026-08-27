@@ -4,6 +4,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import DOMPurify from 'dompurify'
 import { marked } from 'marked'
 
 const props = defineProps<{ content: string }>()
@@ -23,7 +24,11 @@ function highlight(raw: string): string {
   })
 }
 
-const html = computed<string>(() => marked.parse(highlight(props.content)) as string)
+// marked 不做 URL/属性白名单（官方要求外挂 sanitizer）：预转义挡不住
+// [x](javascript:…) 这类不含尖括号的向量，输出必须再过一遍 DOMPurify。
+const html = computed<string>(() =>
+  DOMPurify.sanitize(marked.parse(highlight(props.content)) as string)
+)
 </script>
 
 <style scoped>

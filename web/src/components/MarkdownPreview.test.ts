@@ -25,6 +25,24 @@ describe('MarkdownPreview', () => {
     expect(w.find('script').exists()).toBe(false)
   })
 
+  it('javascript: / data: 协议链接被 DOMPurify 剥离 href（XSS 回归）', () => {
+    const w = mount(MarkdownPreview, {
+      props: { content: '[点我](javascript:alert(document.cookie))\n[a](data:text/html;base64,PHNjcmlwdD4=)' },
+    })
+    const hrefs = w.findAll('a').map((a) => a.attributes('href') || '')
+    expect(hrefs.length).toBeGreaterThanOrEqual(2)
+    for (const h of hrefs) {
+      expect(h).not.toMatch(/^\s*(javascript|data):/i)
+    }
+  })
+
+  it('正常 https 链接在消毒后保留可点击', () => {
+    const w = mount(MarkdownPreview, { props: { content: '[官网](https://example.com)' } })
+    const a = w.find('a')
+    expect(a.exists()).toBe(true)
+    expect(a.attributes('href')).toBe('https://example.com')
+  })
+
   it('空内容渲染为空（不报错）', () => {
     const w = mount(MarkdownPreview, { props: { content: '' } })
     expect(w.exists()).toBe(true)
