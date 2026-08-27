@@ -19,7 +19,7 @@
       <el-menu router :default-active="route.path" class="side-menu">
         <el-menu-item v-for="item in visibleNavItems" :key="item.path" :index="item.path">
           <el-icon><component :is="item.icon" /></el-icon>
-          <span v-if="!collapsed">{{ item.label }}</span>
+          <span v-if="!collapsed">{{ t(item.labelKey) }}</span>
         </el-menu-item>
       </el-menu>
 
@@ -35,7 +35,7 @@
           <button
             class="collapse-btn"
             :class="{ 'is-collapsed': collapsed }"
-            :aria-label="collapsed ? '展开侧边栏' : '收起侧边栏'"
+            :aria-label="collapsed ? t('appShell.expandSidebar') : t('appShell.collapseSidebar')"
             @click="toggleCollapsed"
           >
             <el-icon :size="17"><component :is="collapsed ? Expand : Fold" /></el-icon>
@@ -48,19 +48,31 @@
 
         <div class="topbar-right">
           <el-tooltip
-            :content="theme === 'dark' ? '切换到白天模式' : '切换到夜晚模式'"
+            :content="theme === 'dark' ? t('common.switchToDay') : t('common.switchToNight')"
             placement="bottom"
             :show-after="320"
           >
             <button
               class="theme-btn"
               :class="{ 'is-light': theme === 'light' }"
-              :aria-label="theme === 'dark' ? '切换到白天模式' : '切换到夜晚模式'"
+              :aria-label="theme === 'dark' ? t('common.switchToDay') : t('common.switchToNight')"
               @click="toggleTheme"
             >
               <el-icon :size="18"><component :is="theme === 'dark' ? Sunny : Moon" /></el-icon>
             </button>
           </el-tooltip>
+
+          <el-dropdown trigger="click" @command="(cmd: any) => setLocale(cmd as SupportedLocale)">
+            <button class="theme-btn lang-btn" :aria-label="t('appShell.switchLang')">
+              <el-icon :size="18"><Switch /></el-icon>
+            </button>
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item command="zh-CN">{{ t('appShell.languageZh') }}</el-dropdown-item>
+                <el-dropdown-item command="en-US">{{ t('appShell.languageEn') }}</el-dropdown-item>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
 
           <el-dropdown trigger="click" @command="onCommand">
             <div class="user-chip">
@@ -74,13 +86,13 @@
                   <span class="role-tag">{{ roleLabel }}</span>
                 </el-dropdown-item>
                 <el-dropdown-item command="swagger">
-                  <el-icon><Document /></el-icon>API 文档
+                  <el-icon><Document /></el-icon>{{ t('appShell.apiDocs') }}
                 </el-dropdown-item>
                 <el-dropdown-item command="settings">
-                  <el-icon><Setting /></el-icon>个人设置
+                  <el-icon><Setting /></el-icon>{{ t('appShell.settings') }}
                 </el-dropdown-item>
                 <el-dropdown-item command="logout" divided>
-                  <el-icon><SwitchButton /></el-icon>退出登录
+                  <el-icon><SwitchButton /></el-icon>{{ t('appShell.logout') }}
                 </el-dropdown-item>
               </el-dropdown-menu>
             </template>
@@ -96,43 +108,43 @@
     <!-- ── 后端节点健康弹窗（多实例信号在线） ─────────────────────── -->
     <el-dialog
       v-model="nodesVisible"
-      title="后端节点状态"
+      :title="t('appShell.nodesTitle')"
       width="680px"
       top="8vh"
       :close-on-click-modal="true"
     >
-      <p class="nodes-hint">各后端实例周期上报心跳，超过 {{ NODE_TIMEOUT_SEC }} 秒未上报视为离线。</p>
+      <p class="nodes-hint">{{ t('appShell.nodesHint', { sec: NODE_TIMEOUT_SEC }) }}</p>
       <div v-loading="nodesLoading" class="nodes-table">
-        <el-table :data="nodes" style="width: 100%" empty-text="暂无节点信息">
-          <el-table-column label="节点 ID" min-width="180">
+        <el-table :data="nodes" style="width: 100%" :empty-text="t('appShell.nodesEmpty')">
+          <el-table-column :label="t('appShell.nodeId')" min-width="180">
             <template #default="{ row }">
               <span class="mono node-id">{{ shortID(row.instance_id) }}</span>
             </template>
           </el-table-column>
-          <el-table-column label="地址" min-width="150">
+          <el-table-column :label="t('appShell.nodeAddr')" min-width="150">
             <template #default="{ row }">
               <span class="mono node-addr">{{ row.host }}:{{ row.port }}</span>
             </template>
           </el-table-column>
-          <el-table-column label="版本" width="90">
+          <el-table-column :label="t('appShell.nodeVersion')" width="90">
             <template #default="{ row }">
               <span class="mono node-ver">{{ row.version || '—' }}</span>
             </template>
           </el-table-column>
-          <el-table-column label="启动时间" min-width="160">
+          <el-table-column :label="t('appShell.nodeStarted')" min-width="160">
             <template #default="{ row }">
               <span class="mono node-time">{{ fmtTime(row.started_at) }}</span>
             </template>
           </el-table-column>
-          <el-table-column label="最后心跳" min-width="160">
+          <el-table-column :label="t('appShell.nodeHeartbeat')" min-width="160">
             <template #default="{ row }">
               <span class="mono node-time">{{ fmtTime(row.last_seen_at) }}</span>
             </template>
           </el-table-column>
-          <el-table-column label="状态" width="90" align="center">
+          <el-table-column :label="t('appShell.nodeStatus')" width="90" align="center">
             <template #default="{ row }">
               <el-tag :type="row.healthy ? 'success' : 'danger'" effect="light" size="small">
-                {{ row.healthy ? '健康' : '离线' }}
+                {{ row.healthy ? t('appShell.healthy') : t('appShell.offline') }}
               </el-tag>
             </template>
           </el-table-column>
@@ -140,10 +152,10 @@
       </div>
       <template #footer>
         <div class="nodes-footer">
-          <span class="nodes-sum mono">健康 {{ healthyCount }} / 共 {{ nodes.length }} 节点 · 超时 {{ NODE_TIMEOUT_SEC }}s 判离线</span>
+          <span class="nodes-sum mono">{{ t('appShell.nodesSum', { healthy: healthyCount, total: nodes.length, sec: NODE_TIMEOUT_SEC }) }}</span>
           <div>
-            <el-button size="small" :loading="nodesLoading" @click="loadNodes">刷新</el-button>
-            <el-button size="small" @click="nodesVisible = false">关闭</el-button>
+            <el-button size="small" :loading="nodesLoading" @click="loadNodes">{{ t('common.refresh') }}</el-button>
+            <el-button size="small" @click="nodesVisible = false">{{ t('common.close') }}</el-button>
           </div>
         </div>
       </template>
@@ -159,7 +171,7 @@
         @click="router.push(item.path)"
       >
         <el-icon :size="18"><component :is="item.icon" /></el-icon>
-        <span>{{ item.label }}</span>
+        <span>{{ t(item.labelKey) }}</span>
       </button>
     </nav>
   </div>
@@ -172,8 +184,10 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessageBox } from 'element-plus'
 import {
   Odometer, Connection, Document, AlarmClock, MessageBox,
-  Setting, SwitchButton, User, ArrowDown, Sunny, Moon, List, Fold, Expand,
+  Setting, SwitchButton, User, ArrowDown, Sunny, Moon, List, Fold, Expand, Switch,
 } from '@element-plus/icons-vue'
+import { useI18n } from 'vue-i18n'
+import { setLocale, type SupportedLocale } from '@/i18n/locale'
 import { useAuthStore } from '@/stores/auth'
 import { theme, toggleTheme } from '@/composables/useTheme'
 import { systemApi } from '@/api'
@@ -181,6 +195,7 @@ import { systemApi } from '@/api'
 const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
+const { t } = useI18n()
 
 // 侧边栏收缩/展开（桌面端），状态持久化到 localStorage
 const collapsed = ref<boolean>(localStorage.getItem('notice.sidebar.collapsed') === '1')
@@ -191,19 +206,19 @@ function toggleCollapsed() {
 
 interface NavItem {
   path: string
-  label: string
+  labelKey: string
   icon: Component
   adminOnly?: boolean
 }
 
 const navItems: NavItem[] = [
-  { path: '/dashboard', label: '仪表盘', icon: Odometer },
-  { path: '/channels', label: '渠道管理', icon: Connection },
-  { path: '/templates', label: '模板管理', icon: Document },
-  { path: '/tasks', label: '任务管理', icon: AlarmClock },
-  { path: '/logs', label: '发送日志', icon: MessageBox },
-  { path: '/audit', label: '操作审计', icon: List, adminOnly: true },
-  { path: '/users', label: '用户管理', icon: User, adminOnly: true },
+  { path: '/dashboard', labelKey: 'nav.dashboard', icon: Odometer },
+  { path: '/channels', labelKey: 'nav.channels', icon: Connection },
+  { path: '/templates', labelKey: 'nav.templates', icon: Document },
+  { path: '/tasks', labelKey: 'nav.tasks', icon: AlarmClock },
+  { path: '/logs', labelKey: 'nav.logs', icon: MessageBox },
+  { path: '/audit', labelKey: 'nav.audit', icon: List, adminOnly: true },
+  { path: '/users', labelKey: 'nav.users', icon: User, adminOnly: true },
 ]
 
 // 用户管理仅对 admin 可见
@@ -212,7 +227,7 @@ const visibleNavItems = computed(() =>
 )
 
 const pageTitle = computed<string>(
-  () => (route.meta.title as string) || '信号中枢'
+  () => t((route.meta.titleKey as string) || 'appShell.defaultTitle')
 )
 // 显示名：优先 display_name，未设置时回退到用户名。
 const displayName = computed<string>(
@@ -225,7 +240,7 @@ const avatarLetter = computed<string>(
 const roleLabel = computed<string>(() => {
   const role = auth.user?.role
   if (!role) return '—'
-  return role === 'admin' ? '管理员' : '普通用户'
+  return role === 'admin' ? t('appShell.roleAdmin') : t('appShell.roleUser')
 })
 
 /* ── 信号在线：多后端节点健康（点击查看节点列表） ───────────────────── */
@@ -248,9 +263,9 @@ const SIGNAL_POLL_MS = 10000
 const NODE_TIMEOUT_SEC = 15 // 与后端 heartbeatHealthyWindow 一致
 
 const signalLabel = computed(() => {
-  if (signal.value === 'online') return `信号在线 · ${healthyCount.value} 节点`
-  if (signal.value === 'partial') return `部分离线 · ${healthyCount.value}/${nodes.value.length}`
-  return '信号离线'
+  if (signal.value === 'online') return t('appShell.signalOnline', { n: healthyCount.value })
+  if (signal.value === 'partial') return t('appShell.signalPartial', { healthy: healthyCount.value, total: nodes.value.length })
+  return t('appShell.signalOffline')
 })
 
 async function loadNodes() {
@@ -301,9 +316,9 @@ function onCommand(cmd: string) {
 
 async function onLogout() {
   try {
-    await ElMessageBox.confirm('确认退出当前会话？', '退出登录', {
-      confirmButtonText: '退出',
-      cancelButtonText: '取消',
+    await ElMessageBox.confirm(t('appShell.logoutConfirmMsg'), t('appShell.logoutConfirmTitle'), {
+      confirmButtonText: t('appShell.logoutOk'),
+      cancelButtonText: t('common.cancel'),
       type: 'warning',
     })
   } catch {
@@ -568,6 +583,10 @@ async function onLogout() {
 }
 .theme-btn.is-light { color: var(--indigo-500); }
 .theme-btn.is-light:hover { color: var(--indigo-500); }
+/* 语言切换按钮：沿用 theme-btn 外观，hover 跟随主题色（indigo）而非日/月切换的 amber */
+.lang-btn:hover {
+  color: var(--indigo-400);
+}
 .user-chip {
   display: flex;
   align-items: center;

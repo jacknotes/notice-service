@@ -1,24 +1,25 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { i18n } from '@/i18n'
 
 const router = createRouter({
   history: createWebHistory(),
   routes: [
-    { path: '/login', component: () => import('@/views/Login.vue'), meta: { public: true } },
+    { path: '/login', component: () => import('@/views/Login.vue'), meta: { public: true, titleKey: 'nav.dashboard' } },
     {
       path: '/',
       component: () => import('@/components/AppLayout.vue'),
       redirect: '/dashboard',
       children: [
-        { path: 'dashboard', component: () => import('@/views/Dashboard.vue'), meta: { title: '仪表盘' } },
-        { path: 'channels', component: () => import('@/views/Channels.vue'), meta: { title: '渠道管理' } },
-        { path: 'templates', component: () => import('@/views/Templates.vue'), meta: { title: '模板管理' } },
-        { path: 'tasks', component: () => import('@/views/Tasks.vue'), meta: { title: '任务管理' } },
-        { path: 'logs', component: () => import('@/views/Logs.vue'), meta: { title: '发送日志' } },
-        { path: 'logs/:id', component: () => import('@/views/LogDetail.vue'), meta: { title: '日志详情' } },
-        { path: 'audit', component: () => import('@/views/Audit.vue'), meta: { title: '操作审计', adminOnly: true } },
-        { path: 'users', component: () => import('@/views/Users.vue'), meta: { title: '用户管理', adminOnly: true } },
-        { path: 'settings', component: () => import('@/views/Settings.vue'), meta: { title: '个人设置' } },
+        { path: 'dashboard', component: () => import('@/views/Dashboard.vue'), meta: { titleKey: 'nav.dashboard' } },
+        { path: 'channels', component: () => import('@/views/Channels.vue'), meta: { titleKey: 'nav.channels' } },
+        { path: 'templates', component: () => import('@/views/Templates.vue'), meta: { titleKey: 'nav.templates' } },
+        { path: 'tasks', component: () => import('@/views/Tasks.vue'), meta: { titleKey: 'nav.tasks' } },
+        { path: 'logs', component: () => import('@/views/Logs.vue'), meta: { titleKey: 'nav.logs' } },
+        { path: 'logs/:id', component: () => import('@/views/LogDetail.vue'), meta: { titleKey: 'logs.detailTitle' } },
+        { path: 'audit', component: () => import('@/views/Audit.vue'), meta: { titleKey: 'nav.audit', adminOnly: true } },
+        { path: 'users', component: () => import('@/views/Users.vue'), meta: { titleKey: 'nav.users', adminOnly: true } },
+        { path: 'settings', component: () => import('@/views/Settings.vue'), meta: { titleKey: 'nav.settings' } },
       ],
     },
   ],
@@ -30,6 +31,11 @@ router.beforeEach((to) => {
   if (to.path === '/login' && auth.isLoggedIn) return { path: '/dashboard' }
   if (to.meta.adminOnly && auth.user?.role !== 'admin') return { path: '/dashboard' }
   return true
+})
+
+router.afterEach((to) => {
+  const key = to.meta.titleKey as string | undefined
+  if (key) document.title = i18n.global.t(key)
 })
 
 export default router
