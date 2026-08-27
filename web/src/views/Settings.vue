@@ -2,8 +2,8 @@
   <div class="page">
     <div class="page-head">
       <div>
-        <h1 class="grad-text">个人设置</h1>
-        <p class="sub">查看当前账号信息与会话</p>
+        <h1 class="grad-text">{{ t('nav.settings') }}</h1>
+        <p class="sub">{{ t('settings.subtitle') }}</p>
       </div>
     </div>
 
@@ -19,7 +19,7 @@
       <!-- ── 段 1：账户资料（显示名/邮箱行内编辑） ─────────────────── -->
       <div class="info-rows">
         <div class="info-row" :class="{ 'is-editing': editingField === 'display_name' }">
-          <span class="info-label">显示名</span>
+          <span class="info-label">{{ t('settings.displayNameLabel') }}</span>
           <template v-if="editingField === 'display_name'">
             <el-input
               v-model="editDraft"
@@ -27,23 +27,23 @@
               size="small"
               maxlength="100"
               autofocus
-              placeholder="显示名/昵称（可选）"
+              :placeholder="t('settings.displayNamePlaceholderOpt')"
               @keyup.enter="saveField"
               @keyup.esc="cancelEdit"
             />
-            <el-button type="primary" size="small" :loading="savingField" @click="saveField">保存</el-button>
-            <el-button size="small" @click="cancelEdit">取消</el-button>
+            <el-button type="primary" size="small" :loading="savingField" @click="saveField">{{ t('common.save') }}</el-button>
+            <el-button size="small" @click="cancelEdit">{{ t('common.cancel') }}</el-button>
           </template>
           <template v-else>
             <span class="info-value">{{ auth.user?.display_name?.trim() || '—' }}</span>
-            <button class="row-edit-btn" title="编辑显示名" @click="startEdit('display_name')">
+            <button class="row-edit-btn" :title="t('settings.displayNameEditTitle')" @click="startEdit('display_name')">
               <el-icon :size="13"><EditPen /></el-icon>
             </button>
           </template>
         </div>
 
         <div class="info-row" :class="{ 'is-editing': editingField === 'email' }">
-          <span class="info-label">邮箱</span>
+          <span class="info-label">{{ t('settings.emailLabel') }}</span>
           <template v-if="editingField === 'email'">
             <el-input
               v-model="editDraft"
@@ -51,32 +51,45 @@
               size="small"
               maxlength="190"
               autofocus
-              placeholder="用于接收通知的邮箱（可选）"
+              :placeholder="t('settings.emailPlaceholderOpt')"
               @keyup.enter="saveField"
               @keyup.esc="cancelEdit"
             />
-            <el-button type="primary" size="small" :loading="savingField" @click="saveField">保存</el-button>
-            <el-button size="small" @click="cancelEdit">取消</el-button>
+            <el-button type="primary" size="small" :loading="savingField" @click="saveField">{{ t('common.save') }}</el-button>
+            <el-button size="small" @click="cancelEdit">{{ t('common.cancel') }}</el-button>
           </template>
           <template v-else>
             <span class="info-value">{{ auth.user?.email?.trim() || '—' }}</span>
-            <button class="row-edit-btn" title="编辑邮箱" @click="startEdit('email')">
+            <button class="row-edit-btn" :title="t('settings.emailEditTitle')" @click="startEdit('email')">
               <el-icon :size="13"><EditPen /></el-icon>
             </button>
           </template>
         </div>
 
         <div class="info-row">
-          <span class="info-label">用户名</span>
+          <span class="info-label">{{ t('settings.usernameLabel') }}</span>
           <span class="info-value mono">{{ auth.user?.username || '—' }}</span>
         </div>
         <div class="info-row">
-          <span class="info-label">角色</span>
+          <span class="info-label">{{ t('settings.roleField') }}</span>
           <span class="info-value">{{ roleLabel }}</span>
         </div>
         <div class="info-row">
-          <span class="info-label">用户 ID</span>
+          <span class="info-label">{{ t('settings.userIdLabel') }}</span>
           <span class="info-value mono">#{{ auth.user?.id ?? '—' }}</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">{{ t('settings.interfaceLang') }}</span>
+          <el-select
+            :model-value="currentLocale()"
+            size="small"
+            style="width: 140px"
+            :aria-label="t('settings.interfaceLang')"
+            @change="(v: any) => setLocale(v as SupportedLocale)"
+          >
+            <el-option label="中文" value="zh-CN" />
+            <el-option label="English" value="en-US" />
+          </el-select>
         </div>
       </div>
 
@@ -84,16 +97,15 @@
 
       <!-- ── 段 2：双因子认证 ─────────────────────────────────────── -->
       <div class="section-head">
-        <h3>双因子认证</h3>
+        <h3>{{ t('settings.twofaTitle') }}</h3>
         <span class="pwd-sub mono">TWO-FACTOR AUTH</span>
       </div>
       <p class="twofa-desc">
-        双因子认证（TOTP）在密码之外额外要求认证器中的 6 位动态码，即使密码泄露也无法直接登录。
-        推荐使用 Google Authenticator / Microsoft Authenticator / 1Password 扫码绑定。
+        {{ t('settings.twofaDesc') }}
       </p>
       <div class="twofa-status">
         <el-tag :type="totpEnabled ? 'success' : 'info'" effect="light" size="large">
-          {{ totpEnabled ? '已开启' : '未开启' }}
+          {{ totpEnabled ? t('settings.twofaOn') : t('settings.twofaOff') }}
         </el-tag>
         <el-button
           v-if="!totpEnabled"
@@ -102,21 +114,21 @@
           :loading="settingUp"
           @click="openSetup"
         >
-          开启双因子认证
+          {{ t('settings.twofaEnableBtn') }}
         </el-button>
         <el-button v-else type="danger" plain :icon="Key" @click="disableVisible = true">
-          关闭双因子认证
+          {{ t('settings.twofaDisableBtn') }}
         </el-button>
       </div>
       <p v-if="totpEnabled" class="twofa-tip mono">
-        已启用：登录时输入密码后需再输入认证器动态码（或一次性备用码）
+        {{ t('settings.twofaEnabledTip') }}
       </p>
 
       <div class="section-divider"></div>
 
       <!-- ── 段 3：修改密码 ───────────────────────────────────────── -->
       <div class="section-head">
-        <h3>修改密码</h3>
+        <h3>{{ t('settings.passwordTitle') }}</h3>
         <span class="pwd-sub mono">ROTATE CREDENTIALS</span>
       </div>
       <el-form
@@ -127,31 +139,31 @@
         size="large"
         @submit.prevent="onChangePassword"
       >
-        <el-form-item label="原密码" prop="oldPassword">
+        <el-form-item :label="t('settings.oldPasswordField')" prop="oldPassword">
           <el-input
             v-model="pwdForm.oldPassword"
             type="password"
-            placeholder="请输入当前密码"
+            :placeholder="t('settings.oldPasswordPlaceholder')"
             :prefix-icon="Lock"
             show-password
             autocomplete="current-password"
           />
         </el-form-item>
-        <el-form-item label="新密码" prop="newPassword">
+        <el-form-item :label="t('settings.newPasswordField')" prop="newPassword">
           <el-input
             v-model="pwdForm.newPassword"
             type="password"
-            placeholder="至少 12 位，含大小写字母、数字、特殊字符"
+            :placeholder="t('settings.newPasswordPlaceholder')"
             :prefix-icon="Key"
             show-password
             autocomplete="new-password"
           />
         </el-form-item>
-        <el-form-item label="确认新密码" prop="confirmPassword">
+        <el-form-item :label="t('settings.confirmPasswordField')" prop="confirmPassword">
           <el-input
             v-model="pwdForm.confirmPassword"
             type="password"
-            placeholder="再次输入新密码"
+            :placeholder="t('settings.confirmPasswordPlaceholder')"
             :prefix-icon="Key"
             show-password
             autocomplete="new-password"
@@ -160,9 +172,9 @@
 
         <div class="actions-line">
           <el-button type="primary" :loading="pwdLoading" native-type="submit" :icon="EditPen">
-            {{ pwdLoading ? '提交中…' : '修改密码' }}
+            {{ pwdLoading ? t('settings.submittingBtn') : t('settings.changePwdBtn') }}
           </el-button>
-          <span class="hint">修改成功后需使用新密码重新登录</span>
+          <span class="hint">{{ t('settings.afterChangeHint') }}</span>
         </div>
       </el-form>
 
@@ -170,15 +182,15 @@
 
       <!-- ── 段 4：数据备份（导出/导入，仅管理员） ─────────────────── -->
       <div v-if="isAdmin" class="section-head">
-        <h3>数据备份</h3>
+        <h3>{{ t('settings.backupTitle') }}</h3>
         <span class="pwd-sub mono">BACKUP &amp; RESTORE</span>
       </div>
       <p v-if="isAdmin" class="backup-desc">
-        导出包含渠道明文配置（含 SMTP 密码等敏感信息），请妥善保管备份文件。
+        {{ t('settings.backupDesc') }}
       </p>
       <div v-if="isAdmin" class="backup-actions">
         <el-button type="primary" :icon="Download" :loading="exporting" @click="onExport">
-          导出备份
+          {{ t('settings.exportBackupBtn') }}
         </el-button>
         <el-upload
           ref="importUploadRef"
@@ -188,7 +200,7 @@
           :disabled="importing"
           :on-change="onImportFile"
         >
-          <el-button type="success" plain :icon="Upload" :loading="importing">导入备份</el-button>
+          <el-button type="success" plain :icon="Upload" :loading="importing">{{ t('settings.importBackupBtn') }}</el-button>
         </el-upload>
       </div>
     </div>
@@ -196,7 +208,7 @@
     <!-- ── 开启 2FA 向导：扫码 → 保存备用码 → 验证启用 ──────────────── -->
     <el-dialog
       v-model="setupVisible"
-      title="开启双因子认证"
+      :title="t('settings.setupDialogTitle')"
       width="540px"
       top="6vh"
       :close-on-click-modal="false"
@@ -205,14 +217,14 @@
         <div class="setup-step">
           <span class="setup-num">1</span>
           <div class="setup-content">
-            <p class="setup-title">用认证器 App 扫描二维码（或手动输入密钥）</p>
+            <p class="setup-title">{{ t('settings.setupStepScan') }}</p>
             <div class="qr-box">
-              <img v-if="qrDataUrl" :src="qrDataUrl" alt="双因子认证二维码" />
+              <img v-if="qrDataUrl" :src="qrDataUrl" :alt="t('settings.qrAlt')" />
             </div>
             <div class="secret-box">
               <code class="mono secret-value">{{ setupData.secret }}</code>
               <el-button size="small" :icon="CopyDocument" @click="copyText(setupData.secret)">
-                复制密钥
+                {{ t('settings.copySecretBtn') }}
               </el-button>
             </div>
           </div>
@@ -221,12 +233,12 @@
         <div class="setup-step">
           <span class="setup-num">2</span>
           <div class="setup-content">
-            <p class="setup-title">保存好以下一次性备用码（仅本次显示，手机丢失时用于登录）</p>
+            <p class="setup-title">{{ t('settings.setupStepCodes') }}</p>
             <div class="codes-box">
               <code v-for="c in setupData.recovery_codes" :key="c" class="mono code-item">{{ c }}</code>
             </div>
             <el-button size="small" :icon="CopyDocument" @click="copyText(setupData.recovery_codes.join('\n'))">
-              复制全部备用码
+              {{ t('settings.copyAllCodesBtn') }}
             </el-button>
           </div>
         </div>
@@ -234,16 +246,16 @@
         <div class="setup-step">
           <span class="setup-num">3</span>
           <div class="setup-content">
-            <p class="setup-title">输入认证器中的 6 位动态码以启用</p>
+            <p class="setup-title">{{ t('settings.setupStepVerify') }}</p>
             <div class="verify-row">
               <el-input
                 v-model="setupCode"
-                placeholder="6 位动态码"
+                :placeholder="t('settings.codeInputPlaceholder')"
                 class="mono code-input"
                 maxlength="8"
                 @keyup.enter="enable2FA"
               />
-              <el-button type="primary" :loading="enabling" @click="enable2FA">启用</el-button>
+              <el-button type="primary" :loading="enabling" @click="enable2FA">{{ t('settings.enableBtn') }}</el-button>
             </div>
           </div>
         </div>
@@ -251,7 +263,7 @@
       <template #footer>
         <div class="dialog-footer">
           <span class="footer-grow"></span>
-          <el-button @click="setupVisible = false">暂不开启</el-button>
+          <el-button @click="setupVisible = false">{{ t('settings.laterBtn') }}</el-button>
         </div>
       </template>
     </el-dialog>
@@ -259,14 +271,14 @@
     <!-- ── 关闭 2FA：需校验动态码/备用码 ─────────────────────────────── -->
     <el-dialog
       v-model="disableVisible"
-      title="关闭双因子认证"
+      :title="t('settings.disableDialogTitle')"
       width="420px"
       :close-on-click-modal="false"
     >
-      <p class="disable-hint">请输入当前认证器动态码（或一次性备用码）以确认关闭。</p>
+      <p class="disable-hint">{{ t('settings.disableHint') }}</p>
       <el-input
         v-model="disableCode"
-        placeholder="6 位动态码或备用码"
+        :placeholder="t('settings.disableCodePlaceholder')"
         class="mono code-input"
         maxlength="16"
         @keyup.enter="disable2FA"
@@ -274,8 +286,8 @@
       <template #footer>
         <div class="dialog-footer">
           <span class="footer-grow"></span>
-          <el-button @click="disableVisible = false">取消</el-button>
-          <el-button type="danger" :loading="disabling" @click="disable2FA">确认关闭</el-button>
+          <el-button @click="disableVisible = false">{{ t('common.cancel') }}</el-button>
+          <el-button type="danger" :loading="disabling" @click="disable2FA">{{ t('settings.confirmDisableBtn') }}</el-button>
         </div>
       </template>
     </el-dialog>
@@ -289,11 +301,14 @@ import { ElMessage } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
 import { EditPen, Key, Lock, CopyDocument, Download, Upload } from '@element-plus/icons-vue'
 import QRCode from 'qrcode'
+import { useI18n } from 'vue-i18n'
+import { currentLocale, setLocale, type SupportedLocale } from '@/i18n/locale'
 import { authApi, backupApi } from '@/api'
 import { useAuthStore } from '@/stores/auth'
 
 const router = useRouter()
 const auth = useAuthStore()
+const { t } = useI18n()
 
 const isAdmin = computed(() => auth.user?.role === 'admin')
 
@@ -310,7 +325,7 @@ const avatarLetter = computed<string>(
 const roleLabel = computed<string>(() => {
   const role = auth.user?.role
   if (!role) return '—'
-  return role === 'admin' ? '管理员' : '普通用户'
+  return role === 'admin' ? t('appShell.roleAdmin') : t('appShell.roleUser')
 })
 
 /* ── 行内编辑显示名/邮箱（保存复用 PUT /auth/profile） ────────────── */
@@ -335,7 +350,7 @@ async function saveField() {
   const field = editingField.value
   const value = editDraft.value.trim()
   if (field === 'email' && value && !EMAIL_RE.test(value)) {
-    ElMessage.error('邮箱格式不正确')
+    ElMessage.error(t('settings.emailInvalid'))
     return
   }
   savingField.value = true
@@ -344,11 +359,11 @@ async function saveField() {
       field === 'display_name' ? value : (auth.user?.display_name || ''),
       field === 'email' ? value : (auth.user?.email || '')
     )
-    ElMessage.success('资料已更新')
+    ElMessage.success(t('settings.profileUpdatedOk'))
     cancelEdit()
     await refresh2FA() // 同步 auth store 与 localStorage，右上角头像即时生效
   } catch (e: any) {
-    ElMessage.error(e?.response?.data?.error || '更新失败，请重试')
+    ElMessage.error(e?.response?.data?.error || t('settings.updateFailedRetry'))
   } finally {
     savingField.value = false
   }
@@ -396,7 +411,7 @@ async function openSetup() {
     qrDataUrl.value = await QRCode.toDataURL(data.otpauth_url, { width: 180, margin: 1 })
     setupVisible.value = true
   } catch (e: any) {
-    ElMessage.error(e?.response?.data?.error || '生成密钥失败')
+    ElMessage.error(e?.response?.data?.error || t('settings.secretGenFailed'))
   } finally {
     settingUp.value = false
   }
@@ -404,19 +419,19 @@ async function openSetup() {
 
 async function enable2FA() {
   if (!setupCode.value.trim()) {
-    ElMessage.warning('请输入 6 位动态码')
+    ElMessage.warning(t('settings.enterCodeRequired'))
     return
   }
   enabling.value = true
   try {
     await authApi.enable2FA(setupCode.value.trim())
-    ElMessage.success('双因子认证已开启')
+    ElMessage.success(t('settings.twofaEnabledOk'))
     setupVisible.value = false
     setupData.value = null
     qrDataUrl.value = ''
     await refresh2FA()
   } catch (e: any) {
-    ElMessage.error(e?.response?.data?.error || '启用失败，请检查验证码')
+    ElMessage.error(e?.response?.data?.error || t('settings.twofaEnableFailed'))
   } finally {
     enabling.value = false
   }
@@ -424,18 +439,18 @@ async function enable2FA() {
 
 async function disable2FA() {
   if (!disableCode.value.trim()) {
-    ElMessage.warning('请输入动态码或备用码')
+    ElMessage.warning(t('settings.enterCodeOrBackupRequired'))
     return
   }
   disabling.value = true
   try {
     await authApi.disable2FA(disableCode.value.trim())
-    ElMessage.success('双因子认证已关闭')
+    ElMessage.success(t('settings.twofaDisabledOk'))
     disableVisible.value = false
     disableCode.value = ''
     await refresh2FA()
   } catch (e: any) {
-    ElMessage.error(e?.response?.data?.error || '关闭失败，请检查验证码')
+    ElMessage.error(e?.response?.data?.error || t('settings.twofaDisableFailed'))
   } finally {
     disabling.value = false
   }
@@ -444,9 +459,9 @@ async function disable2FA() {
 async function copyText(text: string) {
   try {
     await navigator.clipboard.writeText(text)
-    ElMessage.success('已复制')
+    ElMessage.success(t('common.copied'))
   } catch {
-    ElMessage.warning('复制失败，请手动选择复制')
+    ElMessage.warning(t('common.copyFailed'))
   }
 }
 
@@ -458,30 +473,31 @@ const pwdForm = reactive({ oldPassword: '', newPassword: '', confirmPassword: ''
 // 密码强度：至少 12 位，且含大写、小写、数字、特殊字符（与后端一致）
 const PASSWORD_RE = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{12,}$/
 
-const pwdRules: FormRules = {
-  oldPassword: [{ required: true, message: '请输入原密码', trigger: 'blur' }],
+// 校验消息随语言切换（与 Login 的 computed 规则同一约定）
+const pwdRules = computed<FormRules>(() => ({
+  oldPassword: [{ required: true, message: t('settings.oldPwdRequired'), trigger: 'blur' }],
   newPassword: [
-    { required: true, message: '请输入新密码', trigger: 'blur' },
+    { required: true, message: t('settings.newPwdRequired'), trigger: 'blur' },
     {
       validator: (_rule, value, callback) => {
         if (value && !PASSWORD_RE.test(value))
-          callback(new Error('密码至少 12 位，且需包含大小写字母、数字、特殊字符'))
+          callback(new Error(t('settings.passwordRule')))
         else callback()
       },
       trigger: 'blur',
     },
   ],
   confirmPassword: [
-    { required: true, message: '请再次输入新密码', trigger: 'blur' },
+    { required: true, message: t('settings.confirmPwdRequired'), trigger: 'blur' },
     {
       validator: (_rule, value, callback) => {
-        if (value !== pwdForm.newPassword) callback(new Error('两次输入的密码不一致'))
+        if (value !== pwdForm.newPassword) callback(new Error(t('settings.confirmMismatch')))
         else callback()
       },
       trigger: 'blur',
     },
   ],
-}
+}))
 
 async function onChangePassword() {
   if (pwdLoading.value) return
@@ -491,11 +507,11 @@ async function onChangePassword() {
   pwdLoading.value = true
   try {
     await authApi.changePassword(pwdForm.oldPassword, pwdForm.newPassword)
-    ElMessage.success('密码已修改，请重新登录')
+    ElMessage.success(t('settings.passwordChangedOk'))
     auth.logout()
     router.push('/login')
   } catch (e: any) {
-    ElMessage.error(e?.response?.data?.error || '修改失败，请检查原密码')
+    ElMessage.error(e?.response?.data?.error || t('settings.changePwdFailed'))
   } finally {
     pwdLoading.value = false
   }
@@ -526,20 +542,20 @@ async function onExport() {
     a.click()
     document.body.removeChild(a)
     URL.revokeObjectURL(url)
-    ElMessage.success('备份已导出，请妥善保管')
+    ElMessage.success(t('settings.backupExportedOk'))
   } catch (e: any) {
     // blob responseType 下错误响应也是 Blob，先尝试解析其中的 {error}
     const raw = e?.response?.data
     if (raw instanceof Blob) {
       try {
         const parsed = JSON.parse(await raw.text())
-        ElMessage.error(parsed?.error || '导出失败，请重试')
+        ElMessage.error(parsed?.error || t('settings.exportFailedRetry'))
         return
       } catch {
         /* 非 JSON 错误体，走默认文案 */
       }
     }
-    ElMessage.error(e?.response?.data?.error || '导出失败，请重试')
+    ElMessage.error(e?.response?.data?.error || t('settings.exportFailedRetry'))
   } finally {
     exporting.value = false
   }
@@ -554,14 +570,14 @@ function onImportFile(file: any) {
     try {
       bundle = JSON.parse(String(reader.result))
     } catch {
-      ElMessage.error('备份文件解析失败，请确认为有效的 JSON 备份')
+      ElMessage.error(t('settings.backupParseFailed'))
       importUploadRef.value?.clearFiles()
       return
     }
     doImport(bundle)
   }
   reader.onerror = () => {
-    ElMessage.error('读取备份文件失败')
+    ElMessage.error(t('settings.backupReadFailed'))
     importUploadRef.value?.clearFiles()
   }
   reader.readAsText(raw)
@@ -573,12 +589,22 @@ async function doImport(bundle: any) {
   try {
     const res = await backupApi.import(bundle)
     const skippedList = res.skipped || []
-    const skipped = skippedList.length
-      ? `；跳过：${skippedList.slice(0, 5).join('、')}${skippedList.length > 5 ? ` 等 ${skippedList.length} 项` : ''}`
-      : ''
-    ElMessage.success(`成功：+${res.channels_created} 渠道 / +${res.templates_created} 模板 / +${res.tasks_created} 任务${skipped}`)
+    let skipped = ''
+    if (skippedList.length) {
+      const shown = skippedList.slice(0, 5).join(t('settings.importJoin'))
+      skipped = t('settings.importSkipped', {
+        list: skippedList.length > 5 ? shown + t('settings.importSkippedMore', { n: skippedList.length }) : shown,
+      })
+    }
+    ElMessage.success(
+      t('settings.importSummary', {
+        channels: res.channels_created,
+        templates: res.templates_created,
+        tasks: res.tasks_created,
+      }) + skipped
+    )
   } catch (e: any) {
-    ElMessage.error(e?.response?.data?.error || '导入失败，请重试')
+    ElMessage.error(e?.response?.data?.error || t('settings.importFailedRetry'))
   } finally {
     importing.value = false
     importUploadRef.value?.clearFiles() // 清空选中，便于再次选择同一文件
