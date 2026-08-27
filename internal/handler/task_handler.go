@@ -34,7 +34,7 @@ func NewTaskHandler(db *sql.DB, sched service.Scheduler, queue *service.QueueSer
 func (h *TaskHandler) List(c *gin.Context) {
 	list, err := h.svc.List(c.GetInt64("uid"))
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": sanitizeErr(err)})
 		return
 	}
 	// api_key 是触发凭据：任务为共享读，最低权限用户不应拿到它去调 webhook。
@@ -61,7 +61,7 @@ func (h *TaskHandler) Create(c *gin.Context) {
 		return
 	}
 	if err := h.svc.Create(c.GetInt64("uid"), &in); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": sanitizeErr(err)})
 		return
 	}
 	auditf(c, h.db, "task.create", "创建任务 %q id=%d", in.Name, in.ID)
@@ -85,7 +85,7 @@ func (h *TaskHandler) Update(c *gin.Context) {
 		return
 	}
 	if err := h.svc.Update(c.GetInt64("uid"), id, &in); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": sanitizeErr(err)})
 		return
 	}
 	name, _ := h.svc.Name(id)
@@ -104,7 +104,7 @@ func (h *TaskHandler) Delete(c *gin.Context) {
 	id, _ := strconv.ParseInt(c.Param("id"), 10, 64)
 	name, _ := h.svc.Name(id) // 删除前取名称
 	if err := h.svc.Delete(c.GetInt64("uid"), id); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": sanitizeErr(err)})
 		return
 	}
 	auditf(c, h.db, "task.delete", "删除任务 %s", auditRef(name, id))
@@ -132,7 +132,7 @@ func (h *TaskHandler) BatchDelete(c *gin.Context) {
 		names[i], _ = h.svc.Name(tid)
 	}
 	if err := h.svc.BatchDelete(req.IDs); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": sanitizeErr(err)})
 		return
 	}
 	auditf(c, h.db, "task.batch_delete", "批量删除任务 %s", auditRefs(names, req.IDs))
@@ -157,7 +157,7 @@ func (h *TaskHandler) Toggle(c *gin.Context) {
 		return
 	}
 	if err := h.svc.Toggle(c.GetInt64("uid"), id, req.Enabled); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": sanitizeErr(err)})
 		return
 	}
 	name, _ := h.svc.Name(id)
@@ -175,12 +175,12 @@ func (h *TaskHandler) Toggle(c *gin.Context) {
 func (h *TaskHandler) Logs(c *gin.Context) {
 	id, _ := strconv.ParseInt(c.Param("id"), 10, 64)
 	if _, err := h.svc.Get(c.GetInt64("uid"), id); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": sanitizeErr(err)})
 		return
 	}
 	logs, err := h.svc.Logs(id)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": sanitizeErr(err)})
 		return
 	}
 	c.JSON(http.StatusOK, logs)
@@ -197,13 +197,13 @@ func (h *TaskHandler) Logs(c *gin.Context) {
 func (h *TaskHandler) SendNow(c *gin.Context) {
 	id, _ := strconv.ParseInt(c.Param("id"), 10, 64)
 	if _, err := h.svc.Get(c.GetInt64("uid"), id); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": sanitizeErr(err)})
 		return
 	}
 	jobID, err := h.queue.Enqueue(id, nil, "",
 		service.Trigger{Type: "manual", By: c.GetString("username"), IP: c.ClientIP()})
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": sanitizeErr(err)})
 		return
 	}
 	name, _ := h.svc.Name(id)
@@ -227,7 +227,7 @@ func (h *TaskHandler) RetryLog(c *gin.Context) {
 	jobID, err := h.queue.EnqueueLogRetry(id,
 		service.Trigger{Type: "retry", By: c.GetString("username"), IP: c.ClientIP()})
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": sanitizeErr(err)})
 		return
 	}
 	// 日志本身无名，用其所属任务名作为可读标识
@@ -256,7 +256,7 @@ func (h *TaskHandler) Preview(c *gin.Context) {
 	}
 	out, err := h.svc.TaskPreview(req.TemplateID, req.Variables, req.Receivers)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": sanitizeErr(err)})
 		return
 	}
 	c.JSON(http.StatusOK, out)
@@ -305,6 +305,22 @@ func (h *TaskHandler) logFilterFromQuery(c *gin.Context) repository.LogFilter {
 	return f
 }
 
+// csvSafe 阻断 Excel 公式注入：单元格以 = + - @ 制表符/回车开头时加单引号前缀，
+// 避免 Excel/WPS 打开导出文件时把内容当公式执行（DDE/宏下载类攻击面）。
+func csvSafe(s string) string {
+	if s == "" {
+		return s
+	}
+	switch s[0] {
+	case '=', '+', '@', '\t', '\r':
+		return "'" + s
+	case '-':
+		// 负号前缀（如 "-1"）同样可被解析为公式起始，统一转义。
+		return "'" + s
+	}
+	return s
+}
+
 // ExportLogs 导出发送日志为 CSV（仅管理员）。
 // @Summary 导出发送日志 CSV（仅管理员）
 // @Tags 任务
@@ -319,7 +335,7 @@ func (h *TaskHandler) ExportLogs(c *gin.Context) {
 	f := h.logFilterFromQuery(c)
 	rows, err := h.svc.ExportLogRows(f, 100000)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": sanitizeErr(err)})
 		return
 	}
 	filename := "logs-" + time.Now().Format("20060102-150405") + ".csv"
@@ -332,9 +348,9 @@ func (h *TaskHandler) ExportLogs(c *gin.Context) {
 	for _, r := range rows {
 		_ = w.Write([]string{
 			strconv.FormatInt(r.ID, 10), r.SentAt.Format("2006-01-02 15:04:05"),
-			strconv.FormatInt(r.TaskID, 10), r.TaskName, strconv.FormatInt(r.ChannelID, 10), r.ChannelName,
-			r.Status, r.Subject, r.Content, r.Request, r.Response, r.ErrorMsg,
-			strconv.Itoa(r.RetryCount), r.TriggerType, r.TriggerBy, r.TriggerIP,
+			strconv.FormatInt(r.TaskID, 10), csvSafe(r.TaskName), strconv.FormatInt(r.ChannelID, 10), csvSafe(r.ChannelName),
+			csvSafe(r.Status), csvSafe(r.Subject), csvSafe(r.Content), csvSafe(r.Request), csvSafe(r.Response), csvSafe(r.ErrorMsg),
+			strconv.Itoa(r.RetryCount), csvSafe(r.TriggerType), csvSafe(r.TriggerBy), csvSafe(r.TriggerIP),
 		})
 	}
 	w.Flush()
@@ -357,7 +373,7 @@ func (h *TaskHandler) LogsAll(c *gin.Context) {
 	f := h.logFilterFromQuery(c)
 	total, logs, err := h.svc.QueryLogs(f)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": sanitizeErr(err)})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"total": total, "items": logs})
@@ -382,7 +398,7 @@ func (h *TaskHandler) LogByID(c *gin.Context) {
 		return
 	}
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": sanitizeErr(err)})
 		return
 	}
 	c.JSON(http.StatusOK, log)
