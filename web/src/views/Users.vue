@@ -2,8 +2,8 @@
   <div class="page">
     <div class="page-head">
       <div>
-        <h1 class="grad-text">用户管理</h1>
-        <p class="sub">管理系统账号：创建普通用户与管理员，分配登录权限</p>
+        <h1 class="grad-text">{{ t('nav.users') }}</h1>
+        <p class="sub">{{ t('users.subtitle') }}</p>
       </div>
       <div class="actions">
         <el-button
@@ -13,9 +13,9 @@
           :disabled="!selectedRows.length"
           @click="batchDelete"
         >
-          批量删除
+          {{ t('common.batchDelete') }}
         </el-button>
-        <el-button type="primary" :icon="Plus" @click="openCreate">新建用户</el-button>
+        <el-button type="primary" :icon="Plus" @click="openCreate">{{ t('users.createTitle') }}</el-button>
       </div>
     </div>
 
@@ -24,7 +24,7 @@
         ref="tableRef"
         :data="paged"
         style="width: 100%"
-        empty-text="暂无用户，点击右上角「新建用户」开始"
+        :empty-text="t('users.emptyTable')"
         @selection-change="onSelectionChange"
         @sort-change="onSortChange"
       >
@@ -40,31 +40,31 @@
           </template>
         </el-table-column>
 
-        <el-table-column prop="username" label="用户名" min-width="170" sortable="custom">
+        <el-table-column prop="username" :label="t('users.usernameCol')" min-width="170" sortable="custom">
           <template #default="{ row }">
             <el-tooltip :content="row.username" placement="top" :show-after="320">
               <span class="user-name">{{ row.username }}</span>
             </el-tooltip>
-            <span v-if="row.id === auth.user?.id" class="self-tag mono">（我）</span>
+            <span v-if="row.id === auth.user?.id" class="self-tag mono">{{ t('users.me') }}</span>
           </template>
         </el-table-column>
 
-        <el-table-column label="显示名" min-width="130" sortable="custom" prop="display_name">
+        <el-table-column :label="t('users.displayNameCol')" min-width="130" sortable="custom" prop="display_name">
           <template #default="{ row }">
             <span class="profile-cell">{{ row.display_name || '—' }}</span>
           </template>
         </el-table-column>
 
-        <el-table-column label="邮箱" min-width="180" show-overflow-tooltip sortable="custom" prop="email">
+        <el-table-column :label="t('users.emailCol')" min-width="180" show-overflow-tooltip sortable="custom" prop="email">
           <template #default="{ row }">
             <span class="mono profile-cell">{{ row.email || '—' }}</span>
           </template>
         </el-table-column>
 
-        <el-table-column prop="role" label="角色" width="110" align="center" sortable="custom">
+        <el-table-column prop="role" :label="t('users.roleCol')" width="110" align="center" sortable="custom">
           <template #default="{ row }">
             <el-tag :style="roleTagStyle(row.role)" effect="plain" size="small">
-              {{ row.role === 'admin' ? '管理员' : '普通用户' }}
+              {{ row.role === 'admin' ? t('appShell.roleAdmin') : t('appShell.roleUser') }}
             </el-tag>
           </template>
         </el-table-column>
@@ -72,30 +72,30 @@
         <el-table-column label="2FA" width="86" align="center" sortable="custom" prop="totp_enabled">
           <template #default="{ row }">
             <el-tag :type="row.totp_enabled ? 'success' : 'info'" effect="light" size="small">
-              {{ row.totp_enabled ? '已开启' : '未开启' }}
+              {{ row.totp_enabled ? t('users.totpOn') : t('users.totpOff') }}
             </el-tag>
           </template>
         </el-table-column>
 
-        <el-table-column label="状态" width="86" align="center" sortable="custom" prop="enabled">
+        <el-table-column :label="t('common.status')" width="86" align="center" sortable="custom" prop="enabled">
           <template #default="{ row }">
             <el-tag :type="row.enabled === false ? 'danger' : 'success'" effect="light" size="small">
-              {{ row.enabled === false ? '已禁用' : '正常' }}
+              {{ row.enabled === false ? t('users.statusDisabled') : t('users.statusNormal') }}
             </el-tag>
           </template>
         </el-table-column>
 
-        <el-table-column label="创建时间" min-width="170" sortable="custom" prop="created_at">
+        <el-table-column :label="t('users.createdAtCol')" min-width="170" sortable="custom" prop="created_at">
           <template #default="{ row }">
             <span class="mono time-cell">{{ row.created_at || '—' }}</span>
           </template>
         </el-table-column>
 
-        <el-table-column label="操作" width="300" align="center" fixed="right">
+        <el-table-column :label="t('common.action')" width="300" align="center" fixed="right">
           <template #default="{ row }">
             <el-tooltip
               :disabled="row.id !== auth.user?.id"
-              content="请用个人设置修改"
+              :content="t('users.selfEditHint')"
             >
               <span>
                 <el-button
@@ -105,13 +105,13 @@
                   :disabled="row.id === auth.user?.id"
                   @click="openEdit(row)"
                 >
-                  编辑
+                  {{ t('common.edit') }}
                 </el-button>
               </span>
             </el-tooltip>
             <el-tooltip
               :disabled="!isProtectedAdmin(row)"
-              content="内置 admin 账号密码不可由管理员重置"
+              :content="t('users.adminResetForbidden')"
             >
               <span>
                 <el-button
@@ -121,7 +121,7 @@
                   :disabled="isProtectedAdmin(row)"
                   @click="generateResetToken(row)"
                 >
-                  重置密码
+                  {{ t('users.resetPasswordAction') }}
                 </el-button>
               </span>
             </el-tooltip>
@@ -137,7 +137,7 @@
                   :disabled="!canToggleEnabled(row)"
                   @click="toggleEnabled(row)"
                 >
-                  {{ row.enabled === false ? '启用' : '禁用' }}
+                  {{ row.enabled === false ? t('users.enableAction') : t('users.disableAction') }}
                 </el-button>
               </span>
             </el-tooltip>
@@ -147,9 +147,9 @@
               </el-button>
               <template #dropdown>
                 <el-dropdown-menu>
-                  <el-dropdown-item command="enable">强制开启双因子认证</el-dropdown-item>
+                  <el-dropdown-item command="enable">{{ t('users.force2faMenuOn') }}</el-dropdown-item>
                   <el-dropdown-item command="disable" :disabled="!row.totp_enabled">
-                    强制关闭双因子认证
+                    {{ t('users.force2faMenuOff') }}
                   </el-dropdown-item>
                 </el-dropdown-menu>
               </template>
@@ -166,7 +166,7 @@
                   :disabled="!canDelete(row)"
                   @click="removeUser(row)"
                 >
-                  删除
+                  {{ t('common.delete') }}
                 </el-button>
               </span>
             </el-tooltip>
@@ -190,25 +190,24 @@
     <!-- ── 重置密码：生成一次性令牌，线下交给用户自助重置 ─────────────── -->
     <el-dialog
       v-model="resetTokenVisible"
-      title="重置密码（一次性令牌）"
+      :title="t('users.resetTokenTitle')"
       width="480px"
       :close-on-click-modal="false"
     >
       <p class="token-hint">
-        已为用户 <b class="token-user">{{ resetTokenUser }}</b> 生成一次性重置令牌。
-        请线下转交给该用户，其在登录页「忘记密码」输入用户名 + 令牌 + 新密码即可自助重置。
+        {{ t('users.resetTokenHint', { user: resetTokenUser }) }}
       </p>
       <div class="token-box">
         <code class="mono token-value">{{ resetTokenValue || '—' }}</code>
         <el-button size="small" type="primary" :icon="CopyDocument" @click="copyResetToken">
-          复制
+          {{ t('common.copy') }}
         </el-button>
       </div>
-      <p class="token-expire mono">令牌有效期至 {{ resetTokenExpires }}，使用一次后即失效</p>
+      <p class="token-expire mono">{{ t('users.tokenExpires', { time: resetTokenExpires }) }}</p>
       <template #footer>
         <div class="dialog-footer">
           <span class="footer-grow"></span>
-          <el-button @click="resetTokenVisible = false">关闭</el-button>
+          <el-button @click="resetTokenVisible = false">{{ t('common.close') }}</el-button>
         </div>
       </template>
     </el-dialog>
@@ -216,37 +215,37 @@
     <!-- ── Create user dialog ────────────────────────────────────────── -->
     <el-dialog
       v-model="dialogVisible"
-      title="新建用户"
+      :title="t('users.createTitle')"
       width="460px"
       :close-on-click-modal="false"
       destroy-on-close
     >
       <el-form ref="formRef" :model="form" :rules="rules" label-position="top">
-        <el-form-item label="用户名" prop="username">
-          <el-input v-model="form.username" placeholder="登录用户名" />
+        <el-form-item :label="t('users.usernameField')" prop="username">
+          <el-input v-model="form.username" :placeholder="t('users.usernamePlaceholder')" />
         </el-form-item>
 
-        <el-form-item label="显示名" prop="display_name">
-          <el-input v-model="form.display_name" placeholder="显示名/昵称（可选）" />
+        <el-form-item :label="t('users.displayNameField')" prop="display_name">
+          <el-input v-model="form.display_name" :placeholder="t('users.displayNamePlaceholderOpt')" />
         </el-form-item>
 
-        <el-form-item label="邮箱" prop="email">
-          <el-input v-model="form.email" placeholder="联系邮箱（可选）" />
+        <el-form-item :label="t('users.emailField')" prop="email">
+          <el-input v-model="form.email" :placeholder="t('users.emailPlaceholderOpt')" />
         </el-form-item>
 
-        <el-form-item label="密码" prop="password">
+        <el-form-item :label="t('users.passwordField')" prop="password">
           <el-input
             v-model="form.password"
             type="password"
             show-password
-            placeholder="至少 12 位，含大小写字母、数字、特殊字符"
+            :placeholder="t('users.passwordPlaceholder')"
           />
         </el-form-item>
 
-        <el-form-item label="角色" prop="role">
+        <el-form-item :label="t('users.roleCol')" prop="role">
           <el-select v-model="form.role" style="width: 100%">
-            <el-option label="管理员" value="admin" />
-            <el-option label="普通用户" value="user" />
+            <el-option :label="t('appShell.roleAdmin')" value="admin" />
+            <el-option :label="t('appShell.roleUser')" value="user" />
           </el-select>
         </el-form-item>
       </el-form>
@@ -254,8 +253,8 @@
       <template #footer>
         <div class="dialog-footer">
           <span class="footer-grow"></span>
-          <el-button @click="dialogVisible = false">取消</el-button>
-          <el-button type="primary" :loading="saving" @click="saveUser">创建</el-button>
+          <el-button @click="dialogVisible = false">{{ t('common.cancel') }}</el-button>
+          <el-button type="primary" :loading="saving" @click="saveUser">{{ t('common.create') }}</el-button>
         </div>
       </template>
     </el-dialog>
@@ -263,42 +262,42 @@
     <!-- ── Edit user dialog ────────────────────────────────────────── -->
     <el-dialog
       v-model="editVisible"
-      title="编辑用户"
+      :title="t('users.editTitle')"
       width="460px"
       :close-on-click-modal="false"
       destroy-on-close
     >
       <el-form ref="editFormRef" :model="editForm" :rules="editRules" label-position="top">
-        <el-form-item label="用户名">
+        <el-form-item :label="t('users.usernameField')">
           <el-input :model-value="editingUser?.username || ''" disabled />
         </el-form-item>
 
-        <el-form-item label="显示名" prop="display_name">
-          <el-input v-model="editForm.display_name" placeholder="显示名/昵称" />
+        <el-form-item :label="t('users.displayNameField')" prop="display_name">
+          <el-input v-model="editForm.display_name" :placeholder="t('users.displayNamePlaceholder')" />
         </el-form-item>
 
-        <el-form-item label="邮箱" prop="email">
-          <el-input v-model="editForm.email" placeholder="联系邮箱" />
+        <el-form-item :label="t('users.emailField')" prop="email">
+          <el-input v-model="editForm.email" :placeholder="t('users.emailPlaceholder')" />
         </el-form-item>
 
-        <el-form-item label="角色" prop="role">
+        <el-form-item :label="t('users.roleCol')" prop="role">
           <el-select
             v-model="editForm.role"
             style="width: 100%"
             :disabled="isProtectedAdmin(editingUser)"
           >
-            <el-option label="管理员" value="admin" />
-            <el-option label="普通用户" value="user" />
+            <el-option :label="t('appShell.roleAdmin')" value="admin" />
+            <el-option :label="t('appShell.roleUser')" value="user" />
           </el-select>
-          <div v-if="isProtectedAdmin(editingUser)" class="edit-hint">内置 admin 账号角色不可修改</div>
+          <div v-if="isProtectedAdmin(editingUser)" class="edit-hint">{{ t('users.protectedRoleHint') }}</div>
         </el-form-item>
 
-        <el-form-item label="新密码" prop="password">
+        <el-form-item :label="t('users.newPasswordField')" prop="password">
           <el-input
             v-model="editForm.password"
             type="password"
             show-password
-            placeholder="留空则不修改；填写需至少 12 位，含大小写字母、数字、特殊字符"
+            :placeholder="t('users.newPasswordPlaceholder')"
           />
         </el-form-item>
       </el-form>
@@ -306,8 +305,8 @@
       <template #footer>
         <div class="dialog-footer">
           <span class="footer-grow"></span>
-          <el-button @click="editVisible = false">取消</el-button>
-          <el-button type="primary" :loading="editSaving" @click="saveEdit">保存</el-button>
+          <el-button @click="editVisible = false">{{ t('common.cancel') }}</el-button>
+          <el-button type="primary" :loading="editSaving" @click="saveEdit">{{ t('common.save') }}</el-button>
         </div>
       </template>
     </el-dialog>
@@ -315,46 +314,44 @@
     <!-- ── 管理员强制开启 2FA：生成密钥与备用码，线下转交用户 ──────────── -->
     <el-dialog
       v-model="force2FAVisible"
-      title="强制开启双因子认证"
+      :title="t('users.force2faMenuOn')"
       width="540px"
       top="6vh"
       :close-on-click-modal="false"
     >
       <p class="token-hint">
-        已为用户 <b class="token-user">{{ force2FAUser }}</b> 强制开启双因子认证，
-        同时重新生成其 TOTP 密钥与一次性备用码（覆盖此前配置）。
-        请将以下信息<b>线下转交</b>该用户完成绑定。
+        {{ t('users.force2faConfirmOnMsg', { name: force2FAUser }) }}
       </p>
       <div v-if="force2FAData" class="force-body">
         <div class="force-block">
-          <span class="force-label">扫码绑定</span>
+          <span class="force-label">{{ t('users.scanBind') }}</span>
           <div class="qr-box">
-            <img v-if="force2FAQr" :src="force2FAQr" alt="2FA 二维码" />
+            <img v-if="force2FAQr" :src="force2FAQr" :alt="t('users.qrAlt')" />
           </div>
         </div>
         <div class="force-block">
-          <span class="force-label">密钥</span>
+          <span class="force-label">{{ t('users.secretLabel') }}</span>
           <div class="secret-box">
             <code class="mono secret-value">{{ force2FAData.secret }}</code>
             <el-button size="small" :icon="CopyDocument" @click="copyText(force2FAData.secret)">
-              复制
+              {{ t('common.copy') }}
             </el-button>
           </div>
         </div>
         <div class="force-block">
-          <span class="force-label">一次性备用码（仅本次显示）</span>
+          <span class="force-label">{{ t('users.recoveryCodesLabel') }}</span>
           <div class="codes-box">
             <code v-for="c in force2FAData.recovery_codes" :key="c" class="mono code-item">{{ c }}</code>
           </div>
           <el-button size="small" :icon="CopyDocument" @click="copyText(force2FAData.recovery_codes.join('\n'))">
-            复制全部备用码
+            {{ t('users.copyAllRecovery') }}
           </el-button>
         </div>
       </div>
       <template #footer>
         <div class="dialog-footer">
           <span class="footer-grow"></span>
-          <el-button @click="force2FAVisible = false">关闭</el-button>
+          <el-button @click="force2FAVisible = false">{{ t('common.close') }}</el-button>
         </div>
       </template>
     </el-dialog>
@@ -362,14 +359,17 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { FormInstance, FormRules, TableInstance } from 'element-plus'
 import { Plus, Delete, CopyDocument, ArrowDown } from '@element-plus/icons-vue'
 import QRCode from 'qrcode'
+import { useI18n } from 'vue-i18n'
 import { userApi } from '@/api'
 import { useAuthStore } from '@/stores/auth'
 import { useTablePaging } from '@/composables/useTablePaging'
+
+const { t } = useI18n()
 
 interface UserRow {
   id: number
@@ -423,16 +423,16 @@ function canToggleEnabled(row: UserRow) {
 }
 
 function deleteHint(row: UserRow) {
-  if (row.id === auth.user?.id) return '不能删除当前登录账号'
-  if (row.username === 'admin') return '内置 admin 账号不可删除'
-  if (row.role === 'admin' && !isBuiltinAdmin()) return '仅内置 admin 可删除管理员账号'
+  if (row.id === auth.user?.id) return t('users.deleteHintSelf')
+  if (row.username === 'admin') return t('users.deleteHintBuiltin')
+  if (row.role === 'admin' && !isBuiltinAdmin()) return t('users.deleteHintAdminOnly')
   return ''
 }
 
 function toggleEnabledHint(row: UserRow) {
-  if (row.id === auth.user?.id) return '不能禁用/启用当前登录账号'
-  if (row.username === 'admin') return '内置 admin 账号不可禁用'
-  if (row.role === 'admin' && !isBuiltinAdmin()) return '仅内置 admin 可禁用/启用管理员账号'
+  if (row.id === auth.user?.id) return t('users.toggleHintSelf')
+  if (row.username === 'admin') return t('users.toggleHintBuiltin')
+  if (row.role === 'admin' && !isBuiltinAdmin()) return t('users.toggleHintAdminOnly')
   return ''
 }
 
@@ -456,7 +456,6 @@ const form = reactive<{ username: string; display_name: string; email: string; p
 
 // 密码强度：至少 12 位，且含大写、小写、数字、特殊字符（与后端一致）
 const PASSWORD_RE = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{12,}$/
-const PASSWORD_MSG = '密码至少 12 位，且需包含大小写字母、数字、特殊字符'
 // 邮箱格式（与后端一致；为空视为合法）
 const EMAIL_RE = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/
 
@@ -464,7 +463,7 @@ function emailRule() {
   return [
     {
       validator: (_rule: unknown, value: string, callback: (e?: Error) => void) => {
-        if (value && !EMAIL_RE.test(value)) callback(new Error('邮箱格式不正确'))
+        if (value && !EMAIL_RE.test(value)) callback(new Error(t('users.emailInvalid')))
         else callback()
       },
       trigger: 'blur',
@@ -479,10 +478,10 @@ function passwordValid(pw: string) {
 // passwordRule 生成密码校验规则；required=false 时留空视为合法（编辑场景）。
 function passwordRule(required: boolean) {
   return [
-    ...(required ? [{ required: true, message: '请输入密码', trigger: 'blur' }] : []),
+    ...(required ? [{ required: true, message: t('users.passwordRequired'), trigger: 'blur' }] : []),
     {
       validator: (_rule: unknown, value: string, callback: (e?: Error) => void) => {
-        if (value && !passwordValid(value)) callback(new Error(PASSWORD_MSG))
+        if (value && !passwordValid(value)) callback(new Error(t('users.passwordRule')))
         else callback()
       },
       trigger: 'blur',
@@ -490,12 +489,13 @@ function passwordRule(required: boolean) {
   ]
 }
 
-const rules: FormRules = {
-  username: [{ required: true, message: '请输入用户名', trigger: 'blur' }],
+// 校验消息随语言切换（与 Login 的 computed 规则同一约定）
+const rules = computed<FormRules>(() => ({
+  username: [{ required: true, message: t('users.usernameRequired'), trigger: 'blur' }],
   email: emailRule(),
   password: passwordRule(true),
-  role: [{ required: true, message: '请选择角色', trigger: 'change' }],
-}
+  role: [{ required: true, message: t('users.roleRequired'), trigger: 'change' }],
+}))
 
 /* ── Edit state ────────────────────────────────────────────────────── */
 const editVisible = ref(false)
@@ -510,12 +510,12 @@ const editForm = reactive<{ display_name: string; email: string; role: 'admin' |
   password: '',
 })
 
-const editRules: FormRules = {
+const editRules = computed<FormRules>(() => ({
   email: emailRule(),
-  role: [{ required: true, message: '请选择角色', trigger: 'change' }],
+  role: [{ required: true, message: t('users.roleRequired'), trigger: 'change' }],
   // 密码可选：留空表示不修改；填写时需符合强度规则
   password: passwordRule(false),
-}
+}))
 
 // 角色标签：admin → violet，user → blue（与 Signal Relay 色板一致）
 function roleTagStyle(role: string) {
@@ -542,7 +542,7 @@ async function load() {
   try {
     users.value = (await userApi.list()) || []
   } catch (e: any) {
-    ElMessage.error(errMsg(e, '用户列表加载失败'))
+    ElMessage.error(errMsg(e, t('users.loadFailed')))
   } finally {
     loading.value = false
   }
@@ -572,11 +572,11 @@ async function saveUser() {
       password: form.password,
       role: form.role,
     })
-    ElMessage.success('用户已创建')
+    ElMessage.success(t('users.createdOk'))
     dialogVisible.value = false
     await load()
   } catch (e: any) {
-    ElMessage.error(errMsg(e, '创建失败'))
+    ElMessage.error(errMsg(e, t('users.createFailed')))
   } finally {
     saving.value = false
   }
@@ -610,11 +610,11 @@ async function saveEdit() {
   editSaving.value = true
   try {
     await userApi.update(row.id, d)
-    ElMessage.success('用户已更新')
+    ElMessage.success(t('users.updatedOk'))
     editVisible.value = false
     await load()
   } catch (e: any) {
-    ElMessage.error(errMsg(e, '更新失败'))
+    ElMessage.error(errMsg(e, t('users.updateFailed')))
   } finally {
     editSaving.value = false
   }
@@ -634,9 +634,9 @@ function on2FACommand(cmd: string, row: UserRow) {
 async function forceEnable2FA(row: UserRow) {
   try {
     await ElMessageBox.confirm(
-      `强制开启用户「${row.username}」的双因子认证？\n将重新生成其 TOTP 密钥与备用码（覆盖此前配置），请把凭据线下转交该用户。`,
-      '强制开启双因子认证',
-      { confirmButtonText: '强制开启', cancelButtonText: '取消', type: 'warning' }
+      t('users.force2faConfirmOnMsg', { name: row.username }),
+      t('users.force2faConfirmOnTitle'),
+      { confirmButtonText: t('users.force2faOnBtn'), cancelButtonText: t('common.cancel'), type: 'warning' }
     )
   } catch {
     return
@@ -649,35 +649,35 @@ async function forceEnable2FA(row: UserRow) {
     force2FAVisible.value = true
     await load()
   } catch (e: any) {
-    ElMessage.error(errMsg(e, '强制开启失败'))
+    ElMessage.error(errMsg(e, t('users.force2faOnFailed')))
   }
 }
 
 async function forceDisable2FA(row: UserRow) {
   try {
     await ElMessageBox.confirm(
-      `强制关闭用户「${row.username}」的双因子认证？\n该用户将不再要求动态码验证（用户丢失手机/备用码时使用此恢复路径）。`,
-      '强制关闭双因子认证',
-      { confirmButtonText: '强制关闭', cancelButtonText: '取消', type: 'warning' }
+      t('users.force2faConfirmOffMsg', { name: row.username }),
+      t('users.force2faConfirmOffTitle'),
+      { confirmButtonText: t('users.force2faOffBtn'), cancelButtonText: t('common.cancel'), type: 'warning' }
     )
   } catch {
     return
   }
   try {
     await userApi.forceDisable2FA(row.id)
-    ElMessage.success(`已强制关闭「${row.username}」的双因子认证`)
+    ElMessage.success(t('users.force2faOffOk', { name: row.username }))
     await load()
   } catch (e: any) {
-    ElMessage.error(errMsg(e, '强制关闭失败'))
+    ElMessage.error(errMsg(e, t('users.force2faOffFailed')))
   }
 }
 
 async function copyText(text: string) {
   try {
     await navigator.clipboard.writeText(text)
-    ElMessage.success('已复制')
+    ElMessage.success(t('common.copied'))
   } catch {
-    ElMessage.warning('复制失败，请手动选择复制')
+    ElMessage.warning(t('common.copyFailed'))
   }
 }
 
@@ -695,7 +695,7 @@ async function generateResetToken(row: UserRow) {
     resetTokenUser.value = row.username
     resetTokenVisible.value = true
   } catch (e: any) {
-    ElMessage.error(errMsg(e, '生成重置令牌失败'))
+    ElMessage.error(errMsg(e, t('users.resetTokenFailed')))
   }
 }
 
@@ -703,9 +703,9 @@ async function copyResetToken() {
   if (!resetTokenValue.value) return
   try {
     await navigator.clipboard.writeText(resetTokenValue.value)
-    ElMessage.success('令牌已复制')
+    ElMessage.success(t('users.tokenCopiedOk'))
   } catch {
-    ElMessage.warning('复制失败，请手动选择复制')
+    ElMessage.warning(t('common.copyFailed'))
   }
 }
 
@@ -715,10 +715,10 @@ async function toggleEnabled(row: UserRow) {
   try {
     await ElMessageBox.confirm(
       disabling
-        ? `确定禁用用户「${row.username}」吗？\n禁用后其登录与已签发令牌立即失效，数据保留，可随时重新启用。`
-        : `确定启用用户「${row.username}」吗？`,
-      disabling ? '禁用用户' : '启用用户',
-      { confirmButtonText: disabling ? '禁用' : '启用', cancelButtonText: '取消', type: 'warning' }
+        ? t('users.disableConfirmMsg', { name: row.username })
+        : t('users.enableConfirmMsg', { name: row.username }),
+      disabling ? t('users.disableConfirmTitle') : t('users.enableConfirmTitle'),
+      { confirmButtonText: disabling ? t('users.disableAction') : t('users.enableAction'), cancelButtonText: t('common.cancel'), type: 'warning' }
     )
   } catch {
     return
@@ -726,10 +726,10 @@ async function toggleEnabled(row: UserRow) {
   try {
     if (disabling) await userApi.disable(row.id)
     else await userApi.enable(row.id)
-    ElMessage.success(disabling ? '已禁用' : '已启用')
+    ElMessage.success(disabling ? t('users.disabledOk') : t('users.enabledOk'))
     await load()
   } catch (e: any) {
-    ElMessage.error(errMsg(e, '操作失败'))
+    ElMessage.error(errMsg(e, t('users.opFailed')))
   }
 }
 
@@ -737,19 +737,19 @@ async function toggleEnabled(row: UserRow) {
 async function removeUser(row: UserRow) {
   try {
     await ElMessageBox.confirm(
-      `确定删除用户「${row.username}」吗？删除后该账号将无法登录。`,
-      '删除用户',
-      { confirmButtonText: '删除', cancelButtonText: '取消', type: 'warning' }
+      t('users.deleteConfirmMsg', { name: row.username }),
+      t('users.deleteConfirmTitle'),
+      { confirmButtonText: t('common.delete'), cancelButtonText: t('common.cancel'), type: 'warning' }
     )
   } catch {
     return
   }
   try {
     await userApi.remove(row.id)
-    ElMessage.success('用户已删除')
+    ElMessage.success(t('users.deletedOk'))
     await load()
   } catch (e: any) {
-    ElMessage.error(errMsg(e, '删除失败'))
+    ElMessage.error(errMsg(e, t('common.deleteFailed')))
   }
 }
 
@@ -759,20 +759,20 @@ async function batchDelete() {
   if (!rows.length) return
   try {
     await ElMessageBox.confirm(
-      `确认删除选中的 ${rows.length} 项？`,
-      '批量删除',
-      { confirmButtonText: '删除', cancelButtonText: '取消', type: 'warning' }
+      t('common.batchDeleteConfirmMsg', { n: rows.length }),
+      t('common.batchDelete'),
+      { confirmButtonText: t('common.delete'), cancelButtonText: t('common.cancel'), type: 'warning' }
     )
   } catch {
     return
   }
   try {
     await userApi.batchRemove(rows.map((r) => r.id))
-    ElMessage.success(`已删除 ${rows.length} 个用户`)
+    ElMessage.success(t('users.batchDeletedOk', { n: rows.length }))
     tableRef.value?.clearSelection()
     await load()
   } catch (e: any) {
-    ElMessage.error(errMsg(e, '批量删除失败'))
+    ElMessage.error(errMsg(e, t('common.batchDeleteFailed')))
   }
 }
 

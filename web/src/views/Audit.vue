@@ -2,51 +2,51 @@
   <div class="page">
     <div class="page-head">
       <div>
-        <h1 class="grad-text">操作审计</h1>
-        <p class="sub">追踪管理员的操作记录：谁在什么时候做了什么（保留 {{ RETENTION_DAYS }} 天）</p>
+        <h1 class="grad-text">{{ t('nav.audit') }}</h1>
+        <p class="sub">{{ t('audit.subtitle', { days: RETENTION_DAYS }) }}</p>
       </div>
     </div>
 
     <div class="filters">
       <div class="filter-item">
-        <span class="filter-label">关键词</span>
+        <span class="filter-label">{{ t('audit.keywordField') }}</span>
         <el-input
           v-model="keyword"
           class="search-input"
           clearable
           :prefix-icon="Search"
-          placeholder="搜索用户 / 来源 IP / 详情…"
+          :placeholder="t('audit.searchPlaceholder')"
           @keyup.enter="applyKeyword"
           @clear="applyKeyword"
         />
       </div>
 
       <div class="filter-item">
-        <span class="filter-label">模块</span>
-        <el-select v-model="moduleFilter" clearable placeholder="全部模块" style="width: 140px" @change="applyKeyword">
+        <span class="filter-label">{{ t('audit.moduleField') }}</span>
+        <el-select v-model="moduleFilter" clearable :placeholder="t('audit.allModules')" style="width: 140px" @change="applyKeyword">
           <el-option
             v-for="m in moduleOptions"
             :key="m.value"
-            :label="m.label"
+            :label="t(m.labelKey)"
             :value="m.value"
           />
         </el-select>
       </div>
 
       <div class="filter-item">
-        <span class="filter-label">操作</span>
-        <el-select v-model="actionFilter" clearable placeholder="全部操作" style="width: 180px" @change="applyKeyword">
+        <span class="filter-label">{{ t('audit.actionField') }}</span>
+        <el-select v-model="actionFilter" clearable :placeholder="t('audit.allActions')" style="width: 180px" @change="applyKeyword">
           <el-option
             v-for="a in actionOptions"
             :key="a.value"
-            :label="a.label"
+            :label="t(a.labelKey)"
             :value="a.value"
           />
         </el-select>
       </div>
 
       <div class="filter-item date-filter">
-        <span class="filter-label">日期</span>
+        <span class="filter-label">{{ t('common.date') }}</span>
         <div class="date-quick">
           <el-button
             v-for="p in quickPresets"
@@ -56,15 +56,15 @@
             plain
             @click="applyQuickPreset(p)"
           >
-            {{ p.label }}
+            {{ t(p.labelKey) }}
           </el-button>
         </div>
         <el-date-picker
           v-model="dateRange"
           type="daterange"
-          range-separator="至"
-          start-placeholder="开始日期"
-          end-placeholder="结束日期"
+          :range-separator="t('common.to')"
+          :start-placeholder="t('common.startDate')"
+          :end-placeholder="t('common.endDate')"
           value-format="YYYY-MM-DD"
           :clearable="true"
           style="width: 240px"
@@ -72,14 +72,14 @@
         />
       </div>
 
-      <div class="filter-meta mono">{{ total }} 条记录</div>
+      <div class="filter-meta mono">{{ t('audit.recordCount', { n: total }) }}</div>
     </div>
 
     <div v-loading="loading" class="card table-card">
       <el-table
         :data="items"
         style="width: 100%"
-        empty-text="暂无审计记录"
+        :empty-text="t('audit.emptyTable')"
       >
         <el-table-column prop="id" label="ID" width="80" align="center">
           <template #default="{ row }">
@@ -87,25 +87,25 @@
           </template>
         </el-table-column>
 
-        <el-table-column label="时间" min-width="170">
+        <el-table-column :label="t('common.time')" min-width="170">
           <template #default="{ row }">
             <span class="mono time-cell">{{ fmtTime(row.created_at) }}</span>
           </template>
         </el-table-column>
 
-        <el-table-column label="用户" min-width="130">
+        <el-table-column :label="t('audit.userCol')" min-width="130">
           <template #default="{ row }">
             <span class="user-cell">{{ row.username || '—' }}</span>
           </template>
         </el-table-column>
 
-        <el-table-column label="来源 IP" min-width="120">
+        <el-table-column :label="t('audit.ipCol')" min-width="120">
           <template #default="{ row }">
             <span class="mono time-cell">{{ row.ip || '—' }}</span>
           </template>
         </el-table-column>
 
-        <el-table-column label="操作" width="200">
+        <el-table-column :label="t('common.action')" width="200">
           <template #default="{ row }">
             <div class="action-cell">
               <el-tag :style="moduleTagStyle(row.module)" effect="plain" size="small" class="module-tag">
@@ -119,7 +119,7 @@
           </template>
         </el-table-column>
 
-        <el-table-column label="详情" min-width="320" show-overflow-tooltip>
+        <el-table-column :label="t('audit.detailCol')" min-width="320" show-overflow-tooltip>
           <template #default="{ row }">
             <span class="detail-cell">{{ row.detail || '—' }}</span>
           </template>
@@ -145,7 +145,10 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import { Search } from '@element-plus/icons-vue'
+import { useI18n } from 'vue-i18n'
 import { auditApi } from '@/api'
+
+const { t } = useI18n()
 
 interface AuditRow {
   id: number
@@ -171,19 +174,28 @@ const moduleFilter = ref('')
 const RETENTION_DAYS = 180 // 与后端 AUDIT_RETENTION_DAYS 默认一致
 
 /* ── 模块分类（后端按 action 前缀推导） ─────────────────────────────── */
-const MODULE_LABELS: Record<string, string> = {
-  auth: '认证',
-  channel: '渠道',
-  template: '模板',
-  task: '任务',
-  log: '日志',
-  user: '用户',
-  other: '其他',
+interface FilterOption {
+  value: string
+  labelKey: string
 }
-const moduleOptions = Object.entries(MODULE_LABELS).map(([value, label]) => ({ value, label }))
+
+const moduleOptions: FilterOption[] = [
+  { value: 'auth', labelKey: 'audit.module.auth' },
+  { value: 'channel', labelKey: 'audit.module.channel' },
+  { value: 'template', labelKey: 'audit.module.template' },
+  { value: 'task', labelKey: 'audit.module.task' },
+  { value: 'log', labelKey: 'audit.module.log' },
+  { value: 'user', labelKey: 'audit.module.user' },
+  { value: 'other', labelKey: 'audit.module.other' },
+]
+
+const MODULE_KEY: Record<string, string> = Object.fromEntries(
+  moduleOptions.map((o) => [o.value, o.labelKey])
+)
 
 function moduleLabel(module: string) {
-  return MODULE_LABELS[module] || module || '—'
+  const key = MODULE_KEY[module]
+  return (module && key ? t(key) : module) || '—'
 }
 
 function moduleTagStyle(module: string) {
@@ -198,46 +210,47 @@ function moduleTagStyle(module: string) {
   return { color: c, borderColor: `${c}55`, backgroundColor: `${c}1a` }
 }
 
-/* ── 操作类型选项（后端 action 值 → 中文） ──────────────────────────── */
-const ACTION_LABELS: Record<string, string> = {
-  'login.success': '登录成功',
-  'login.failed': '登录失败',
-  'login.step1': '登录(待2FA)',
-  logout: '登出',
-  'auth.2fa_setup': '生成2FA密钥',
-  'auth.2fa_enable': '启用2FA',
-  'auth.2fa_disable': '关闭2FA',
-  'channel.create': '新建渠道',
-  'channel.update': '更新渠道',
-  'channel.delete': '删除渠道',
-  'channel.batch_delete': '批量删渠道',
-  'channel.test': '测试渠道',
-  'template.create': '新建模板',
-  'template.update': '更新模板',
-  'template.delete': '删除模板',
-  'template.batch_delete': '批量删模板',
-  'task.create': '新建任务',
-  'task.update': '更新任务',
-  'task.delete': '删除任务',
-  'task.batch_delete': '批量删任务',
-  'task.toggle': '启停任务',
-  'task.send_now': '立即发送',
-  'log.retry': '日志重试',
-  'user.create': '新建用户',
-  'user.update': '更新用户',
-  'user.delete': '删除用户',
-  'user.batch_delete': '批量删用户',
-  'user.reset_token': '生成重置令牌',
-  'user.disable': '禁用用户',
-  'user.enable': '启用用户',
-  'user.2fa_force_enable': '强制开启2FA',
-  'user.2fa_force_disable': '强制关闭2FA',
+/* ── 操作类型选项（后端 action 值 → 本地化标签） ─────────────────────── */
+const ACTION_KEY: Record<string, string> = {
+  'login.success': 'audit.action.loginSuccess',
+  'login.failed': 'audit.action.loginFailed',
+  'login.step1': 'audit.action.loginStep1',
+  logout: 'audit.action.logout',
+  'auth.2fa_setup': 'audit.action.twoFaSetup',
+  'auth.2fa_enable': 'audit.action.twoFaEnable',
+  'auth.2fa_disable': 'audit.action.twoFaDisable',
+  'channel.create': 'audit.action.channelCreate',
+  'channel.update': 'audit.action.channelUpdate',
+  'channel.delete': 'audit.action.channelDelete',
+  'channel.batch_delete': 'audit.action.channelBatchDelete',
+  'channel.test': 'audit.action.channelTest',
+  'template.create': 'audit.action.templateCreate',
+  'template.update': 'audit.action.templateUpdate',
+  'template.delete': 'audit.action.templateDelete',
+  'template.batch_delete': 'audit.action.templateBatchDelete',
+  'task.create': 'audit.action.taskCreate',
+  'task.update': 'audit.action.taskUpdate',
+  'task.delete': 'audit.action.taskDelete',
+  'task.batch_delete': 'audit.action.taskBatchDelete',
+  'task.toggle': 'audit.action.taskToggle',
+  'task.send_now': 'audit.action.taskSendNow',
+  'log.retry': 'audit.action.logRetry',
+  'user.create': 'audit.action.userCreate',
+  'user.update': 'audit.action.userUpdate',
+  'user.delete': 'audit.action.userDelete',
+  'user.batch_delete': 'audit.action.userBatchDelete',
+  'user.reset_token': 'audit.action.userResetToken',
+  'user.disable': 'audit.action.userDisable',
+  'user.enable': 'audit.action.userEnable',
+  'user.2fa_force_enable': 'audit.action.userTwoFaForceEnable',
+  'user.2fa_force_disable': 'audit.action.userTwoFaForceDisable',
 }
 
-const actionOptions = Object.entries(ACTION_LABELS).map(([value, label]) => ({ value, label }))
+const actionOptions: FilterOption[] = Object.entries(ACTION_KEY).map(([value, labelKey]) => ({ value, labelKey }))
 
 function actionLabel(action: string) {
-  return ACTION_LABELS[action] || action
+  const key = ACTION_KEY[action]
+  return (action && key ? t(key) : action)
 }
 
 function actionTagStyle(action: string) {
@@ -252,9 +265,9 @@ function actionTagStyle(action: string) {
 
 /* ── 日期范围（与发送日志一致） ─────────────────────────────────────── */
 const quickPresets = [
-  { key: 'today', label: '今天', days: 0 },
-  { key: 'week', label: '最近一周', days: 7 },
-  { key: 'month', label: '最近一个月', days: 30 },
+  { key: 'today', labelKey: 'common.today', days: 0 },
+  { key: 'week', labelKey: 'common.lastWeek', days: 7 },
+  { key: 'month', labelKey: 'common.lastMonth', days: 30 },
 ]
 const quickPreset = ref('month')
 const dateRange = ref<[string, string] | null>(null)
