@@ -25,6 +25,10 @@ type AuthClaims struct {
 	jwt.RegisteredClaims
 }
 
+// dummyBcryptHash 用于登录「用户不存在」分支的等价工作量比对，
+// 内容为公开已知口令的哈希即可——用途是消耗相同 CPU 时间，非机密。
+var dummyBcryptHash = []byte("$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy")
+
 type AuthService struct {
 	users      *repository.UserRepo
 	rateLimit  *repository.RateLimitRepo
@@ -213,6 +217,9 @@ func (s *AuthService) Login(username, password, ip string) (*LoginResult, error)
 	}
 	u, err := s.users.GetByUsername(username)
 	if errors.Is(err, repository.ErrNotFound) {
+		// 账号不存在也跑一次等价 bcrypt 比对：抹平与「存在但密码错」路径的
+		// 响应时序差，阻断按耗时区分用户名是否存在的枚举探测。
+		_ = bcrypt.CompareHashAndPassword(dummyBcryptHash, []byte(password))
 		_ = s.rateLimit.RecordLoginFailure(bucket, s.maxFails, s.lockWindow)
 		return nil, errors.New("用户名或密码错误")
 	}
@@ -384,6 +391,11 @@ func (s *AuthService) ChangePassword(userID int64, oldPass, newPass string) erro
 		return err
 	}
 	return s.users.UpdatePassword(u.ID, string(hash))
+}
+
+// RevokeAllSessions 吊销该用户当前全部已签发 JWT（登出全部设备）。
+func (s *AuthService) RevokeAllSessions(userID int64) error {
+	return s.users.RevokeAllSessions(userID)
 }
 
 // ResetPassword 忘记密码：用管理员生成的一次性令牌重置密码（公开接口）。

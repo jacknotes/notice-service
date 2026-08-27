@@ -33,14 +33,18 @@ func (r *UserRepo) Create(u *model.User) error {
 }
 
 // userCols 用户常用列（含 2FA 字段与启用状态）。
-const userCols = "id, username, display_name, email, password_hash, role, enabled, created_at, updated_at, totp_secret, totp_enabled, totp_recovery_codes"
+const userCols = "id, username, display_name, email, password_hash, role, enabled, created_at, updated_at, session_revoked_at, totp_secret, totp_enabled, totp_recovery_codes"
 
 func scanUser(row interface{ Scan(...any) error }) (*model.User, error) {
 	u := &model.User{}
 	var secret, recovery sql.NullString
+	var revoked sql.NullTime
 	var totpEnabled bool
-	if err := row.Scan(&u.ID, &u.Username, &u.DisplayName, &u.Email, &u.PasswordHash, &u.Role, &u.Enabled, &u.CreatedAt, &u.UpdatedAt, &secret, &totpEnabled, &recovery); err != nil {
+	if err := row.Scan(&u.ID, &u.Username, &u.DisplayName, &u.Email, &u.PasswordHash, &u.Role, &u.Enabled, &u.CreatedAt, &u.UpdatedAt, &revoked, &secret, &totpEnabled, &recovery); err != nil {
 		return nil, err
+	}
+	if revoked.Valid {
+		u.SessionRevokedAt = &revoked.Time
 	}
 	u.TOTPSecret = secret.String
 	u.TOTPEnabled = totpEnabled
@@ -74,8 +78,15 @@ func (r *UserRepo) GetByID(id int64) (*model.User, error) {
 	return u, nil
 }
 
+// UpdatePassword 同时推进会话吊销基线：密码变更后旧 JWT 全部失效。
 func (r *UserRepo) UpdatePassword(userID int64, hash string) error {
-	_, err := r.db.Exec("UPDATE users SET password_hash = ? WHERE id = ?", hash, userID)
+	_, err := r.db.Exec("UPDATE users SET password_hash = ?, session_revoked_at = NOW() WHERE id = ?", hash, userID)
+	return err
+}
+
+// RevokeAllSessions 吊销该用户当前全部会话（登出全部设备 / 检测到风险时）。
+func (r *UserRepo) RevokeAllSessions(userID int64) error {
+	_, err := r.db.Exec("UPDATE users SET session_revoked_at = NOW() WHERE id = ?", userID)
 	return err
 }
 
@@ -143,7 +154,7 @@ func (r *UserRepo) SetResetToken(userID int64, token string, expires time.Time) 
 // 返回是否成功匹配并更新；失败表示令牌无效、已用或过期。
 func (r *UserRepo) ResetPasswordByToken(username, token, newHash string) (bool, error) {
 	res, err := r.db.Exec(
-		"UPDATE users SET password_hash=?, reset_token=NULL, reset_token_expires=NULL "+
+		"UPDATE users SET password_hash=?, reset_token=NULL, reset_token_expires=NULL, session_revoked_at=NOW() "+
 			"WHERE username=? AND reset_token=? AND reset_token_expires > NOW() AND deleted_at IS NULL",
 		newHash, username, token)
 	if err != nil {

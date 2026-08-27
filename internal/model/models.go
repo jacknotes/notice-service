@@ -14,6 +14,9 @@ type User struct {
 	UpdatedAt    time.Time  `json:"updated_at"`
 	DeletedAt    *time.Time `json:"-"`
 
+	// 会话吊销基线：晚于该时间签发的 JWT 才有效；NULL 表示从未吊销
+	SessionRevokedAt *time.Time `json:"-"`
+
 	// 双因子认证（TOTP）
 	TOTPSecret        string   `json:"-"`
 	TOTPEnabled       bool     `json:"totp_enabled"`
@@ -67,6 +70,7 @@ type Task struct {
 	ReceiversJSON    string            `json:"-"`
 	CronExpr         string            `json:"cron_expr"`
 	APIKey           string            `json:"api_key,omitempty"`
+	HMACSecret       string            `json:"hmac_secret,omitempty"`
 	RequireSignature bool              `json:"require_signature"`
 	AllowedIPs       []string          `json:"allowed_ips,omitempty"`
 	AllowedIPsJSON   string            `json:"-"`

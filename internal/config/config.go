@@ -166,12 +166,14 @@ func loadFromPath(path string) *Config {
 		LogRetentionDays:      firstInt("LOG_RETENTION_DAYS", f.LogRetentionDays, 90),
 		QueueJobRetentionDays: firstInt("QUEUE_JOB_RETENTION_DAYS", f.Queue.JobRetentionDays, 30),
 		AuditRetentionDays:    firstInt("AUDIT_RETENTION_DAYS", f.AuditRetentionDays, 180),
-		TrustedProxies:        parseCSV(firstNonEmpty(os.Getenv("TRUSTED_PROXIES"), f.TrustedProxies, "127.0.0.1,::1,172.16.0.0/12")),
-		StaticDir:             firstNonEmpty(os.Getenv("STATIC_DIR"), f.StaticDir, "./web/dist"),
-		SwaggerEnabled:        firstBool("SWAGGER_ENABLED", f.SwaggerEnabled, false),
-		MetricsEnabled:        firstBool("METRICS_ENABLED", f.Metrics.Enabled, false),
-		MetricsUser:           firstNonEmpty(os.Getenv("METRICS_USER"), f.Metrics.User, ""),
-		MetricsPassword:       firstNonEmpty(os.Getenv("METRICS_PASSWORD"), f.Metrics.Password, ""),
+		// 默认仅信任本机反代；部署在容器网络且经网内反代时显式设置
+		// TRUSTED_PROXIES（如 172.16.0.0/12），避免任意邻居容器伪造 X-Forwarded-For。
+		TrustedProxies:  parseCSV(firstNonEmpty(os.Getenv("TRUSTED_PROXIES"), f.TrustedProxies, "127.0.0.1,::1")),
+		StaticDir:       firstNonEmpty(os.Getenv("STATIC_DIR"), f.StaticDir, "./web/dist"),
+		SwaggerEnabled:  firstBool("SWAGGER_ENABLED", f.SwaggerEnabled, false),
+		MetricsEnabled:  firstBool("METRICS_ENABLED", f.Metrics.Enabled, false),
+		MetricsUser:     firstNonEmpty(os.Getenv("METRICS_USER"), f.Metrics.User, ""),
+		MetricsPassword: firstNonEmpty(os.Getenv("METRICS_PASSWORD"), f.Metrics.Password, ""),
 	}
 }
 
@@ -228,12 +230,6 @@ func parseCSV(s string) []string {
 // keyFile 未显式配置 ENCRYPT_KEY 时用于持久化密钥，保证重启后能解密已存的渠道配置。
 const keyFile = ".notice-encrypt.key"
 
-// resolveEncryptKey 优先用环境变量；否则读取本地密钥文件，不存在则生成并持久化。
-func resolveEncryptKey() string {
-	k, _ := resolveEncryptKeyWith("", keyFile)
-	return k
-}
-
 // resolveEncryptKeyWith 密钥解析：env ENCRYPT_KEY > config.yml encrypt_key > 密钥文件 > 随机生成。
 // 返回 (密钥, 是否自动生成)。自动生成仅在「无显式密钥且无可用密钥文件」时发生。
 func resolveEncryptKeyWith(fileKey, filePath string) (string, bool) {
@@ -257,15 +253,6 @@ func (c *Config) DSN() string {
 func getEnv(key, def string) string {
 	if v := os.Getenv(key); v != "" {
 		return v
-	}
-	return def
-}
-
-func getEnvInt(key string, def int) int {
-	if v := os.Getenv(key); v != "" {
-		if n, err := strconv.Atoi(v); err == nil {
-			return n
-		}
 	}
 	return def
 }
@@ -317,6 +304,15 @@ func loadDotEnv(path string) {
 			_ = os.Setenv(k, v)
 		}
 	}
+}
+
+func getEnvInt(key string, def int) int {
+	if v := os.Getenv(key); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			return n
+		}
+	}
+	return def
 }
 
 func randomHex(n int) string {

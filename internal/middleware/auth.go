@@ -28,6 +28,11 @@ func Auth(svc *service.AuthService) gin.HandlerFunc {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "账号已被禁用"})
 			return
 		}
+		// 会话吊销基线：改密/重置/登出后签发的更早令牌立即失效（不只靠 24h TTL）。
+		if u.SessionRevokedAt != nil && claims.IssuedAt != nil && claims.IssuedAt.Before(*u.SessionRevokedAt) {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "会话已失效，请重新登录"})
+			return
+		}
 		c.Set("uid", u.ID)
 		c.Set("role", u.Role)
 		c.Set("username", u.Username)

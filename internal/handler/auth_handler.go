@@ -2,6 +2,7 @@ package handler
 
 import (
 	"database/sql"
+	"log"
 	"net/http"
 	"strings"
 
@@ -147,8 +148,12 @@ func (h *AuthHandler) Verify2FA(c *gin.Context) {
 // @Success 200 {object} map[string]interface{}
 // @Router /api/auth/logout [post]
 func (h *AuthHandler) Logout(c *gin.Context) {
+	uid := c.GetInt64("uid")
+	if err := h.Svc.RevokeAllSessions(uid); err != nil {
+		log.Printf("logout: revoke sessions failed: %v", err) // 吊销失败不阻塞前端清 token
+	}
 	auditCtx(c, h.db, "logout", "登出")
-	// v1：前端丢弃令牌即可实现登出
+	// 服务端吊销该用户全部已签发令牌（含其它设备），前端同时丢弃本地 token。
 	c.JSON(http.StatusOK, gin.H{"ok": true})
 }
 
