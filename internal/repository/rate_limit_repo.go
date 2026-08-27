@@ -2,31 +2,82 @@ package repository
 
 import (
 	"database/sql"
+	"strconv"
+	"sync"
 	"time"
 )
 
 // RateLimitRepo MySQL 集中式限流：一张表同时服务固定窗口计数（webhook）与
 // 连续失败+锁定（登录）。多实例共享计数，替代原来的内存态限流。
-type RateLimitRepo struct{ db *sql.DB }
+type RateLimitRepo struct {
+	db *sql.DB
 
-func NewRateLimitRepo(db *sql.DB) *RateLimitRepo { return &RateLimitRepo{db: db} }
+	// 拒绝方向本地缓存：key = bucket + "|" + windowStart，value = windowEnd（unix 秒）。
+	// 仅缓存「已超限拒绝」结论——fail-safe：漏判方向是多拒，绝不因缓存放松限流。
+	// 多实例各持本地副本，DB 始终是最终计数来源；窗口滚动后 key 变化自然失效。
+	mu     sync.Mutex
+	denied map[string]int64
+}
+
+func NewRateLimitRepo(db *sql.DB) *RateLimitRepo {
+	return &RateLimitRepo{db: db, denied: make(map[string]int64)}
+}
 
 // Allow 固定窗口计数：bucket 在 window 内的累计次数 <= limit 放行。
+// 单轮往返：INSERT ... ON DUPLICATE KEY UPDATE 内用 LAST_INSERT_ID(expr)
+// 把新计数暴露给 OK 包，res.LastInsertId() 即新 count（首插=1、upsert=count+1）。
 // 窗口滚动 = 主键换行（window_start 随当前窗口变化）；并发下由行锁保证计数
 // 单调，最多略微超过 limit，绝不小于（fail-safe 方向）。
 func (r *RateLimitRepo) Allow(bucket string, window time.Duration, limit int) (bool, error) {
-	windowStart := time.Now().Unix() / int64(window.Seconds()) * int64(window.Seconds())
-	if _, err := r.db.Exec(
-		`INSERT INTO rate_limits (bucket, window_start, count) VALUES (?, ?, 1)
-		 ON DUPLICATE KEY UPDATE count = count + 1`, bucket, windowStart); err != nil {
+	now := time.Now()
+	windowStart := now.Unix() / int64(window.Seconds()) * int64(window.Seconds())
+	windowEnd := windowStart + int64(window.Seconds())
+	key := bucket + "|" + strconv.FormatInt(windowStart, 10)
+
+	// 拒绝短路：本窗口已超限，直接拒绝，不再打 DB。
+	if r.deniedWithin(key, now.Unix()) {
+		return false, nil
+	}
+
+	res, err := r.db.Exec(
+		`INSERT INTO rate_limits (bucket, window_start, count) VALUES (?, ?, LAST_INSERT_ID(1))
+		 ON DUPLICATE KEY UPDATE count = LAST_INSERT_ID(count + 1)`, bucket, windowStart)
+	if err != nil {
 		return false, err
 	}
-	var count int
-	if err := r.db.QueryRow(
-		`SELECT count FROM rate_limits WHERE bucket=? AND window_start=?`, bucket, windowStart).Scan(&count); err != nil {
+	count, err := res.LastInsertId()
+	if err != nil {
 		return false, err
 	}
-	return count <= limit, nil
+
+	allowed := count <= int64(limit)
+	if !allowed {
+		r.setDenied(key, windowEnd)
+	}
+	return allowed, nil
+}
+
+// deniedWithin 命中未过期的拒绝缓存返回 true（应直接拒绝）。
+func (r *RateLimitRepo) deniedWithin(key string, nowUnix int64) bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	end, ok := r.denied[key]
+	return ok && end > nowUnix
+}
+
+// setDenied 记录拒绝结论；顺带在缓存过大时清理过期条目，防止无限膨胀。
+func (r *RateLimitRepo) setDenied(key string, windowEnd int64) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if len(r.denied) >= 4096 {
+		now := time.Now().Unix()
+		for k, end := range r.denied {
+			if end <= now {
+				delete(r.denied, k)
+			}
+		}
+	}
+	r.denied[key] = windowEnd
 }
 
 // LoginLocked 登录是否处于锁定（locked_until 未过期）。
