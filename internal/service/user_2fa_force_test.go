@@ -132,4 +132,3 @@ func TestUserUpdateProfile(t *testing.T) {
 	}
 	t.Fatal("updated user not found in list")
 }
-

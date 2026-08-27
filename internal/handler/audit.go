@@ -1,9 +1,9 @@
 package handler
 
 import (
-	"strings"
 	"database/sql"
 	"fmt"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 

@@ -160,7 +160,9 @@ func TestUserServiceDisableEnable(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { db.Exec("DELETE FROM users WHERE id IN (?, ?, ?, ?)", bAdmin.ID, op.ID, otherAdmin.ID, normal.ID) })
+	t.Cleanup(func() {
+		db.Exec("DELETE FROM users WHERE id IN (?, ?, ?, ?)", bAdmin.ID, op.ID, otherAdmin.ID, normal.ID)
+	})
 
 	// 非 admin 无权操作
 	if err := svc.DisableUser(normal, op.ID); err == nil || !strings.Contains(err.Error(), "无权操作") {

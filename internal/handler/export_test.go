@@ -132,23 +132,33 @@ func TestExportImportRoundTrip(t *testing.T) {
 
 	// 建渠道/模板/任务
 	wc := authReq(t, r, tok, "POST", "/api/channels", `{"type":"email","name":"rt-ch","config":{"host":"smtp.x.com","port":"587","username":"u","password":"p","from":"a@x.com"},"enabled":true}`)
-	if wc.Code != 200 { t.Fatalf("create channel = %d", wc.Code) }
+	if wc.Code != 200 {
+		t.Fatalf("create channel = %d", wc.Code)
+	}
 	ch := mustJSON(t, wc)
 	wt := authReq(t, r, tok, "POST", "/api/templates", `{"name":"rt-tpl","subject":"s","content_md":"hi","variables":[]}`)
-	if wt.Code != 200 { t.Fatalf("create template = %d", wt.Code) }
+	if wt.Code != 200 {
+		t.Fatalf("create template = %d", wt.Code)
+	}
 	tpl := mustJSON(t, wt)
 	payload := `{"name":"rt-task","channel_id":` + num(int64(ch["id"].(float64))) + `,"template_id":` + num(int64(tpl["id"].(float64))) + `,"trigger_type":"api","receivers":["a@x.com"],"enabled":true}`
 	wtk := authReq(t, r, tok, "POST", "/api/tasks", payload)
-	if wtk.Code != 200 { t.Fatalf("create task = %d", wtk.Code) }
+	if wtk.Code != 200 {
+		t.Fatalf("create task = %d", wtk.Code)
+	}
 
 	// 导出（含真实 id）
 	we := authReq(t, r, tok, "GET", "/api/export", "")
-	if we.Code != 200 { t.Fatalf("export = %d body=%s", we.Code, we.Body.String()) }
+	if we.Code != 200 {
+		t.Fatalf("export = %d body=%s", we.Code, we.Body.String())
+	}
 	bundle := we.Body.String()
 
 	// 导入同一份导出 → 全部按名称冲突跳过（幂等），返回 200 且无报错
 	wi := authReq(t, r, tok, "POST", "/api/import", bundle)
-	if wi.Code != 200 { t.Fatalf("re-import = %d body=%s", wi.Code, wi.Body.String()) }
+	if wi.Code != 200 {
+		t.Fatalf("re-import = %d body=%s", wi.Code, wi.Body.String())
+	}
 	res := mustJSON(t, wi)
 	if int(res["channels_created"].(float64))+int(res["templates_created"].(float64))+int(res["tasks_created"].(float64)) != 0 {
 		t.Fatalf("re-import should skip all (name conflicts), got %+v", res)

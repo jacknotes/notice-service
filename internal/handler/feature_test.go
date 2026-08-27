@@ -31,7 +31,7 @@ func TestAuditListEndpoint(t *testing.T) {
 		t.Fatalf("audit list = %d body=%s", w.Code, w.Body.String())
 	}
 	var resp struct {
-		Total int                    `json:"total"`
+		Total int                      `json:"total"`
 		Items []map[string]interface{} `json:"items"`
 	}
 	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
