@@ -14,7 +14,7 @@
 - **仪表盘**：今日发送量、成功率、近 7/30 天发送趋势；发送日志含触发方式 / 触发人 / 触发 IP
 - **多实例可观测**：各后端实例心跳上报，「信号在线」侧边栏显示健康节点数，点击可查看各节点状态（地址/版本/启动时间/最后心跳）
 - **前端**：Vue3 + Element Plus 深色主题（"Signal Relay" 设计），PC/移动端响应式；侧边栏可收缩/展开（状态记忆）；列表支持排序与分页，渠道/模板/任务支持「复制」，模板/任务编辑实时预览，用户管理支持显示名/邮箱、角色调整、禁用/启用与管理员强制 2FA；界面中英文双语可切换（vue-i18n，顶栏 + 个人设置双入口，默认中文）；界面展示构建版本号（侧边栏底部 / 节点状态弹窗 / 个人设置页），升级对比一目了然
-- **部署**：Docker 多阶段构建，单实例镜像约 30-50MB
+- **部署**：Docker 多阶段构建，单实例镜像约 30-50MB；已发布至 Docker Hub（`jacknotes/notice-service`），单镜像 + MySQL 一键启动
 
 ## 技术栈
 
@@ -25,6 +25,50 @@
 | 前端 | Vue3 + Element Plus + Vite + ECharts |
 | 认证 | JWT (golang-jwt) + bcrypt |
 | 部署 | Docker 多阶段 + docker-compose |
+
+## 一键部署（Docker Hub 镜像，推荐）
+
+适合只想**用起来**的用户：直接拉取已发布镜像 [jacknotes/notice-service](https://hub.docker.com/r/jacknotes/notice-service)，不需要克隆源码、不需要本地构建。前置条件仅 Docker + Docker Compose v2。
+
+**方式一：不克隆仓库（只需两个文件）**
+
+```bash
+# 1. 下载 compose 文件与环境变量模板
+curl -O https://raw.githubusercontent.com/jacknotes/notice-service/main/docker-compose.quickstart.yml
+curl -o .env https://raw.githubusercontent.com/jacknotes/notice-service/main/.env.example
+
+# 2. 修改全部密码与密钥（必改：DB_PASSWORD / MYSQL_ROOT_PASSWORD /
+#    JWT_SECRET / ENCRYPT_KEY / ADMIN_PASS；缺任一项启动会直接报错）
+vi .env
+
+# 3. 一键启动（notice-service + MySQL 5.7）
+docker compose -f docker-compose.quickstart.yml up -d
+```
+
+**方式二：克隆仓库**
+
+```bash
+git clone https://github.com/jacknotes/notice-service.git
+cd notice-service
+cp .env.example .env && vi .env          # 同上，必改密码与密钥
+docker compose -f docker-compose.quickstart.yml up -d
+```
+
+启动完成后访问 **http://<主机IP>:8080**，默认管理员 `admin` / 你在 `.env` 里设置的 `ADMIN_PASS`。
+
+常用命令：
+
+```bash
+docker compose -f docker-compose.quickstart.yml logs -f    # 跟随日志
+docker compose -f docker-compose.quickstart.yml down       # 停止（数据保留在 mysql_data 卷）
+docker compose -f docker-compose.quickstart.yml pull \
+  && docker compose -f docker-compose.quickstart.yml up -d # 升级到新版本镜像
+```
+
+> - 国内网络拉取 Docker Hub 镜像慢/失败时，在 `.env` 设置 `MYSQL_IMAGE=docker.m.daocloud.io/library/mysql:5.7`，应用镜像同理可换成镜像源前缀形式。
+> - 首启自动建表并创建管理员，数据（渠道配置、模板、任务、日志）持久化在 MySQL 卷中，重启不丢。
+> - 生产环境建议置于 Nginx 反向代理之后（参考下文「Docker 部署」的反代说明），不要将 8080 直接暴露公网。
+> - 需要多实例高可用（双实例 + 负载均衡、源码构建）时，见下文「Docker 部署（多实例高可用）」。
 
 ## 快速开始（本地开发）
 
@@ -108,6 +152,8 @@ make clean              # 删除 .dev/notice-service、web/dist、web/node_modul
 ```
 
 ## Docker 部署（多实例高可用）
+
+> 与上文「一键部署」的区别：本节从**源码构建**镜像并运行 **2 个服务实例**（负载均衡、单实例宕机自动接管），适合生产环境或需要自定义代码的场景。只需单实例请直接用 `docker-compose.quickstart.yml`。
 
 ```bash
 # 1. 复制并修改配置（必须改：DB_PASSWORD / MYSQL_ROOT_PASSWORD / JWT_SECRET /

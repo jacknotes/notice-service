@@ -1,0 +1,59 @@
+# Notice Service · 一键部署（单实例）
+#
+# 面向最终用户：直接拉取 Docker Hub 镜像 jacknotes/notice-service，无需克隆源码构建。
+# 配套 MySQL 5.7，`docker compose up -d` 即可启动。
+#
+# 使用步骤：
+#   1. 准备本文件与 .env（cp .env.example .env 后修改全部密码与密钥）
+#   2. docker compose up -d
+#   3. 浏览器访问 http://<主机IP>:8080（默认管理员 admin / ADMIN_PASS）
+#
+# 如需多实例高可用（源码构建、双实例 + 负载均衡），见 docker-compose.yml。
+#
+# ${VAR:?err} 语法：关键变量缺失时 docker compose 直接报错退出，避免以弱默认密钥裸跑。
+services:
+  notice-service:
+    image: jacknotes/notice-service:v1
+    ports:
+      - "8080:8080"
+    environment:
+      - DB_HOST=mysql
+      - DB_PORT=3306
+      - DB_USER=notice
+      - DB_PASSWORD=${DB_PASSWORD:?请在 .env 中设置 DB_PASSWORD}
+      - DB_NAME=notice_service
+      - JWT_SECRET=${JWT_SECRET:?请在 .env 中设置 JWT_SECRET}
+      - ENCRYPT_KEY=${ENCRYPT_KEY:?请在 .env 中设置 ENCRYPT_KEY}
+      - ADMIN_USER=${ADMIN_USER:-admin}
+      - ADMIN_PASS=${ADMIN_PASS:?请在 .env 中设置 ADMIN_PASS}
+      - TRUSTED_PROXIES=${TRUSTED_PROXIES:-127.0.0.1,::1,172.16.0.0/12}
+      - GIN_MODE=release
+    depends_on:
+      mysql:
+        condition: service_healthy
+    restart: unless-stopped
+    stop_grace_period: 30s
+
+  mysql:
+    # 国内网络可设为镜像源，如 docker.m.daocloud.io/library/mysql:5.7
+    image: ${MYSQL_IMAGE:-mysql:5.7}
+    # 仅宿主机可访问（供运维工具），不对外网暴露数据库端口。
+    ports:
+      - "127.0.0.1:3306:3306"
+    environment:
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD:?请在 .env 中设置 MYSQL_ROOT_PASSWORD}
+      - MYSQL_DATABASE=notice_service
+      - MYSQL_USER=notice
+      - MYSQL_PASSWORD=${DB_PASSWORD:?请在 .env 中设置 DB_PASSWORD}
+    volumes:
+      - mysql_data:/var/lib/mysql
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-p${MYSQL_ROOT_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+volumes:
+  mysql_data:
