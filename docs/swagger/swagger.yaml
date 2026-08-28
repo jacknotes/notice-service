@@ -1,6 +1,8 @@
 definitions:
   model.Channel:
     properties:
+      category:
+        type: string
       config:
         additionalProperties:
           type: string
@@ -27,6 +29,8 @@ definitions:
           type: string
         type: array
       api_key:
+        type: string
+      category:
         type: string
       channel_id:
         type: integer
@@ -71,6 +75,9 @@ definitions:
     type: object
   model.TaskLog:
     properties:
+      category:
+        description: 任务的当前分类（读取时 JOIN tasks 得到，不落库）
+        type: string
       channel_id:
         type: integer
       content:
@@ -102,6 +109,8 @@ definitions:
     type: object
   model.Template:
     properties:
+      category:
+        type: string
       content_md:
         type: string
       created_at:
@@ -384,6 +393,101 @@ paths:
       summary: 修改自己的显示名/邮箱
       tags:
       - 认证
+  /api/categories:
+    get:
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              additionalProperties: true
+              type: object
+            type: array
+      security:
+      - BearerAuth: []
+      summary: 共享分类列表
+      tags:
+      - 分类
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 分类信息
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 新增分类
+      tags:
+      - 分类
+  /api/categories/{name}:
+    delete:
+      parameters:
+      - description: 分类名称
+        in: path
+        name: name
+        required: true
+        type: string
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 删除分类
+      tags:
+      - 分类
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: 分类名称
+        in: path
+        name: name
+        required: true
+        type: string
+      - description: 新名称
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 重命名分类
+      tags:
+      - 分类
+  /api/categories/unused:
+    get:
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              type: string
+            type: array
+      security:
+      - BearerAuth: []
+      summary: 未被引用的分类
+      tags:
+      - 分类
   /api/channels:
     get:
       responses:
@@ -660,6 +764,10 @@ paths:
         in: query
         name: status
         type: string
+      - description: 分类（任务的当前分类）
+        in: query
+        name: category
+        type: string
       - description: 开始日期 YYYY-MM-DD
         in: query
         name: from
@@ -734,6 +842,10 @@ paths:
       - description: 状态
         in: query
         name: status
+        type: string
+      - description: 分类（任务的当前分类）
+        in: query
+        name: category
         type: string
       - description: 开始日期
         in: query

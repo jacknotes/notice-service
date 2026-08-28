@@ -381,6 +381,161 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/categories": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "tags": [
+                    "分类"
+                ],
+                "summary": "共享分类列表",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "additionalProperties": true
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "tags": [
+                    "分类"
+                ],
+                "summary": "新增分类",
+                "parameters": [
+                    {
+                        "description": "分类信息",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/categories/unused": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "tags": [
+                    "分类"
+                ],
+                "summary": "未被引用的分类",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/categories/{name}": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "tags": [
+                    "分类"
+                ],
+                "summary": "重命名分类",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "分类名称",
+                        "name": "name",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "新名称",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "tags": [
+                    "分类"
+                ],
+                "summary": "删除分类",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "分类名称",
+                        "name": "name",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
         "/api/channels": {
             "get": {
                 "security": [
@@ -840,6 +995,12 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
+                        "description": "分类（任务的当前分类）",
+                        "name": "category",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
                         "description": "开始日期 YYYY-MM-DD",
                         "name": "from",
                         "in": "query"
@@ -896,6 +1057,12 @@ const docTemplate = `{
                         "type": "string",
                         "description": "状态",
                         "name": "status",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "分类（任务的当前分类）",
+                        "name": "category",
                         "in": "query"
                     },
                     {
@@ -1878,6 +2045,9 @@ const docTemplate = `{
         "model.Channel": {
             "type": "object",
             "properties": {
+                "category": {
+                    "type": "string"
+                },
                 "config": {
                     "type": "object",
                     "additionalProperties": {
@@ -1917,6 +2087,9 @@ const docTemplate = `{
                     }
                 },
                 "api_key": {
+                    "type": "string"
+                },
+                "category": {
                     "type": "string"
                 },
                 "channel_id": {
@@ -1984,6 +2157,10 @@ const docTemplate = `{
         "model.TaskLog": {
             "type": "object",
             "properties": {
+                "category": {
+                    "description": "任务的当前分类（读取时 JOIN tasks 得到，不落库）",
+                    "type": "string"
+                },
                 "channel_id": {
                     "type": "integer"
                 },
@@ -2031,6 +2208,9 @@ const docTemplate = `{
         "model.Template": {
             "type": "object",
             "properties": {
+                "category": {
+                    "type": "string"
+                },
                 "content_md": {
                     "type": "string"
                 },

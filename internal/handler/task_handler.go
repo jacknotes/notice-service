@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -262,7 +263,7 @@ func (h *TaskHandler) Preview(c *gin.Context) {
 	c.JSON(http.StatusOK, out)
 }
 
-// logFilterFromQuery 从查询参数解析日志过滤条件（task_id/status/from/to/
+// logFilterFromQuery 从查询参数解析日志过滤条件（task_id/category/status/from/to/
 // page/page_size/sort_by/sort_order），返回带默认 Page/PageSize 的 filter。
 // LogsAll 与 ExportLogs 共用，保证导出与列表筛选一致。
 func (h *TaskHandler) logFilterFromQuery(c *gin.Context) repository.LogFilter {
@@ -271,6 +272,9 @@ func (h *TaskHandler) logFilterFromQuery(c *gin.Context) repository.LogFilter {
 		if n, err := strconv.ParseInt(v, 10, 64); err == nil {
 			f.TaskID = n
 		}
+	}
+	if v := c.Query("category"); v != "" {
+		f.Category = strings.TrimSpace(v)
 	}
 	if v := c.Query("status"); v == "success" || v == "failed" {
 		f.Status = v
@@ -327,6 +331,7 @@ func csvSafe(s string) string {
 // @Security BearerAuth
 // @Param task_id query int false "任务 ID"
 // @Param status query string false "状态"
+// @Param category query string false "分类（任务的当前分类）"
 // @Param from query string false "开始日期"
 // @Param to query string false "结束日期"
 // @Success 200 {string} string "CSV"
@@ -344,11 +349,11 @@ func (h *TaskHandler) ExportLogs(c *gin.Context) {
 	// UTF-8 BOM：Windows Excel 无 BOM 时会把中文按 ANSI/GBK 误读，导致中文内容乱码。
 	_, _ = c.Writer.Write([]byte("\xEF\xBB\xBF"))
 	w := csv.NewWriter(c.Writer)
-	_ = w.Write([]string{"id", "sent_at", "task_id", "task_name", "channel_id", "channel_name", "status", "subject", "content", "request", "response", "error_msg", "retry_count", "trigger_type", "trigger_by", "trigger_ip"})
+	_ = w.Write([]string{"id", "sent_at", "task_id", "task_name", "category", "channel_id", "channel_name", "status", "subject", "content", "request", "response", "error_msg", "retry_count", "trigger_type", "trigger_by", "trigger_ip"})
 	for _, r := range rows {
 		_ = w.Write([]string{
 			strconv.FormatInt(r.ID, 10), r.SentAt.Format("2006-01-02 15:04:05"),
-			strconv.FormatInt(r.TaskID, 10), csvSafe(r.TaskName), strconv.FormatInt(r.ChannelID, 10), csvSafe(r.ChannelName),
+			strconv.FormatInt(r.TaskID, 10), csvSafe(r.TaskName), csvSafe(r.Category), strconv.FormatInt(r.ChannelID, 10), csvSafe(r.ChannelName),
 			csvSafe(r.Status), csvSafe(r.Subject), csvSafe(r.Content), csvSafe(r.Request), csvSafe(r.Response), csvSafe(r.ErrorMsg),
 			strconv.Itoa(r.RetryCount), csvSafe(r.TriggerType), csvSafe(r.TriggerBy), csvSafe(r.TriggerIP),
 		})
@@ -363,6 +368,7 @@ func (h *TaskHandler) ExportLogs(c *gin.Context) {
 // @Security BearerAuth
 // @Param task_id query int false "任务 ID"
 // @Param status query string false "状态 success/failed"
+// @Param category query string false "分类（任务的当前分类）"
 // @Param from query string false "开始日期 YYYY-MM-DD"
 // @Param to query string false "结束日期 YYYY-MM-DD"
 // @Param page query int false "页码"
