@@ -24,7 +24,7 @@
       </el-menu>
 
       <div class="sidebar-foot">
-        <p class="ver mono">Notice Service · v1</p>
+        <p class="ver mono">Notice Service<template v-if="buildVersion"> · {{ buildVersion }}</template></p>
       </div>
     </aside>
 
@@ -300,6 +300,16 @@ function fmtTime(iso?: string) {
 }
 
 let signalTimer: ReturnType<typeof setInterval> | null = null
+// 侧边栏底部版本：登录态下取当前实例构建版本（与节点弹窗/设置页同源）
+const buildVersion = ref('')
+onMounted(async () => {
+  try {
+    buildVersion.value = (await systemApi.version()).version
+  } catch {
+    /* 获取失败保持纯品牌文案 */
+  }
+})
+
 onMounted(() => {
   loadNodes()
   signalTimer = setInterval(loadNodes, SIGNAL_POLL_MS)
