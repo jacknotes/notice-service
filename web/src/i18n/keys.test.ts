@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { readFileSync, readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
-import zhCN from '@/locales/zh-CN'
+import zhCN from '@/locales/zh-CN.json'
+import enUS from '@/locales/en-US.json'
 
 // 组件里静态用到的 t('...')/$t('...') key 必须在 zh-CN 文案表中存在。
 // vue-i18n 9 的 t() 对「新字面量」不做编译期硬校验，这个扫描测试就是
@@ -9,7 +10,7 @@ import zhCN from '@/locales/zh-CN'
 //
 // 注意本测试的局限：只扫描「静态单引号」t('...')/$t('...') 字面量（见下方 KEY_RE），
 // 动态 key（如 t(item.labelKey)、t(route.meta.titleKey) —— 即导航/标题 key 的计划约定）
-// 不在扫描范围内，是刻意为之；这类动态 key 由 en-US.ts 的 EnMessages 映射类型
+// 不在扫描范围内，是刻意为之；这类动态 key 由下方「en/zh 结构比对」测试
 // 保证键一致性，并在运行时经 fallbackLocale 回退兜底。
 
 function collectFiles(dir: string): string[] {
@@ -55,5 +56,15 @@ describe('i18n key 完整性', () => {
     const used = usedKeys(collectFiles('src'))
     const missing = [...used].filter((k) => !known.has(k))
     expect(missing).toEqual([])
+  })
+})
+
+describe('i18n locale 结构一致性', () => {
+  // locale 改为 JSON 后，原先 en-US.ts 的 EnMessages 映射类型编译期校验
+  // 不复存在，这里用运行时结构比对补上网：en 与 zh 的键集合必须完全一致。
+  it('en-US 与 zh-CN 的键结构完全一致', () => {
+    const zhKeys = flatten(zhCN as unknown as Record<string, unknown>)
+    const enKeys = flatten(enUS as unknown as Record<string, unknown>)
+    expect([...enKeys].sort()).toEqual([...zhKeys].sort())
   })
 })
