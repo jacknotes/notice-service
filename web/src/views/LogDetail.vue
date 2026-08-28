@@ -37,6 +37,9 @@
             <span class="name-cell">{{ channelName }}</span>
             <span class="mono name-id">#{{ log.channel_id }}</span>
           </el-descriptions-item>
+          <el-descriptions-item :label="t('logs.category')">
+            <el-tag effect="plain" size="small" class="category-tag">{{ log.category || 'default' }}</el-tag>
+          </el-descriptions-item>
           <el-descriptions-item :label="t('common.status')">
             <el-tag
               :type="log.status === 'success' ? 'success' : 'danger'"
@@ -109,6 +112,7 @@ interface LogDetail {
   id: number
   task_id: number
   channel_id: number
+  category?: string
   subject?: string
   content?: string
   status: 'success' | 'failed'
@@ -287,6 +291,13 @@ watch(
 .faint {
   color: var(--text-faint);
   font-size: var(--text-xs);
+}
+.category-tag {
+  color: var(--indigo-400) !important;
+  border-color: rgba(129, 140, 248, 0.4) !important;
+  background: rgba(129, 140, 248, 0.12) !important;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .desc-error {
   margin: 0;

@@ -7,6 +7,7 @@
 ## [Unreleased]
 
 ### 已实现
+- **发送日志分类**：列表筛选与表格新增「分类」（任务的当前分类，读取时 JOIN，不落库），支持后端排序；日志详情页展示分类；CSV 导出新增 `category` 列且支持 `category` 筛选参数
 - **前端自动化测试（R9）**：引入 Vitest + Vue Test Utils，覆盖 auth store / api 客户端与接口封装 / useTablePaging / useTheme / MarkdownPreview；CI 前端 job 追加 `npm run test`
 - **前端国际化（i18n）**：vue-i18n（zh-CN/en-US，默认中文），顶栏 + 个人设置双入口切换，Element Plus 内置文案同步；后端错误消息保持原样
 - **限流优化**：Webhook 限流 Allow 改为单轮往返（INSERT+LAST_INSERT_ID），并新增「拒绝方向」本地缓存（fail-safe，不放松限流）
