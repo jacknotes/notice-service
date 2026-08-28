@@ -89,3 +89,42 @@ func (s *CategoryService) Delete(name string) error {
 	}
 	return nil
 }
+
+// Update 重命名分类。改名后渠道/模板/任务的引用会同步更新为新的名称。
+func (s *CategoryService) Update(oldName, newName string) (*model.Category, error) {
+	oldName = strings.TrimSpace(oldName)
+	newName = strings.TrimSpace(newName)
+	if oldName == "" {
+		return nil, errors.New("分类名称不能为空")
+	}
+	if newName == "" {
+		return nil, errors.New("新名称不能为空")
+	}
+	if len([]rune(newName)) > 50 {
+		return nil, errors.New("分类名称过长（最多 50 字符）")
+	}
+	if oldName == "default" {
+		return nil, errors.New("default 为系统默认分类，不可重命名")
+	}
+	if newName == "default" {
+		return nil, errors.New("分类不可重命名为 default（默认分类保留）")
+	}
+	ok, err := s.repo.Exists(oldName)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return nil, repository.ErrNotFound
+	}
+	if oldName == newName {
+		return s.repo.GetByName(oldName)
+	}
+	dup, err := s.repo.Exists(newName)
+	if err != nil {
+		return nil, err
+	}
+	if dup {
+		return nil, errors.New("「" + newName + "」分类已存在")
+	}
+	return s.repo.Rename(oldName, newName)
+}

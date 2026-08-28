@@ -74,6 +74,37 @@ func (h *CategoryHandler) Create(c *gin.Context) {
 	c.JSON(http.StatusOK, cat)
 }
 
+// Update 重命名分类（仅 admin）。改名后渠道/模板/任务中的引用同步更新。
+// @Summary 重命名分类
+// @Tags 分类
+// @Security BearerAuth
+// @Accept json
+// @Param name path string true "分类名称"
+// @Param body body object true "新名称"
+// @Success 200 {object} map[string]interface{}
+// @Router /api/categories/{name} [put]
+func (h *CategoryHandler) Update(c *gin.Context) {
+	old := c.Param("name")
+	var req struct {
+		Name string `json:"name"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil || req.Name == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "参数错误"})
+		return
+	}
+	cat, err := h.svc.Update(old, req.Name)
+	if err != nil {
+		if err == repository.ErrNotFound {
+			c.JSON(http.StatusNotFound, gin.H{"error": "分类不存在"})
+			return
+		}
+		c.JSON(http.StatusBadRequest, gin.H{"error": sanitizeErr(err)})
+		return
+	}
+	auditf(c, h.db, "category.update", "重命名分类 %q → %q", old, cat.Name)
+	c.JSON(http.StatusOK, cat)
+}
+
 // Delete 删除分类（仅 admin）
 // @Summary 删除分类
 // @Tags 分类

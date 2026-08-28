@@ -262,6 +262,9 @@
   "categories": {
     "subtitle": "Manage the shared category pool used by channels, templates and tasks",
     "createTitle": "New Category",
+    "editTitle": "Edit category",
+    "editHint": "Renaming syncs to channels / templates / tasks using this category automatically",
+    "updatedOk": "Category updated",
     "emptyTable": "No categories yet. Click \"New Category\" in the top right to start.",
     "namePlaceholder": "A name such as Work / Life / Temporary",
     "nameRequired": "Please enter a category name",
@@ -274,6 +277,8 @@
     "deleteConfirmMsg": "Delete category \"{name}\"?",
     "deleteReferenced": "\"{name}\" is referenced by channels/templates/tasks and cannot be deleted",
     "deleteRefHint": "In-use categories cannot be deleted",
+    "defaultNotEditable": "default is the system category and cannot be renamed",
+    "updateFailed": "Failed to update category",
     "unusedHint": "Unreferenced categories can be safely deleted",
     "defaultTag": "Default",
     "createdAt": "Created at",

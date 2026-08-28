@@ -67,9 +67,19 @@
           </template>
         </el-table-column>
 
-        <el-table-column :label="t('common.action')" width="140" align="center" fixed="right">
+        <el-table-column :label="t('common.action')" width="170" align="center" fixed="right">
           <template #default="{ row }">
             <template v-if="isAdmin">
+              <el-button
+                link
+                type="primary"
+                size="small"
+                :disabled="row.name === 'default'"
+                :title="row.name === 'default' ? t('categories.defaultNotEditable') : ''"
+                @click="openEdit(row)"
+              >
+                {{ t('common.edit') }}
+              </el-button>
               <el-button
                 link
                 type="danger"
@@ -99,14 +109,15 @@
       />
     </div>
 
-    <!-- ── Create dialog ───────────────────────────────────────────── -->
+    <!-- ── Create / Edit dialog ─────────────────────────────────────── -->
     <el-dialog
       v-model="dialogVisible"
-      :title="t('categories.createTitle')"
+      :title="isEdit ? t('categories.editTitle') : t('categories.createTitle')"
       width="420px"
       :close-on-click-modal="false"
       destroy-on-close
     >
+      <el-alert v-if="isEdit && form.oldName" type="info" :closable="false" show-icon class="edit-hint" :title="t('categories.editHint')" />
       <el-form ref="formRef" :model="form" :rules="rules" label-position="top" @submit.prevent>
         <el-form-item :label="t('common.name')" prop="name">
           <el-input
@@ -120,7 +131,9 @@
         <div class="dialog-footer">
           <span class="footer-grow"></span>
           <el-button @click="dialogVisible = false">{{ t('common.cancel') }}</el-button>
-          <el-button type="primary" :loading="saving" @click="saveCategory">{{ t('common.create') }}</el-button>
+          <el-button type="primary" :loading="saving" @click="saveCategory">
+            {{ isEdit ? t('common.save') : t('common.create') }}
+          </el-button>
         </div>
       </template>
     </el-dialog>
@@ -168,10 +181,13 @@ const dialogVisible = ref(false)
 const saving = ref(false)
 const formRef = ref<FormInstance>()
 
-const form = reactive<{ id: number; name: string }>({
+const form = reactive<{ id: number; oldName: string; name: string }>({
   id: 0,
+  oldName: '',
   name: '',
 })
+
+const isEdit = computed(() => form.id > 0)
 
 const rules = computed<FormRules>(() => ({
   name: [{ required: true, message: t('categories.nameRequired'), trigger: 'blur' }],
@@ -223,7 +239,15 @@ function countBy<T>(list: T[], pick: (x: T) => string): Record<string, number> {
 
 function openCreate() {
   form.id = 0
+  form.oldName = ''
   form.name = ''
+  dialogVisible.value = true
+}
+
+function openEdit(row: CategoryRow) {
+  form.id = row.id
+  form.oldName = row.name
+  form.name = row.name
   dialogVisible.value = true
 }
 
@@ -232,8 +256,13 @@ async function saveCategory() {
   if (!valid) return
   saving.value = true
   try {
-    await categoryApi.create(form.name.trim())
-    ElMessage.success(t('categories.createdOk'))
+    if (isEdit.value) {
+      await categoryApi.update(form.oldName, form.name.trim())
+      ElMessage.success(t('categories.updatedOk'))
+    } else {
+      await categoryApi.create(form.name.trim())
+      ElMessage.success(t('categories.createdOk'))
+    }
     dialogVisible.value = false
     await load()
   } catch (e: any) {
@@ -273,6 +302,10 @@ onMounted(load)
 }
 
 .unused-alert {
+  margin-bottom: var(--space-3);
+}
+
+.edit-hint {
   margin-bottom: var(--space-3);
 }
 

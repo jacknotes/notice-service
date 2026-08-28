@@ -262,6 +262,9 @@
   "categories": {
     "subtitle": "维护共享分类池：渠道、模板、任务统一引用，在一个地方创建",
     "createTitle": "新建分类",
+    "editTitle": "编辑分类",
+    "editHint": "重命名后，引用该分类的渠道 / 模板 / 任务会自动同步为新名称",
+    "updatedOk": "分类已更新",
     "emptyTable": "暂无分类，点击右上角「新建分类」开始",
     "namePlaceholder": "给分类起个名字，如 工作 / 生活 / 临时",
     "nameRequired": "请输入分类名称",
@@ -274,6 +277,8 @@
     "deleteConfirmMsg": "确定删除分类「{name}」吗？",
     "deleteReferenced": "「{name}」已被渠道/模板/任务引用，无法删除",
     "deleteRefHint": "引用中的分类不可删除",
+    "defaultNotEditable": "default 为系统默认分类，不可重命名",
+    "updateFailed": "分类更新失败",
     "unusedHint": "未被引用的分类可安全删除",
     "defaultTag": "默认",
     "createdAt": "创建时间",

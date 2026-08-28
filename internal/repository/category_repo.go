@@ -55,6 +55,45 @@ func (r *CategoryRepo) List() ([]*model.Category, error) {
 	return out, rows.Err()
 }
 
+// GetByName 按名称查询分类。
+func (r *CategoryRepo) GetByName(name string) (*model.Category, error) {
+	c := &model.Category{}
+	err := r.db.QueryRow(
+		"SELECT id, name, created_at FROM categories WHERE name=?", name).Scan(&c.ID, &c.Name, &c.CreatedAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	return c, nil
+}
+
+// Rename 重命名分类：事务内同时更新 categories 表及 channels/templates/tasks 三表的引用，
+// 保证一处改名、其它引用同步生效。default 分类不允许改名。
+func (r *CategoryRepo) Rename(old, new string) (*model.Category, error) {
+	if old == "default" {
+		return nil, errors.New("default 分类不可重命名")
+	}
+	tx, err := r.db.Begin()
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+	for _, table := range []string{"channels", "templates", "tasks"} {
+		if _, err := tx.Exec("UPDATE "+table+" SET category=? WHERE category=?", new, old); err != nil {
+			return nil, err
+		}
+	}
+	if _, err := tx.Exec("UPDATE categories SET name=? WHERE name=?", new, old); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	return r.GetByName(new)
+}
+
 // Exists 判断分类名是否已存在。
 func (r *CategoryRepo) Exists(name string) (bool, error) {
 	var n int

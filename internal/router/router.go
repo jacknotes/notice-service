@@ -148,6 +148,7 @@ func NewRouter(db *sql.DB, authSvc *service.AuthService, cipher *crypto.Cipher, 
 			admin.POST("/channels/batch-delete", channelH.BatchDelete)
 
 			admin.POST("/categories", categoryH.Create)
+			admin.PUT("/categories/:name", categoryH.Update)
 			admin.DELETE("/categories/:name", categoryH.Delete)
 
 			admin.POST("/templates", templateH.Create)
