@@ -649,7 +649,6 @@ onMounted(() => {
   color: var(--indigo-400) !important;
   border-color: rgba(129, 140, 248, 0.4) !important;
   background: rgba(129, 140, 248, 0.12) !important;
-  max-width: 120px;
   overflow: hidden;
   text-overflow: ellipsis;
 }
