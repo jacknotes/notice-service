@@ -85,18 +85,18 @@ describe('api/index 各接口封装', () => {
   it('logApi.query 把筛选参数放进 query 并透传 data', async () => {
     vi.mocked(mockClient.get).mockResolvedValue({ data: { items: [], total: 0 } })
     const out = await logApi.query({
-      task_id: 7, status: 'failed', page: 2, page_size: 20, sort_by: 'sent_at', sort_order: 'asc',
+      task_id: 7, category: '工作', status: 'failed', page: 2, page_size: 20, sort_by: 'sent_at', sort_order: 'asc',
     })
     expect(mockClient.get).toHaveBeenCalledWith('/logs', {
-      params: { task_id: 7, status: 'failed', page: 2, page_size: 20, sort_by: 'sent_at', sort_order: 'asc' },
+      params: { task_id: 7, category: '工作', status: 'failed', page: 2, page_size: 20, sort_by: 'sent_at', sort_order: 'asc' },
     })
     expect(out).toEqual({ items: [], total: 0 })
   })
 
   it('logApi.export 带 responseType=blob', async () => {
-    await logApi.export({ from: '2026-01-01', to: '2026-01-31' })
+    await logApi.export({ from: '2026-01-01', to: '2026-01-31', category: '工作' })
     expect(mockClient.get).toHaveBeenCalledWith('/logs/export', {
-      params: { from: '2026-01-01', to: '2026-01-31' }, responseType: 'blob',
+      params: { from: '2026-01-01', to: '2026-01-31', category: '工作' }, responseType: 'blob',
     })
   })
 

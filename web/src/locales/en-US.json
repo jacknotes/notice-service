@@ -92,6 +92,8 @@
     "allStatus": "All statuses",
     "taskCol": "Task",
     "channelCol": "Channel",
+    "allCategories": "All Categories",
+    "category": "Category",
     "subjectCol": "Subject",
     "timeCol": "Time",
     "keywordLabel": "Keyword",

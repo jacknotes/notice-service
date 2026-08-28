@@ -83,6 +83,7 @@ export const taskApi = {
 export const logApi = {
   query: (params: {
     task_id?: number
+    category?: string
     status?: string
     from?: string
     to?: string
@@ -95,7 +96,7 @@ export const logApi = {
   // 单条日志完整内容（详情页用）
   detail: (id: number): Promise<any> => client.get(`/logs/${id}`).then((r) => r.data),
   // 导出 CSV（仅管理员），筛选条件与列表一致
-  export: (params: { task_id?: number; status?: string; from?: string; to?: string }): Promise<Blob> =>
+  export: (params: { task_id?: number; category?: string; status?: string; from?: string; to?: string }): Promise<Blob> =>
     client.get('/logs/export', { params, responseType: 'blob' }).then((r) => r.data as Blob),
 }
 

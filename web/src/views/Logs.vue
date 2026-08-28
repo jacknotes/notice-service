@@ -36,6 +36,18 @@
       </div>
 
       <div class="filter-item">
+        <span class="filter-label">{{ t('logs.category') }}</span>
+        <el-select
+          v-model="categoryFilter"
+          clearable
+          :placeholder="t('logs.allCategories')"
+          style="width: 150px"
+        >
+          <el-option v-for="cg in categories" :key="cg.id" :label="cg.name" :value="cg.name" />
+        </el-select>
+      </div>
+
+      <div class="filter-item">
         <span class="filter-label">{{ t('common.status') }}</span>
         <el-select v-model="statusFilter" clearable :placeholder="t('logs.allStatus')" style="width: 150px">
           <el-option :label="t('common.success')" value="success" />
@@ -173,6 +185,12 @@
           </template>
         </el-table-column>
 
+        <el-table-column :label="t('logs.category')" width="110" sortable="custom" prop="category">
+          <template #default="{ row }">
+            <el-tag effect="plain" size="small" class="category-tag">{{ row.category || 'default' }}</el-tag>
+          </template>
+        </el-table-column>
+
         <el-table-column :label="t('common.status')" width="100" align="center" sortable="custom" prop="status">
           <template #default="{ row }">
             <el-tag :type="row.status === 'success' ? 'success' : 'danger'" effect="light" size="small">
@@ -232,7 +250,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Download, Search } from '@element-plus/icons-vue'
 import { useI18n } from 'vue-i18n'
-import { channelApi, logApi, taskApi } from '@/api'
+import { categoryApi, channelApi, logApi, taskApi } from '@/api'
 import { useAuthStore } from '@/stores/auth'
 
 const { t } = useI18n()
@@ -241,6 +259,7 @@ interface LogRow {
   id: number
   task_id: number
   channel_id: number
+  category?: string
   subject?: string
   content?: string
   status: 'success' | 'failed'
@@ -264,9 +283,11 @@ const loading = ref(false)
 const tasksLoaded = ref(false)
 const tasks = ref<{ id: number; name: string }[]>([])
 const channels = ref<{ id: number; name: string }[]>([])
+const categories = ref<{ id: number; name: string }[]>([])
 const logs = ref<LogRow[]>([])
 
 const taskFilter = ref<number | undefined>(undefined)
+const categoryFilter = ref<string>('')
 const statusFilter = ref<'success' | 'failed' | ''>('')
 const keyword = ref('')
 
@@ -379,6 +400,7 @@ const filteredLogs = computed<LogRow[]>(() => {
     const hit =
       taskName(l.task_id).toLowerCase().includes(kw) ||
       channelName(l.channel_id).toLowerCase().includes(kw) ||
+      (l.category || 'default').toLowerCase().includes(kw) ||
       (l.subject || '').toLowerCase().includes(kw) ||
       (l.content || '').toLowerCase().includes(kw) ||
       (l.error_msg || '').toLowerCase().includes(kw) ||
@@ -390,7 +412,13 @@ const filteredLogs = computed<LogRow[]>(() => {
 })
 
 const emptyDescription = computed(() => {
-  if (taskFilter.value !== undefined || statusFilter.value || keyword.value.trim() || dateRange.value)
+  if (
+    taskFilter.value !== undefined ||
+    statusFilter.value ||
+    categoryFilter.value ||
+    keyword.value.trim() ||
+    dateRange.value
+  )
     return t('logs.emptyFiltered')
   return t('logs.emptyAll')
 })
@@ -440,8 +468,9 @@ async function exportCsv() {
   if (exporting.value) return
   exporting.value = true
   try {
-    const params: { task_id?: number; status?: string; from?: string; to?: string } = {}
+    const params: { task_id?: number; category?: string; status?: string; from?: string; to?: string } = {}
     if (taskFilter.value !== undefined) params.task_id = taskFilter.value
+    if (categoryFilter.value) params.category = categoryFilter.value
     if (statusFilter.value) params.status = statusFilter.value
     if (dateRange.value) {
       params.from = dateRange.value[0]
@@ -479,13 +508,14 @@ async function loadLogs() {
   loading.value = true
   try {
     const params: {
-      task_id?: number; status?: string; from?: string; to?: string
+      task_id?: number; category?: string; status?: string; from?: string; to?: string
       page: number; page_size: number; sort_by?: string; sort_order?: 'asc' | 'desc'
     } = {
       page: page.value,
       page_size: pageSize.value,
     }
     if (taskFilter.value !== undefined) params.task_id = taskFilter.value
+    if (categoryFilter.value) params.category = categoryFilter.value
     if (statusFilter.value) params.status = statusFilter.value
     if (dateRange.value) {
       params.from = dateRange.value[0]
@@ -508,9 +538,10 @@ async function loadLogs() {
 
 async function loadMeta() {
   try {
-    const [list, chList] = await Promise.all([taskApi.list(), channelApi.list()])
+    const [list, chList, catList] = await Promise.all([taskApi.list(), channelApi.list(), categoryApi.list()])
     tasks.value = list || []
     channels.value = chList || []
+    categories.value = catList || []
   } catch (e: any) {
     ElMessage.error(errMsg(e, t('logs.metaLoadFailed')))
   }
@@ -521,8 +552,8 @@ function onPageSizeChange() {
   loadLogs()
 }
 
-// 任务/状态/日期变化时回到第一页并重新查询
-watch([taskFilter, statusFilter, dateRange], () => {
+// 任务/分类/状态/日期变化时回到第一页并重新查询
+watch([taskFilter, statusFilter, categoryFilter, dateRange], () => {
   page.value = 1
   loadLogs()
 })
@@ -613,6 +644,14 @@ onMounted(() => {
   color: var(--text-primary);
   font-size: var(--text-sm);
   margin-right: 8px;
+}
+.category-tag {
+  color: var(--indigo-400) !important;
+  border-color: rgba(129, 140, 248, 0.4) !important;
+  background: rgba(129, 140, 248, 0.12) !important;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .ok-cell {
   color: var(--text-faint);
