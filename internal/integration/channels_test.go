@@ -283,6 +283,14 @@ func buildFixture(t *testing.T, chType string, cfg map[string]string) *fixture {
 	if err := taskSvc.Create(uid, tk); err != nil {
 		t.Fatal(err)
 	}
+	// 清理夹具数据：避免遗留的联调任务与发送日志累积在测试库中，
+	// 干扰其他包对 task_logs 全量计数的断言（如日志查询分页测试）。
+	t.Cleanup(func() {
+		_, _ = db.Exec("DELETE FROM task_logs WHERE task_id=?", tk.ID)
+		_, _ = db.Exec("DELETE FROM tasks WHERE id=?", tk.ID)
+		_, _ = db.Exec("DELETE FROM channels WHERE id=?", ch.ID)
+		_, _ = db.Exec("DELETE FROM templates WHERE id=?", tpl.ID)
+	})
 
 	ns := service.NewNotificationService(db, ciph)
 	return &fixture{
