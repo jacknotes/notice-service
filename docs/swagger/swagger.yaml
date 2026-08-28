@@ -753,6 +753,19 @@ paths:
       summary: 导出发送日志 CSV（仅管理员）
       tags:
       - 任务
+  /api/system/version:
+    get:
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 当前服务版本
+      tags:
+      - 系统
   /api/tasks:
     get:
       responses:

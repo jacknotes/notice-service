@@ -982,6 +982,28 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/system/version": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "tags": [
+                    "系统"
+                ],
+                "summary": "当前服务版本",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
         "/api/tasks": {
             "get": {
                 "security": [
