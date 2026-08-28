@@ -10,6 +10,8 @@
 - **前端自动化测试（R9）**：引入 Vitest + Vue Test Utils，覆盖 auth store / api 客户端与接口封装 / useTablePaging / useTheme / MarkdownPreview；CI 前端 job 追加 `npm run test`
 - **前端国际化（i18n）**：vue-i18n（zh-CN/en-US，默认中文），顶栏 + 个人设置双入口切换，Element Plus 内置文案同步；后端错误消息保持原样
 - **限流优化**：Webhook 限流 Allow 改为单轮往返（INSERT+LAST_INSERT_ID），并新增「拒绝方向」本地缓存（fail-safe，不放松限流）
+- **安全加固批次**：Markdown 预览输出经 DOMPurify 消毒（封堵 markdown 链接 XSS）；登录锁定改「用户名+IP」复合桶（他人无法再锁死已知账号）；2FA 动态码验证失败纳入限流（防在线爆破）；发送日志 CSV 导出转义 Excel 公式注入；错误响应集中脱敏（不透出驱动/表结构细节）；JWT 校验收紧为仅 HS256；改密/登出即时吊销全部旧会话（users.session_revoked_at，迁移 012）；Webhook HMAC 签名密钥与触发凭据 api_key 分离、可独立轮换（tasks.hmac_secret，迁移 013，存量自动回填行为不变）；TRUSTED_PROXIES 二进制默认收敛为环回；/swagger 与 /metrics 默认关闭（SWAGGER_ENABLED/METRICS_ENABLED 显式开启）
+- **服务版本号体系**：构建期 ldflags 注入 git describe 版本（make build / Dockerfile BUILD_VERSION / compose），新增 GET /api/system/version，侧边栏底部、「节点状态」弹窗、个人设置页三处同源展示，升级对比一目了然；`make version` 快捷查看
 
 ## [1.4.0] - 2026-08-25
 
