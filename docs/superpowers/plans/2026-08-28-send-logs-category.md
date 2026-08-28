@@ -21,7 +21,7 @@
 - Modify: `internal/repository/task_log_repo.go`
 - Test: `internal/repository/task_log_repo_test.go`
 
-- [ ] **Step 1: 写失败测试** — 追加到 `internal/repository/task_log_repo_test.go` 末尾：
+- [x] **Step 1: 写失败测试** — 追加到 `internal/repository/task_log_repo_test.go` 末尾：
 
 ```go
 func TestTaskLogQueryCategory(t *testing.T) {
@@ -116,12 +116,12 @@ func TestTaskLogGetByIDCategory(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: 运行验证失败**
+- [x] **Step 2: 运行验证失败**
 
 Run: `make db-start && GOCACHE=$PWD/.dev/go-cache GOMODCACHE=$PWD/.dev/gomodcache go test ./internal/repository/ -run 'TestTaskLogQueryCategory|TestTaskLogGetByIDCategory' -count=1 -v`
 Expected: 编译失败 — `unknown field Category in struct literal` / `f.Category undefined`（LogFilter/TaskLog 尚无该字段）
 
-- [ ] **Step 3: 实现**
+- [x] **Step 3: 实现**
 
 3a. `internal/model/models.go` — TaskLog 结构体加 Category（ChannelID 之后）：
 
@@ -379,12 +379,12 @@ type LogExportRow struct {
 		}
 ```
 
-- [ ] **Step 4: 运行验证通过**
+- [x] **Step 4: 运行验证通过**
 
 Run: `GOCACHE=$PWD/.dev/go-cache GOMODCACHE=$PWD/.dev/gomodcache go test ./internal/repository/ -count=1`
 Expected: PASS（该包全部测试，含两个新测试）
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 git add internal/model/models.go internal/repository/task_log_repo.go internal/repository/task_log_repo_test.go
@@ -399,7 +399,7 @@ git commit -m "feat: 发送日志仓储层支持任务分类（JOIN tasks，筛�
 - Modify: `internal/handler/task_handler.go`
 - Test: `internal/handler/log_export_test.go`
 
-- [ ] **Step 1: 写失败测试** — 追加到 `internal/handler/log_export_test.go` 末尾（import 区补 `"net/url"`）：
+- [x] **Step 1: 写失败测试** — 追加到 `internal/handler/log_export_test.go` 末尾（import 区补 `"net/url"`）：
 
 ```go
 import (
@@ -505,12 +505,12 @@ func TestLogsCategoryFilter(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: 运行验证失败**
+- [x] **Step 2: 运行验证失败**
 
 Run: `GOCACHE=$PWD/.dev/go-cache GOMODCACHE=$PWD/.dev/gomodcache go test ./internal/handler/ -run TestLogsCategoryFilter -count=1 -v`
 Expected: FAIL — `total = 2, want 1`（category 参数尚未被解析，category 列也缺失）
 
-- [ ] **Step 3: 实现** — `internal/handler/task_handler.go`：
+- [x] **Step 3: 实现** — `internal/handler/task_handler.go`：
 
 ① import 区补 `"strings"`（`"strconv"` 与 `"time"` 之间）。
 
@@ -543,12 +543,12 @@ Expected: FAIL — `total = 2, want 1`（category 参数尚未被解析，catego
 // @Param category query string false "分类（任务的当前分类）"
 ```
 
-- [ ] **Step 4: 运行验证通过**
+- [x] **Step 4: 运行验证通过**
 
 Run: `GOCACHE=$PWD/.dev/go-cache GOMODCACHE=$PWD/.dev/gomodcache go test ./internal/handler/ -count=1`
 Expected: PASS（handler 包全部测试）
 
-- [ ] **Step 5: 再生成 Swagger 文档并提交**
+- [x] **Step 5: 再生成 Swagger 文档并提交**
 
 ```bash
 make swagger
@@ -566,7 +566,7 @@ git commit -m "feat: 发送日志 API 支持 category 筛选，CSV 导出增加�
 - Modify: `web/src/locales/zh-CN.json`、`web/src/locales/en-US.json`
 - Modify: `web/src/views/Logs.vue`
 
-- [ ] **Step 1: 改前端 API 测试（先失败）** — `web/src/api/index.test.ts` 中两个用例改为带 category：
+- [x] **Step 1: 改前端 API 测试（先失败）** — `web/src/api/index.test.ts` 中两个用例改为带 category：
 
 ```ts
   it('logApi.query 把筛选参数放进 query 并透传 data', async () => {
@@ -588,12 +588,12 @@ git commit -m "feat: 发送日志 API 支持 category 筛选，CSV 导出增加�
   })
 ```
 
-- [ ] **Step 2: 运行验证失败**
+- [x] **Step 2: 运行验证失败**
 
 Run: `cd web && npm test`
 Expected: FAIL — `logApi.query`/`export` 的调用断言不匹配（实际 params 缺 `category`）
 
-- [ ] **Step 3: 实现**
+- [x] **Step 3: 实现**
 
 3a. `web/src/api/index.ts` — `logApi.query` 参数加 `category?: string`（`task_id` 之后）；`logApi.export` 参数加 `category?: string`：
 
@@ -789,12 +789,12 @@ watch([taskFilter, statusFilter, categoryFilter, dateRange], () => {
 }
 ```
 
-- [ ] **Step 4: 运行验证通过**
+- [x] **Step 4: 运行验证通过**
 
 Run: `cd web && npm test`
 Expected: PASS
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 git add web/src/api/index.ts web/src/api/index.test.ts web/src/locales/zh-CN.json web/src/locales/en-US.json web/src/views/Logs.vue
@@ -809,7 +809,7 @@ git commit -m "feat(logs): 发送日志页新增分类筛选与分类列"
 - Modify: `web/src/views/LogDetail.vue`
 - Modify: `CHANGELOG.md`
 
-- [ ] **Step 1: `LogDetail.vue`** 逐处修改：
+- [x] **Step 1: `LogDetail.vue`** 逐处修改：
 
 ① `LogDetail` 接口加 `category?: string`（`channel_id` 之后）：
 
@@ -854,18 +854,18 @@ interface LogDetail {
 }
 ```
 
-- [ ] **Step 2: `CHANGELOG.md`** — `## [Unreleased]` 的 `### 已实现` 列表顶部加一条：
+- [x] **Step 2: `CHANGELOG.md`** — `## [Unreleased]` 的 `### 已实现` 列表顶部加一条：
 
 ```markdown
 - **发送日志分类**：列表筛选与表格新增「分类」（任务的当前分类，读取时 JOIN，不落库），支持后端排序；日志详情页展示分类；CSV 导出新增 `category` 列且支持 `category` 筛选参数
 ```
 
-- [ ] **Step 3: 运行前端测试确认无回归**
+- [x] **Step 3: 运行前端测试确认无回归**
 
 Run: `cd web && npm test`
 Expected: PASS
 
-- [ ] **Step 4: 提交**
+- [x] **Step 4: 提交**
 
 ```bash
 git add web/src/views/LogDetail.vue CHANGELOG.md
@@ -876,17 +876,17 @@ git commit -m "feat(logs): 日志详情页展示分类"
 
 ### Task 5: 全量验证
 
-- [ ] **Step 1: 后端静态检查 + 全量测试**
+- [x] **Step 1: 后端静态检查 + 全量测试**
 
 Run: `make vet && make test`
 Expected: 全部 PASS
 
-- [ ] **Step 2: 前端测试 + 构建（vite build 会先经 swag 再生成 swagger）**
+- [x] **Step 2: 前端测试 + 构建（vite build 会先经 swag 再生成 swagger）**
 
 Run: `cd web && npm test && npm run build`
 Expected: 全部 PASS / 构建成功
 
-- [ ] **Step 3: 人工冒烟（可选，`make dev` 后）**
+- [x] **Step 3: 人工冒烟（可选，`make dev` 后）**
 
 1. 打开「发送日志」页：筛选区出现「分类」下拉（选项来自分类管理）；表格渠道列后有「分类」列。
 2. 选某分类 → 列表只剩该分类任务的日志，记录数与分页正确；点分类列表头可排序。
@@ -894,7 +894,7 @@ Expected: 全部 PASS / 构建成功
 4. 管理员「导出 CSV」→ 文件含 `category` 列，且随当前筛选（含分类）变化。
 5. 分类管理中重命名某分类 → 日志页该分类下的记录自动跟随新名称。
 
-- [ ] **Step 4: 如有遗漏修补后提交，无则跳过**
+- [x] **Step 4: 如有遗漏修补后提交，无则跳过**
 
 ```bash
 git status --short
