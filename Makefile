@@ -64,7 +64,7 @@ frontend-dev: ## 启动前端 dev server（:5173，热更新）
 ## ---------- Docker ----------
 
 docker-build: ## 构建 Docker 镜像
-	docker build -t notice-service .
+	docker build --build-arg BUILD_VERSION=$(VERSION) -t notice-service .
 
 docker-up: ## 启动多实例高可用部署（2 实例 + MySQL 5.7）
 	docker compose up -d

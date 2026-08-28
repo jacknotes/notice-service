@@ -5,9 +5,10 @@
 #      两实例必须一致；MYSQL_ROOT_PASSWORD / DB_PASSWORD / ADMIN_PASS 必改）。
 #   2. 下面的 ${VAR:?err} 语法：关键变量缺失时 docker compose 会直接报错退出，
 #      避免以弱默认密钥裸跑。
-#   3. 若 Nginx 反代不在本机（如独立节点），请设置 TRUSTED_PROXIES 为反代所在
-#      CIDR（默认信任 127.0.0.1 / ::1 + Docker 默认网桥网段 172.16.0.0/12，
-#      对应「宿主机 Nginx → 本机端口」与「容器内由宿主机 Nginx 反代」两种形态）。
+#   3. TRUSTED_PROXIES：二进制默认仅信任环回。compose 显式放宽为含 Docker
+#      网桥网段（172.16.0.0/12），覆盖「宿主机 Nginx → 发布端口」与「容器内
+#      反代」两种形态；若 8080/8081 纯直连（无反代），建议改窄为 127.0.0.1,::1
+#      防止同网段容器伪造 X-Forwarded-For。
 services:
   notice-service-1:
     build:
@@ -16,6 +17,8 @@ services:
       # 默认空 = 官方 Docker Hub
       args:
         IMAGE_PREFIX: ${IMAGE_PREFIX:-}
+        # 升级对比版本号：BUILD_VERSION=$(git describe --tags --always --dirty) docker compose up -d --build
+        BUILD_VERSION: ${BUILD_VERSION:-dev}
     ports:
       - "8080:8080"
     environment:
@@ -41,6 +44,8 @@ services:
       context: .
       args:
         IMAGE_PREFIX: ${IMAGE_PREFIX:-}
+        # 升级对比版本号：BUILD_VERSION=$(git describe --tags --always --dirty) docker compose up -d --build
+        BUILD_VERSION: ${BUILD_VERSION:-dev}
     ports:
       - "8081:8080"
     environment:

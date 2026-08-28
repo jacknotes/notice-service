@@ -14,6 +14,9 @@ RUN npm run build
 
 # 阶段2：构建后端（Go 走镜像 + 缓存）
 FROM ${IMAGE_PREFIX}golang:1.25-alpine AS build
+# BUILD_VERSION：注入 buildVersion（/api/system/version 与节点心跳展示），
+# 构建时传 --build-arg BUILD_VERSION=$(git describe --tags --always --dirty)，缺省 dev
+ARG BUILD_VERSION=dev
 ARG GOPROXY=https://goproxy.cn,direct
 ENV GOPROXY=${GOPROXY} GOFLAGS=-mod=mod
 WORKDIR /src
@@ -23,7 +26,7 @@ COPY . .
 COPY --from=web /app/dist ./web/dist
 RUN go install github.com/swaggo/swag/cmd/swag@v1.16.6
 RUN swag init -g cmd/server/main.go -o docs/swagger
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /notice-service ./cmd/server
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w -X main.buildVersion=${BUILD_VERSION}" -o /notice-service ./cmd/server
 
 # 阶段3：运行
 FROM ${IMAGE_PREFIX}alpine:3.18
