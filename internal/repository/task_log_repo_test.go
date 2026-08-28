@@ -68,3 +68,94 @@ func TestTaskLogCleanupOlderThan(t *testing.T) {
 		t.Errorf("expected 1 log left, got %d", left)
 	}
 }
+
+func TestTaskLogQueryCategory(t *testing.T) {
+	db := openTestDB(t)
+	r := NewTaskLogRepo(db)
+	uid := seedUser(t, db)
+	chID := seedChannel(t, db, uid)
+	tplID := seedTemplate(t, db, uid)
+
+	// 任务 A：分类「工作」；任务 B：默认 default
+	tkA := &model.Task{UserID: uid, Name: "cat-a-" + randSuffix(), ChannelID: chID, TemplateID: tplID, TriggerType: "api", ReceiversJSON: "[]", Enabled: true, Category: "工作"}
+	if err := NewTaskRepo(db).Create(tkA); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { db.Exec("DELETE FROM tasks WHERE id=?", tkA.ID) })
+	tkB := &model.Task{UserID: uid, Name: "cat-b-" + randSuffix(), ChannelID: chID, TemplateID: tplID, TriggerType: "api", ReceiversJSON: "[]", Enabled: true, Category: "default"}
+	if err := NewTaskRepo(db).Create(tkB); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { db.Exec("DELETE FROM tasks WHERE id=?", tkB.ID) })
+
+	for _, tkID := range []int64{tkA.ID, tkB.ID} {
+		if err := r.Create(&model.TaskLog{TaskID: tkID, ChannelID: chID, Status: "success", SentAt: time.Now()}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Cleanup(func() { db.Exec("DELETE FROM task_logs WHERE task_id IN (?,?)", tkA.ID, tkB.ID) })
+
+	// 按分类筛选：只命中「工作」任务的日志，且行内带分类
+	total, logs, err := r.Query(LogFilter{Category: "工作", Page: 1, PageSize: 50})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if total != 1 || len(logs) != 1 || logs[0].TaskID != tkA.ID {
+		t.Fatalf("filter 工作: total=%d n=%d", total, len(logs))
+	}
+	if logs[0].Category != "工作" {
+		t.Fatalf("category = %q, want 工作", logs[0].Category)
+	}
+
+	// 不命中：不存在的分类返回 0 条
+	total, _, err = r.Query(LogFilter{Category: "不存在", Page: 1, PageSize: 50})
+	if err != nil || total != 0 {
+		t.Fatalf("filter 不存在: err=%v total=%d", err, total)
+	}
+
+	// 无分类筛选：两条都返回，且各带任务分类
+	total, logs, err = r.Query(LogFilter{Page: 1, PageSize: 50})
+	if err != nil || total != 2 || len(logs) != 2 {
+		t.Fatalf("all: err=%v total=%d n=%d", err, total, len(logs))
+	}
+	cats := map[int64]string{}
+	for _, l := range logs {
+		cats[l.TaskID] = l.Category
+	}
+	if cats[tkA.ID] != "工作" || cats[tkB.ID] != "default" {
+		t.Fatalf("categories = %v", cats)
+	}
+
+	// 按分类排序（不假设中文/英文的字典序，只断言升序单调）
+	_, logs, err = r.Query(LogFilter{SortBy: "category", SortOrder: "asc", Page: 1, PageSize: 50})
+	if err != nil || len(logs) != 2 {
+		t.Fatalf("sort: err=%v n=%d", err, len(logs))
+	}
+	if logs[0].Category > logs[1].Category {
+		t.Fatalf("sort by category asc wrong order: %q > %q", logs[0].Category, logs[1].Category)
+	}
+}
+
+func TestTaskLogGetByIDCategory(t *testing.T) {
+	db := openTestDB(t)
+	r := NewTaskLogRepo(db)
+	uid := seedUser(t, db)
+	chID := seedChannel(t, db, uid)
+	tplID := seedTemplate(t, db, uid)
+	tk := &model.Task{UserID: uid, Name: "cat-g-" + randSuffix(), ChannelID: chID, TemplateID: tplID, TriggerType: "api", ReceiversJSON: "[]", Enabled: true, Category: "工作"}
+	if err := NewTaskRepo(db).Create(tk); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { db.Exec("DELETE FROM tasks WHERE id=?", tk.ID) })
+	l := &model.TaskLog{TaskID: tk.ID, ChannelID: chID, Status: "success", SentAt: time.Now()}
+	if err := r.Create(l); err != nil {
+		t.Fatal(err)
+	}
+	got, err := r.GetByID(l.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Category != "工作" {
+		t.Fatalf("category = %q, want 工作", got.Category)
+	}
+}

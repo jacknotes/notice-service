@@ -12,8 +12,15 @@ type TaskLogRepo struct{ db *sql.DB }
 
 func NewTaskLogRepo(db *sql.DB) *TaskLogRepo { return &TaskLogRepo{db: db} }
 
-// taskLogCols 发送日志的通用列清单（各查询复用）。
+// taskLogCols 发送日志的通用列清单（不 JOIN 的查询复用：ListByTask/Recent）。
 const taskLogCols = "id, task_id, channel_id, subject, content, status, request, response, error_msg, retry_count, trigger_type, trigger_by, trigger_ip, sent_at"
+
+// taskLogColsJoined JOIN tasks 的列清单（Query/GetByID 用，附带任务的当前分类）。
+// 分类语义：日志跟随任务的当前分类，不落库；任务行缺失时兜底 default。
+const taskLogColsJoined = "tl.id, tl.task_id, tl.channel_id, tl.subject, tl.content, tl.status, tl.request, tl.response, tl.error_msg, tl.retry_count, tl.trigger_type, tl.trigger_by, tl.trigger_ip, tl.sent_at, COALESCE(t.category,'default') AS category"
+
+// taskLogFrom 日志 JOIN 查询的 FROM 子句（Query/GetByID/计数共用）。
+const taskLogFrom = " FROM task_logs tl LEFT JOIN tasks t ON t.id = tl.task_id"
 
 func (r *TaskLogRepo) Create(l *model.TaskLog) error {
 	if l.SentAt.IsZero() {
@@ -31,12 +38,12 @@ func (r *TaskLogRepo) Create(l *model.TaskLog) error {
 }
 
 func (r *TaskLogRepo) GetByID(id int64) (*model.TaskLog, error) {
-	rows, err := r.db.Query("SELECT "+taskLogCols+" FROM task_logs WHERE id=?", id)
+	rows, err := r.db.Query("SELECT "+taskLogColsJoined+taskLogFrom+" WHERE tl.id=?", id)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	logs, err := scanLogs(rows)
+	logs, err := scanLogsJoined(rows)
 	if err != nil {
 		return nil, err
 	}
@@ -66,21 +73,46 @@ func (r *TaskLogRepo) Recent(limit int) ([]*model.TaskLog, error) {
 	return scanLogs(rows)
 }
 
+// scanLogInto 扫描单行；cat 非空时对应 JOIN 查询（列清单末尾多一列 category）。
+func scanLogInto(rows *sql.Rows, l *model.TaskLog, cat *string) error {
+	var subj, content, req, resp, errMsg, trigBy, trigIP sql.NullString
+	dest := []any{&l.ID, &l.TaskID, &l.ChannelID, &subj, &content, &l.Status, &req, &resp, &errMsg, &l.RetryCount, &l.TriggerType, &trigBy, &trigIP, &l.SentAt}
+	if cat != nil {
+		dest = append(dest, cat)
+	}
+	if err := rows.Scan(dest...); err != nil {
+		return err
+	}
+	l.Subject = subj.String
+	l.Content = content.String
+	l.Request = req.String
+	l.Response = resp.String
+	l.ErrorMsg = errMsg.String
+	l.TriggerBy = trigBy.String
+	l.TriggerIP = trigIP.String
+	return nil
+}
+
 func scanLogs(rows *sql.Rows) ([]*model.TaskLog, error) {
 	out := []*model.TaskLog{}
 	for rows.Next() {
 		l := &model.TaskLog{}
-		var subj, content, req, resp, errMsg, trigBy, trigIP sql.NullString
-		if err := rows.Scan(&l.ID, &l.TaskID, &l.ChannelID, &subj, &content, &l.Status, &req, &resp, &errMsg, &l.RetryCount, &l.TriggerType, &trigBy, &trigIP, &l.SentAt); err != nil {
+		if err := scanLogInto(rows, l, nil); err != nil {
 			return nil, err
 		}
-		l.Subject = subj.String
-		l.Content = content.String
-		l.Request = req.String
-		l.Response = resp.String
-		l.ErrorMsg = errMsg.String
-		l.TriggerBy = trigBy.String
-		l.TriggerIP = trigIP.String
+		out = append(out, l)
+	}
+	return out, rows.Err()
+}
+
+// scanLogsJoined 带 category 列的扫描（Query/GetByID 的 JOIN 查询用）。
+func scanLogsJoined(rows *sql.Rows) ([]*model.TaskLog, error) {
+	out := []*model.TaskLog{}
+	for rows.Next() {
+		l := &model.TaskLog{}
+		if err := scanLogInto(rows, l, &l.Category); err != nil {
+			return nil, err
+		}
 		out = append(out, l)
 	}
 	return out, rows.Err()
@@ -117,45 +149,62 @@ func (r *TaskLogRepo) CleanupOlderThan(days int) (int64, error) {
 // LogFilter 日志查询过滤条件（后端分页/筛选下推 DB）。
 type LogFilter struct {
 	TaskID   int64
+	Category string // 任务的当前分类；空串=全部
 	Status   string // success | failed | ""（全部）
 	From, To time.Time
 	Page     int
 	PageSize int
 	// SortBy / SortOrder 后端排序（SortBy 为白名单内的列名）。
-	SortBy    string // id | sent_at | task_id | channel_id | status | retry_count
+	SortBy    string // id | sent_at | task_id | channel_id | status | retry_count | category
 	SortOrder string // asc | desc（默认 desc）
 }
 
-// sortColumn 排序白名单：防 SQL 注入，非法值回退 id。
-func (f LogFilter) sortColumn() (string, bool) {
+// sortColumn 排序白名单：防 SQL 注入，非法值回退 tl.id。
+// 返回带表别名的列名（Query 已 JOIN tasks，裸列名 id 等会有歧义）。
+func (f LogFilter) sortColumn() string {
 	switch f.SortBy {
-	case "sent_at", "task_id", "channel_id", "status", "retry_count":
-		return f.SortBy, true
+	case "sent_at":
+		return "tl.sent_at"
+	case "task_id":
+		return "tl.task_id"
+	case "channel_id":
+		return "tl.channel_id"
+	case "status":
+		return "tl.status"
+	case "retry_count":
+		return "tl.retry_count"
+	case "category":
+		return "t.category"
 	}
-	return "id", false // 默认按 id 倒序（与既有行为一致）
+	return "tl.id" // 默认按 id 倒序（与既有行为一致）
 }
 
 // Query 按过滤条件分页查询发送日志，返回总数与当前页数据。
+// JOIN tasks 取任务的当前分类：category 筛选/排序/展示均基于它。
 func (r *TaskLogRepo) Query(f LogFilter) (total int, logs []*model.TaskLog, err error) {
 	where := "WHERE 1=1"
 	args := []interface{}{}
 	if f.TaskID > 0 {
-		where += " AND task_id=?"
+		where += " AND tl.task_id=?"
 		args = append(args, f.TaskID)
 	}
+	if f.Category != "" {
+		where += " AND t.category=?"
+		args = append(args, f.Category)
+	}
 	if f.Status != "" {
-		where += " AND status=?"
+		where += " AND tl.status=?"
 		args = append(args, f.Status)
 	}
 	if !f.From.IsZero() {
-		where += " AND sent_at >= ?"
+		where += " AND tl.sent_at >= ?"
 		args = append(args, f.From)
 	}
 	if !f.To.IsZero() {
-		where += " AND sent_at < ?"
+		where += " AND tl.sent_at < ?"
 		args = append(args, f.To)
 	}
-	if err = r.db.QueryRow("SELECT COUNT(*) FROM task_logs "+where, args...).Scan(&total); err != nil {
+	if err = r.db.QueryRow("SELECT COUNT(*)"+taskLogFrom+" "+where, args...).Scan(&total); err != nil {
 		return 0, nil, err
 	}
 	limit := f.PageSize
@@ -170,17 +219,17 @@ func (r *TaskLogRepo) Query(f LogFilter) (total int, logs []*model.TaskLog, err 
 	if strings.EqualFold(f.SortOrder, "asc") {
 		order = "ASC"
 	}
-	col, _ := f.sortColumn()
+	col := f.sortColumn()
 	// 固定 id 作为次级排序键，保证同值分页稳定不重不漏。
 	queryArgs := append(append([]interface{}{}, args...), limit, offset)
 	rows, err := r.db.Query(
-		"SELECT "+taskLogCols+" FROM task_logs "+where+" ORDER BY "+col+" "+order+", id DESC LIMIT ? OFFSET ?",
+		"SELECT "+taskLogColsJoined+taskLogFrom+" "+where+" ORDER BY "+col+" "+order+", tl.id DESC LIMIT ? OFFSET ?",
 		queryArgs...)
 	if err != nil {
 		return 0, nil, err
 	}
 	defer rows.Close()
-	logs, err = scanLogs(rows)
+	logs, err = scanLogsJoined(rows)
 	if err != nil {
 		return 0, nil, err
 	}
@@ -273,6 +322,7 @@ type LogExportRow struct {
 	SentAt      time.Time
 	TaskID      int64
 	TaskName    string
+	Category    string
 	ChannelID   int64
 	ChannelName string
 	Status      string
@@ -299,6 +349,10 @@ func (r *TaskLogRepo) ListExportRows(f LogFilter, limit int) ([]*LogExportRow, e
 		where += " AND tl.status=?"
 		args = append(args, f.Status)
 	}
+	if f.Category != "" {
+		where += " AND t.category=?"
+		args = append(args, f.Category)
+	}
 	if !f.From.IsZero() {
 		where += " AND tl.sent_at >= ?"
 		args = append(args, f.From)
@@ -310,7 +364,7 @@ func (r *TaskLogRepo) ListExportRows(f LogFilter, limit int) ([]*LogExportRow, e
 	if limit <= 0 || limit > 100000 {
 		limit = 100000
 	}
-	query := `SELECT tl.id, tl.sent_at, tl.task_id, COALESCE(t.name,''), tl.channel_id, COALESCE(c.name,''),
+	query := `SELECT tl.id, tl.sent_at, tl.task_id, COALESCE(t.name,''), COALESCE(t.category,'default'), tl.channel_id, COALESCE(c.name,''),
 		tl.status, tl.subject, COALESCE(tl.content,''), COALESCE(tl.request,''), COALESCE(tl.response,''),
 		COALESCE(tl.error_msg,''), tl.retry_count, COALESCE(tl.trigger_type,''), COALESCE(tl.trigger_by,''), COALESCE(tl.trigger_ip,'')
 		FROM task_logs tl
@@ -326,7 +380,7 @@ func (r *TaskLogRepo) ListExportRows(f LogFilter, limit int) ([]*LogExportRow, e
 	out := []*LogExportRow{}
 	for rows.Next() {
 		row := &LogExportRow{}
-		if err := rows.Scan(&row.ID, &row.SentAt, &row.TaskID, &row.TaskName, &row.ChannelID, &row.ChannelName,
+		if err := rows.Scan(&row.ID, &row.SentAt, &row.TaskID, &row.TaskName, &row.Category, &row.ChannelID, &row.ChannelName,
 			&row.Status, &row.Subject, &row.Content, &row.Request, &row.Response, &row.ErrorMsg, &row.RetryCount,
 			&row.TriggerType, &row.TriggerBy, &row.TriggerIP); err != nil {
 			return nil, err

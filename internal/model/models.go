@@ -93,6 +93,7 @@ type TaskLog struct {
 	ID          int64     `json:"id"`
 	TaskID      int64     `json:"task_id"`
 	ChannelID   int64     `json:"channel_id"`
+	Category    string    `json:"category"` // 任务的当前分类（读取时 JOIN tasks 得到，不落库）
 	Subject     string    `json:"subject"`
 	Content     string    `json:"content"`
 	Status      string    `json:"status"`
