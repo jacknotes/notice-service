@@ -54,6 +54,8 @@ func NewRouter(db *sql.DB, authSvc *service.AuthService, cipher *crypto.Cipher, 
 		o.MetricsEnabled = opts[0].MetricsEnabled
 		o.MetricsUser = opts[0].MetricsUser
 		o.MetricsPassword = opts[0].MetricsPassword
+		o.BuildVersion = opts[0].BuildVersion
+		o.InstanceID = opts[0].InstanceID
 	}
 
 	// 不用 gin.Default()（它信任全部代理头）；显式 New + Recovery + 自研
