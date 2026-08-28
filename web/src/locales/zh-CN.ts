@@ -423,6 +423,7 @@ const zhCN = {
     roleField: '角色',
     userIdLabel: '用户 ID',
     interfaceLang: '界面语言',
+    versionLabel: '服务版本',
     twofaTitle: '双因子认证',
     twofaDesc: '双因子认证（TOTP）在密码之外额外要求认证器中的 6 位动态码，即使密码泄露也无法直接登录。推荐使用 Google Authenticator / Microsoft Authenticator / 1Password 扫码绑定。',
     twofaOn: '已开启',

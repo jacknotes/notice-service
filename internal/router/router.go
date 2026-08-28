@@ -36,6 +36,9 @@ type Options struct {
 	// MetricsUser / MetricsPassword 同时非空时 /metrics 需 Basic Auth。
 	MetricsUser     string
 	MetricsPassword string
+	// BuildVersion / InstanceID 注入到 /api/system/version 与节点心跳同源的版本口径。
+	BuildVersion string
+	InstanceID   string
 }
 
 func NewRouter(db *sql.DB, authSvc *service.AuthService, cipher *crypto.Cipher, sched *scheduler.Scheduler, queue *service.QueueService, opts ...Options) *gin.Engine {
@@ -80,7 +83,7 @@ func NewRouter(db *sql.DB, authSvc *service.AuthService, cipher *crypto.Cipher, 
 	dashH := handler.NewDashboardHandler(db)
 	userH := handler.NewUserHandler(db)
 	auditH := handler.NewAuditHandler(db)
-	sysH := handler.NewSystemHandler(db)
+	sysH := handler.NewSystemHandler(db, o.BuildVersion, o.InstanceID)
 
 	r.GET("/api/health", handler.Health(db))
 	if o.MetricsEnabled {
@@ -127,6 +130,7 @@ func NewRouter(db *sql.DB, authSvc *service.AuthService, cipher *crypto.Cipher, 
 		auth.GET("/dashboard/channel-stats", dashH.ChannelStats)
 
 		auth.GET("/instances", sysH.Instances) // 后端节点健康列表（信号在线）
+		auth.GET("/system/version", sysH.Version) // 当前服务版本（与心跳 version 同源）
 
 		// 写操作与用户管理：仅管理员
 		admin := auth.Group("")

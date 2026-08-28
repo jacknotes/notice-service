@@ -142,6 +142,8 @@ export const systemApi = {
     healthy: number
     total: number
   }> => client.get('/instances').then((r) => r.data),
+  version: (): Promise<{ version: string; instance_id: string }> =>
+    client.get('/system/version').then((r) => r.data),
 }
 
 export const dashboardApi = {

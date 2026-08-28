@@ -487,6 +487,7 @@ const enUS: EnMessages = {
     roleField: 'Role',
     userIdLabel: 'User ID',
     interfaceLang: 'Interface language',
+    versionLabel: 'Service version',
     twofaTitle: 'Two-factor authentication',
     twofaDesc: 'Two-factor authentication (TOTP) additionally requires the 6-digit code from an authenticator app on top of your password, so a leaked password alone cannot sign in. Recommended apps: Google Authenticator / Microsoft Authenticator / 1Password.',
     twofaOn: 'On',

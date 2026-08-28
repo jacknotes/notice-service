@@ -79,6 +79,10 @@
           <span class="info-value mono">#{{ auth.user?.id ?? '—' }}</span>
         </div>
         <div class="info-row">
+          <span class="info-label">{{ t('settings.versionLabel') }}</span>
+          <span class="info-value mono">{{ serviceVersion || '—' }}</span>
+        </div>
+        <div class="info-row">
           <span class="info-label">{{ t('settings.interfaceLang') }}</span>
           <el-select
             :model-value="currentLocale()"
@@ -303,12 +307,22 @@ import { EditPen, Key, Lock, CopyDocument, Download, Upload } from '@element-plu
 import QRCode from 'qrcode'
 import { useI18n } from 'vue-i18n'
 import { currentLocale, setLocale, type SupportedLocale } from '@/i18n/locale'
-import { authApi, backupApi } from '@/api'
+import { authApi, backupApi, systemApi } from '@/api'
 import { useAuthStore } from '@/stores/auth'
 
 const router = useRouter()
 const auth = useAuthStore()
 const { t } = useI18n()
+
+// 服务版本：与节点心跳 /system/version 同源（构建期 ldflags 注入）
+const serviceVersion = ref('')
+onMounted(async () => {
+  try {
+    serviceVersion.value = (await systemApi.version()).version
+  } catch {
+    /* 版本获取失败不阻塞设置页 */
+  }
+})
 
 const isAdmin = computed(() => auth.user?.role === 'admin')
 

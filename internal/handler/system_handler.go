@@ -16,10 +16,24 @@ const heartbeatHealthyWindow = 15 * time.Second
 
 type SystemHandler struct {
 	heartbeats *repository.HeartbeatRepo
+	// buildVersion/instanceID 来自启动注入（ldflags / 随机生成），
+	// 供「当前服务版本」接口与节点心跳口径保持一致。
+	buildVersion string
+	instanceID   string
 }
 
-func NewSystemHandler(db *sql.DB) *SystemHandler {
-	return &SystemHandler{heartbeats: repository.NewHeartbeatRepo(db)}
+func NewSystemHandler(db *sql.DB, buildVersion, instanceID string) *SystemHandler {
+	return &SystemHandler{heartbeats: repository.NewHeartbeatRepo(db), buildVersion: buildVersion, instanceID: instanceID}
+}
+
+// Version 当前实例构建版本（与节点心跳上报的 version 同源）。
+// @Summary 当前服务版本
+// @Tags 系统
+// @Security BearerAuth
+// @Success 200 {object} map[string]interface{}
+// @Router /api/system/version [get]
+func (h *SystemHandler) Version(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{"version": h.buildVersion, "instance_id": h.instanceID})
 }
 
 // Instances 返回全部后端实例节点及健康状态（多实例「信号在线」）。

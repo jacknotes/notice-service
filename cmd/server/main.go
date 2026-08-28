@@ -181,6 +181,8 @@ func main() {
 		MetricsEnabled:  cfg.MetricsEnabled,
 		MetricsUser:     cfg.MetricsUser,
 		MetricsPassword: cfg.MetricsPassword,
+		BuildVersion:    buildVersion,
+		InstanceID:      cfg.InstanceID,
 	})
 	staticDir, staticOK := resolveStaticDir(cfg.StaticDir)
 	if staticOK {
@@ -225,7 +227,7 @@ func main() {
 		}
 	}()
 
-	log.Printf("notice-service listening on :%s (instance %s)", cfg.Port, cfg.InstanceID)
+	log.Printf("notice-service listening on :%s (build %s) (instance %s)", cfg.Port, buildVersion, cfg.InstanceID)
 	if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		log.Fatal(err)
 	}

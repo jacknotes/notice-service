@@ -21,8 +21,13 @@ deps: frontend-install ## 安装 Go + 前端依赖
 swagger: ## 重新生成 Swagger 文档
 	$(GO_ENV) go run github.com/swaggo/swag/cmd/swag@v1.16.6 init -g cmd/server/main.go -o docs/swagger
 
-build: swagger ## 编译后端（静态；先生成 swagger，避免 docs 缺失编译失败）
-	$(GO_ENV) CGO_ENABLED=0 go build -o $(BIN) ./cmd/server
+VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
+
+version: ## 打印当前构建版本号（git describe，注入 buildVersion）
+	@echo $(VERSION)
+
+build: swagger ## 编译后端（静态；ldflags 注入版本号，先生成 swagger 避免缺失编译失败）
+	$(GO_ENV) CGO_ENABLED=0 go build -ldflags "-X main.buildVersion=$(VERSION)" -o $(BIN) ./cmd/server
 
 run: build ## 编译并启动后端（:$(PORT)，默认 release 模式）
 	PORT=$(PORT) $(BIN)
