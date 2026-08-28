@@ -28,7 +28,7 @@
 
 ## 一键部署（Docker Hub 镜像，推荐）
 
-适合只想**用起来**的用户：直接拉取已发布镜像 [jacknotes/notice-service](https://hub.docker.com/r/jacknotes/notice-service)，不需要克隆源码、不需要本地构建。前置条件仅 Docker + Docker Compose v2。
+适合只想**用起来**的用户：直接拉取已发布镜像 `jacknotes/notice-service:v1`（[Docker Hub](https://hub.docker.com/r/jacknotes/notice-service/tags)），不需要克隆源码、不需要本地构建。前置条件仅 Docker + Docker Compose v2。
 
 **方式一：不克隆仓库（只需两个文件）**
 
@@ -65,6 +65,7 @@ docker compose -f docker-compose.quickstart.yml pull \
   && docker compose -f docker-compose.quickstart.yml up -d # 升级到新版本镜像
 ```
 
+> - 镜像版本固定在 compose 文件中的 `image: jacknotes/notice-service:v1`；升级到新版本时先 `pull` 拉新镜像，再把 tag 改为新版本号后 `up -d`。登录后可在「个人设置」或侧边栏底部查看当前运行版本。
 > - 国内网络拉取 Docker Hub 镜像慢/失败时，在 `.env` 设置 `MYSQL_IMAGE=docker.m.daocloud.io/library/mysql:5.7`，应用镜像同理可换成镜像源前缀形式。
 > - 首启自动建表并创建管理员，数据（渠道配置、模板、任务、日志）持久化在 MySQL 卷中，重启不丢。
 > - 生产环境建议置于 Nginx 反向代理之后（参考下文「Docker 部署」的反代说明），不要将 8080 直接暴露公网。
@@ -319,7 +320,7 @@ internal/
   handler/ middleware/ router/
 web/                  # Vue3 前端
 internal/database/migrations/  # 数据库迁移 SQL（go:embed 内嵌，启动自动应用）
-Dockerfile  docker-compose.yml  .env.example
+Dockerfile  docker-compose.yml  docker-compose.quickstart.yml  .env.example
 ```
 
 ## 文档
