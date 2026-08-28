@@ -32,6 +32,17 @@
       </div>
     </div>
 
+    <div class="filter-row">
+      <el-select
+        v-model="categoryFilter"
+        class="filter-select"
+        clearable
+        :placeholder="t('channels.allCategories')"
+      >
+        <el-option v-for="cg in channelCategories" :key="cg" :label="cg" :value="cg" />
+      </el-select>
+    </div>
+
     <div v-loading="loading" class="card table-card">
       <el-table
         ref="tableRef"
@@ -59,6 +70,12 @@
             <el-tag :style="typeTagStyle(row.type)" effect="plain" size="small">
               {{ typeLabel(row.type) }}
             </el-tag>
+          </template>
+        </el-table-column>
+
+        <el-table-column :label="t('channels.category')" width="130">
+          <template #default="{ row }">
+            <el-tag effect="plain" size="small" class="category-tag">{{ row.category || 'default' }}</el-tag>
           </template>
         </el-table-column>
 
@@ -131,6 +148,19 @@
           </el-form-item>
         </div>
 
+        <el-form-item :label="t('channels.category')" prop="category">
+          <el-select
+            v-model="form.category"
+            filterable
+            allow-create
+            default-first-option
+            :placeholder="t('channels.categoryPlaceholder')"
+            style="width: 100%"
+          >
+            <el-option v-for="cg in channelCategories" :key="cg" :label="cg" :value="cg" />
+          </el-select>
+        </el-form-item>
+
         <template v-for="field in currentFields" :key="field.key">
           <el-form-item :label="t(field.labelKey)" :prop="`config.${field.key}`">
             <el-input
@@ -189,6 +219,7 @@ interface ChannelRow {
   id: number
   type: string
   name: string
+  category?: string
   config: Record<string, string>
   enabled: boolean
   created_at?: string
@@ -256,15 +287,28 @@ function onSelectionChange(rows: ChannelRow[]) {
 
 const keyword = ref('')
 
-// 按名称或类型（原始值 / 本地化标签）做客户端过滤
+// 分类筛选（客户端）
+const categoryFilter = ref<string>('')
+
+// 已使用到的渠道分类（去重排序），供筛选下拉与分类输入复用
+const channelCategories = computed<string[]>(() =>
+  Array.from(new Set(channels.value.map((c) => c.category || 'default')))
+    .filter(Boolean)
+    .sort()
+)
+
+// 按名称、类型（原始值 / 本地化标签）或分类做客户端过滤
 const filteredChannels = computed<ChannelRow[]>(() => {
   const kw = keyword.value.trim().toLowerCase()
-  if (!kw) return channels.value
-  return channels.value.filter((c) =>
-    (c.name || '').toLowerCase().includes(kw) ||
-    (c.type || '').toLowerCase().includes(kw) ||
-    (typeLabel(c.type) || '').toLowerCase().includes(kw)
-  )
+  return channels.value.filter((c) => {
+    if (categoryFilter.value && (c.category || 'default') !== categoryFilter.value) return false
+    if (!kw) return true
+    return (
+      (c.name || '').toLowerCase().includes(kw) ||
+      (c.type || '').toLowerCase().includes(kw) ||
+      (typeLabel(c.type) || '').toLowerCase().includes(kw)
+    )
+  })
 })
 
 // 客户端排序 + 分页（整表数据在前端）
@@ -279,12 +323,14 @@ const form = reactive<{
   id: number
   name: string
   type: string
+  category: string
   enabled: boolean
   config: Record<string, string>
 }>({
   id: 0,
   name: '',
   type: 'email',
+  category: 'default',
   enabled: true,
   config: {},
 })
@@ -327,6 +373,7 @@ function openCreate() {
   form.id = 0
   form.name = ''
   form.type = 'email'
+  form.category = 'default'
   form.enabled = true
   form.config = {}
   dialogVisible.value = true
@@ -336,6 +383,7 @@ function openEdit(row: ChannelRow) {
   form.id = row.id
   form.name = row.name
   form.type = row.type
+  form.category = row.category || 'default'
   form.enabled = row.enabled
   form.config = { ...(row.config || {}) }
   dialogVisible.value = true
@@ -346,6 +394,7 @@ function duplicateChannel(row: ChannelRow) {
   form.id = 0
   form.name = `${row.name}${t('channels.copySuffix')}`
   form.type = row.type
+  form.category = row.category || 'default'
   form.enabled = row.enabled
   form.config = { ...(row.config || {}) }
   dialogVisible.value = true
@@ -362,7 +411,7 @@ async function saveChannel() {
 
   saving.value = true
   try {
-    const payload = { type: form.type, name: form.name, config: form.config, enabled: form.enabled }
+    const payload = { type: form.type, name: form.name, category: form.category || 'default', config: form.config, enabled: form.enabled }
     if (form.id) {
       await channelApi.update(form.id, payload)
       ElMessage.success(t('channels.updatedOk'))
@@ -455,6 +504,24 @@ onMounted(load)
 
 <style scoped>
 .search-input { width: 220px; }
+
+.filter-row {
+  display: flex;
+  gap: var(--space-3);
+  align-items: center;
+  margin-bottom: var(--space-3);
+  flex-wrap: wrap;
+}
+.filter-select { width: 200px; }
+
+.category-tag {
+  color: var(--indigo-400) !important;
+  border-color: rgba(129, 140, 248, 0.4) !important;
+  background: rgba(129, 140, 248, 0.12) !important;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 
 .pager-row {
   display: flex;

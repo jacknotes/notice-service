@@ -1,0 +1,2 @@
+ALTER TABLE tasks ADD COLUMN category VARCHAR(50) NOT NULL DEFAULT 'default' AFTER template_id;
+ALTER TABLE channels ADD COLUMN category VARCHAR(50) NOT NULL DEFAULT 'default' AFTER name;

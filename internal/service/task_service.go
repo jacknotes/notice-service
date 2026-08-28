@@ -91,6 +91,7 @@ func (s *TaskService) Create(userID int64, in *model.Task) error {
 	in.UserID = userID
 	in.APIKey = ""
 	in.HMACSecret = ""
+	normalizeCategory(&in.Category)
 	if in.TriggerType == "api" {
 		in.APIKey = generateAPIKey()
 		in.HMACSecret = generateAPIKey() // 签名密钥与触发凭据独立生成、独立轮换
@@ -117,6 +118,7 @@ func (s *TaskService) Update(userID, id int64, in *model.Task) error {
 	in.ID = id
 	// 保持原属主：管理员可编辑任意用户的任务
 	in.UserID = ex.UserID
+	normalizeCategory(&in.Category)
 	// Webhook API Key 生命周期：切到 api 且原无 Key → 生成；api→api 编辑保留；
 	// 切回 cron → 清空（旧 URL 立即失效，同时避免 cron 任务残留 Key 仍可被触发）。
 	switch in.TriggerType {

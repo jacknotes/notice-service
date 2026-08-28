@@ -58,6 +58,7 @@ func (s *ChannelService) Create(userID int64, in *model.Channel) error {
 	if _, ok := channel.Get(in.Type); !ok {
 		return errors.New("不支持的渠道类型")
 	}
+	normalizeCategory(&in.Category)
 	enc, err := s.encryptConfig(in.Config)
 	if err != nil {
 		return err
@@ -75,6 +76,7 @@ func (s *ChannelService) Update(userID, id int64, in *model.Channel) error {
 	if _, ok := channel.Get(in.Type); !ok {
 		return errors.New("不支持的渠道类型")
 	}
+	normalizeCategory(&in.Category)
 	enc, err := s.encryptConfig(in.Config)
 	if err != nil {
 		return err

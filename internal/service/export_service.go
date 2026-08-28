@@ -95,7 +95,7 @@ func (s *ExportService) Import(userID int64, b *ExportBundle) (*ImportResult, er
 			continue
 		}
 		oldID := c.ID
-		nc := &model.Channel{Type: c.Type, Name: c.Name, Config: c.Config, Enabled: c.Enabled}
+		nc := &model.Channel{Type: c.Type, Name: c.Name, Category: c.Category, Config: c.Config, Enabled: c.Enabled}
 		if err := s.channels.Create(userID, nc); err != nil {
 			return nil, fmt.Errorf("导入渠道 %q 失败: %w", c.Name, err)
 		}
@@ -129,7 +129,7 @@ func (s *ExportService) Import(userID int64, b *ExportBundle) (*ImportResult, er
 			res.Skipped = append(res.Skipped, "任务 "+t.Name)
 			continue
 		}
-		nt := &model.Task{Name: t.Name, TemplateID: remapID(tplMap, t.TemplateID), TriggerType: t.TriggerType,
+		nt := &model.Task{Name: t.Name, TemplateID: remapID(tplMap, t.TemplateID), Category: t.Category, TriggerType: t.TriggerType,
 			Receivers: t.Receivers, CronExpr: t.CronExpr, AllowedIPs: t.AllowedIPs, Variables: t.Variables,
 			Enabled: t.Enabled, RequireSignature: t.RequireSignature}
 		for _, cid := range t.ChannelIDs {

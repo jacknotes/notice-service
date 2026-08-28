@@ -33,6 +33,7 @@ services:
       - ADMIN_PASS=${ADMIN_PASS:?请在 .env 中设置 ADMIN_PASS}
       - TRUSTED_PROXIES=${TRUSTED_PROXIES:-127.0.0.1,::1,172.16.0.0/12}
       - GIN_MODE=release
+      - TZ=Asia/Shanghai
     depends_on:
       mysql:
         condition: service_healthy
@@ -60,6 +61,7 @@ services:
       - ADMIN_PASS=${ADMIN_PASS:?请在 .env 中设置 ADMIN_PASS}
       - TRUSTED_PROXIES=${TRUSTED_PROXIES:-127.0.0.1,::1,172.16.0.0/12}
       - GIN_MODE=release
+      - TZ=Asia/Shanghai
     depends_on:
       mysql:
         condition: service_healthy
@@ -77,6 +79,7 @@ services:
       - MYSQL_DATABASE=notice_service
       - MYSQL_USER=notice
       - MYSQL_PASSWORD=${DB_PASSWORD:?请在 .env 中设置 DB_PASSWORD}
+      - TZ=Asia/Shanghai
     volumes:
       - mysql_data:/var/lib/mysql
     restart: unless-stopped

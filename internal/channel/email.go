@@ -140,7 +140,7 @@ func (e *EmailChannel) Send(message *Message, receiver *Receiver) error {
 	}
 	defer client.Close()
 
-	msg := e.buildMail(message.Subject, render.ToHTML(message.Content), receiver.Address)
+	msg := e.buildMail(message.Subject, render.ToHTMLEmail(message.Content), receiver.Address)
 	if err := client.Mail(e.config["from"]); err != nil {
 		return err
 	}

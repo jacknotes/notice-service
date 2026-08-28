@@ -29,6 +29,7 @@ type Channel struct {
 	UserID     int64             `json:"user_id"`
 	Type       string            `json:"type"`
 	Name       string            `json:"name"`
+	Category   string            `json:"category"`
 	Config     map[string]string `json:"config"`
 	ConfigJSON string            `json:"-"`
 	Enabled    bool              `json:"enabled"`
@@ -64,6 +65,7 @@ type Task struct {
 	ChannelID        int64             `json:"channel_id"`
 	ChannelIDs       []int64           `json:"channel_ids,omitempty"`
 	ChannelIDsJSON   string            `json:"-"`
+	Category         string            `json:"category"`
 	TemplateID       int64             `json:"template_id"`
 	TriggerType      string            `json:"trigger_type"`
 	Receivers        []string          `json:"receivers"`

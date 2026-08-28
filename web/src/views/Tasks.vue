@@ -30,6 +30,22 @@
       </div>
     </div>
 
+    <div class="filter-row">
+      <el-select v-model="triggerFilter" class="filter-select" :placeholder="t('tasks.allTriggers')">
+        <el-option :label="t('tasks.allTriggers')" value="" />
+        <el-option :label="t('tasks.filterCron')" value="cron" />
+        <el-option label="Webhook API" value="api" />
+      </el-select>
+      <el-select
+        v-model="categoryFilter"
+        class="filter-select"
+        clearable
+        :placeholder="t('tasks.allCategories')"
+      >
+        <el-option v-for="cg in taskCategories" :key="cg" :label="cg" :value="cg" />
+      </el-select>
+    </div>
+
     <div v-loading="loading" class="card table-card">
       <el-table
         ref="tableRef"
@@ -71,6 +87,12 @@
         <el-table-column :label="t('tasks.channels')" min-width="170">
           <template #default="{ row }">
             <span class="channels-cell">{{ channelNames(row) || '—' }}</span>
+          </template>
+        </el-table-column>
+
+        <el-table-column :label="t('tasks.category')" width="130">
+          <template #default="{ row }">
+            <el-tag effect="plain" size="small" class="category-tag">{{ row.category || 'default' }}</el-tag>
           </template>
         </el-table-column>
 
@@ -173,6 +195,7 @@
           <el-form-item :label="t('tasks.template')" prop="template_id" class="grow">
             <el-select
               v-model="form.template_id"
+              filterable
               :placeholder="t('tasks.templateSelectPlaceholder')"
               style="width: 100%"
               @change="onTemplateChange"
@@ -186,6 +209,19 @@
             </el-select>
           </el-form-item>
         </div>
+
+        <el-form-item :label="t('tasks.category')" prop="category">
+          <el-select
+            v-model="form.category"
+            filterable
+            allow-create
+            default-first-option
+            :placeholder="t('tasks.categoryPlaceholder')"
+            style="width: 100%"
+          >
+            <el-option v-for="cg in taskCategories" :key="cg" :label="cg" :value="cg" />
+          </el-select>
+        </el-form-item>
 
         <el-form-item :label="t('tasks.triggerType')" prop="trigger_type">
           <el-radio-group v-model="form.trigger_type">
@@ -377,6 +413,7 @@ interface TaskRow {
   name: string
   channel_id: number
   channel_ids?: number[]
+  category?: string
   template_id: number
   trigger_type: 'cron' | 'api'
   receivers: string[]
@@ -418,11 +455,24 @@ function onSelectionChange(rows: TaskRow[]) {
 
 const keyword = ref('')
 
-// 按任务名称、或绑定的渠道 / 模板名称做客户端过滤
+// 触发方式与分类筛选（客户端）
+const triggerFilter = ref<string>('')
+const categoryFilter = ref<string>('')
+
+// 已使用到的任务分类（去重排序），供筛选下拉与分类输入复用
+const taskCategories = computed<string[]>(() =>
+  Array.from(new Set(tasks.value.map((t) => t.category || 'default')))
+    .filter(Boolean)
+    .sort()
+)
+
+// 按任务名称、或绑定的渠道 / 模板名称 / 触发方式 / 分类做客户端过滤
 const filteredTasks = computed<TaskRow[]>(() => {
   const kw = keyword.value.trim().toLowerCase()
-  if (!kw) return tasks.value
   return tasks.value.filter((t) => {
+    if (triggerFilter.value && t.trigger_type !== triggerFilter.value) return false
+    if (categoryFilter.value && (t.category || 'default') !== categoryFilter.value) return false
+    if (!kw) return true
     const ids = t.channel_ids?.length ? t.channel_ids : [t.channel_id]
     const chName = ids.map((id) => channels.value.find((c) => c.id === id)?.name || '').join(' ')
     const tplName = templates.value.find((p) => p.id === t.template_id)?.name || ''
@@ -446,6 +496,7 @@ const form = reactive<{
   name: string
   channel_ids: number[]
   template_id: number | null
+  category: string
   trigger_type: 'cron' | 'api'
   cron_expr: string
   receivers: string
@@ -458,6 +509,7 @@ const form = reactive<{
   name: '',
   channel_ids: [],
   template_id: null,
+  category: 'default',
   trigger_type: 'cron',
   cron_expr: '',
   receivers: '',
@@ -648,6 +700,7 @@ function openCreate() {
   form.name = ''
   form.channel_ids = []
   form.template_id = null
+  form.category = 'default'
   form.trigger_type = 'cron'
   form.cron_expr = ''
   form.receivers = ''
@@ -663,6 +716,7 @@ function openEdit(row: TaskRow) {
   form.name = row.name
   form.channel_ids = row.channel_ids?.length ? [...row.channel_ids] : [row.channel_id]
   form.template_id = row.template_id
+  form.category = row.category || 'default'
   form.trigger_type = row.trigger_type
   form.cron_expr = row.cron_expr || ''
   form.receivers = (row.receivers || []).join('\n')
@@ -680,6 +734,7 @@ function duplicateTask(row: TaskRow) {
   form.name = `${row.name}${t('common.copySuffix')}`
   form.channel_ids = row.channel_ids?.length ? [...row.channel_ids] : [row.channel_id]
   form.template_id = row.template_id
+  form.category = row.category || 'default'
   form.trigger_type = row.trigger_type
   form.cron_expr = row.cron_expr || ''
   form.receivers = (row.receivers || []).join('\n')
@@ -745,6 +800,7 @@ async function saveTask() {
       name: form.name,
       channel_ids: form.channel_ids,
       template_id: form.template_id,
+      category: form.category || 'default',
       trigger_type: form.trigger_type,
       cron_expr: form.trigger_type === 'cron' ? form.cron_expr.trim() : '',
       receivers: splitLines(form.receivers),
@@ -837,6 +893,24 @@ onMounted(() => {
 
 <style scoped>
 .search-input { width: 220px; }
+
+.filter-row {
+  display: flex;
+  gap: var(--space-3);
+  align-items: center;
+  margin-bottom: var(--space-3);
+  flex-wrap: wrap;
+}
+.filter-select { width: 200px; }
+
+.category-tag {
+  color: var(--indigo-400) !important;
+  border-color: rgba(129, 140, 248, 0.4) !important;
+  background: rgba(129, 140, 248, 0.12) !important;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 
 .pager-row {
   display: flex;
