@@ -30,6 +30,17 @@
       </div>
     </div>
 
+    <div class="filter-row">
+      <el-select
+        v-model="categoryFilter"
+        class="filter-select"
+        clearable
+        :placeholder="t('templates.allCategories')"
+      >
+        <el-option v-for="cg in categories" :key="cg.name" :label="cg.name" :value="cg.name" />
+      </el-select>
+    </div>
+
     <div v-loading="loading" class="card table-card">
       <el-table
         ref="tableRef"
@@ -49,6 +60,12 @@
         <el-table-column prop="name" :label="t('common.name')" min-width="170" sortable="custom">
           <template #default="{ row }">
             <span class="tpl-name">{{ row.name }}</span>
+          </template>
+        </el-table-column>
+
+        <el-table-column :label="t('templates.category')" width="130">
+          <template #default="{ row }">
+            <el-tag effect="plain" size="small" class="category-tag">{{ row.category || 'default' }}</el-tag>
           </template>
         </el-table-column>
 
@@ -110,6 +127,17 @@
         <el-form ref="formRef" :model="form" :rules="rules" label-position="top" class="tpl-form">
           <el-form-item :label="t('common.name')" prop="name">
             <el-input v-model="form.name" :placeholder="t('templates.namePlaceholder')" />
+          </el-form-item>
+
+          <el-form-item :label="t('templates.category')" prop="category">
+            <el-select
+              v-model="form.category"
+              filterable
+              :placeholder="t('templates.categoryPlaceholder')"
+              style="width: 100%"
+            >
+              <el-option v-for="cg in categories" :key="cg.name" :label="cg.name" :value="cg.name" />
+            </el-select>
           </el-form-item>
 
           <el-form-item :label="t('templates.subject')" prop="subject">
@@ -198,7 +226,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import type { FormInstance, FormRules, TableInstance } from 'element-plus'
 import { Plus, Delete, View, Search } from '@element-plus/icons-vue'
 import { useI18n } from 'vue-i18n'
-import { templateApi } from '@/api'
+import { templateApi, categoryApi } from '@/api'
 import MarkdownPreview from '@/components/MarkdownPreview.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useTablePaging } from '@/composables/useTablePaging'
@@ -209,6 +237,7 @@ interface TemplateVar { name: string; default: string }
 interface TemplateRow {
   id: number
   name: string
+  category?: string
   subject: string
   content_md: string
   variables: TemplateVar[]
@@ -232,14 +261,23 @@ function onSelectionChange(rows: TemplateRow[]) {
 
 const keyword = ref('')
 
-// 按名称或标题做客户端过滤
+// 分类筛选（客户端）
+const categoryFilter = ref<string>('')
+
+// 共享分类池（渠道/模板/任务统一引用）：只在「分类管理」一处创建
+const categories = ref<{ id: number; name: string }[]>([])
+
+// 按名称、标题或分类做客户端过滤
 const filteredTemplates = computed<TemplateRow[]>(() => {
   const kw = keyword.value.trim().toLowerCase()
-  if (!kw) return templates.value
-  return templates.value.filter((t) =>
-    (t.name || '').toLowerCase().includes(kw) ||
-    (t.subject || '').toLowerCase().includes(kw)
-  )
+  return templates.value.filter((t) => {
+    if (categoryFilter.value && (t.category || 'default') !== categoryFilter.value) return false
+    if (!kw) return true
+    return (
+      (t.name || '').toLowerCase().includes(kw) ||
+      (t.subject || '').toLowerCase().includes(kw)
+    )
+  })
 })
 
 // 客户端排序 + 分页（整表数据在前端）
@@ -253,12 +291,14 @@ const formRef = ref<FormInstance>()
 const form = reactive<{
   id: number
   name: string
+  category: string
   subject: string
   content_md: string
   variables: TemplateVar[]
 }>({
   id: 0,
   name: '',
+  category: 'default',
   subject: '',
   content_md: '',
   variables: [],
@@ -305,10 +345,20 @@ async function load() {
   }
 }
 
+// 共享分类池（渠道/模板/任务统一引用）：只在「分类管理」一处创建
+async function loadCategories() {
+  try {
+    categories.value = (await categoryApi.list()) || []
+  } catch (e: any) {
+    ElMessage.error(errMsg(e, t('templates.loadFailed')))
+  }
+}
+
 /* ── Create / edit ─────────────────────────────────────────────────── */
 function openCreate() {
   form.id = 0
   form.name = ''
+  form.category = 'default'
   form.subject = ''
   form.content_md = ''
   form.variables = []
@@ -319,6 +369,7 @@ function openCreate() {
 function openEdit(row: TemplateRow) {
   form.id = row.id
   form.name = row.name
+  form.category = row.category || 'default'
   form.subject = row.subject
   form.content_md = row.content_md
   form.variables = (row.variables || []).map((v) => ({ name: v.name, default: v.default ?? '' }))
@@ -330,6 +381,7 @@ function openEdit(row: TemplateRow) {
 function duplicateTemplate(row: TemplateRow) {
   form.id = 0
   form.name = `${row.name}${t('common.copySuffix')}`
+  form.category = row.category || 'default'
   form.subject = row.subject
   form.content_md = row.content_md
   form.variables = (row.variables || []).map((v) => ({ name: v.name, default: v.default ?? '' }))
@@ -359,7 +411,7 @@ async function saveTemplate() {
     const vars = form.variables
       .filter((v) => v.name.trim())
       .map((v) => ({ name: v.name.trim(), type: 'string', description: '', default: v.default }))
-    const payload = { name: form.name, subject: form.subject, content_md: form.content_md, variables: vars }
+    const payload = { name: form.name, category: form.category || 'default', subject: form.subject, content_md: form.content_md, variables: vars }
 
     if (form.id) {
       await templateApi.update(form.id, payload)
@@ -443,11 +495,32 @@ async function batchDelete() {
   }
 }
 
-onMounted(load)
+onMounted(() => {
+  load()
+  loadCategories()
+})
 </script>
 
 <style scoped>
 .search-input { width: 220px; }
+
+.filter-row {
+  display: flex;
+  gap: var(--space-3);
+  align-items: center;
+  margin-bottom: var(--space-3);
+  flex-wrap: wrap;
+}
+.filter-select { width: 200px; }
+
+.category-tag {
+  color: var(--indigo-400) !important;
+  border-color: rgba(129, 140, 248, 0.4) !important;
+  background: rgba(129, 140, 248, 0.12) !important;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 
 .pager-row {
   display: flex;

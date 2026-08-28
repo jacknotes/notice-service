@@ -15,6 +15,7 @@ const router = createRouter({
         { path: 'channels', component: () => import('@/views/Channels.vue'), meta: { titleKey: 'nav.channels' } },
         { path: 'templates', component: () => import('@/views/Templates.vue'), meta: { titleKey: 'nav.templates' } },
         { path: 'tasks', component: () => import('@/views/Tasks.vue'), meta: { titleKey: 'nav.tasks' } },
+        { path: 'categories', component: () => import('@/views/Categories.vue'), meta: { titleKey: 'nav.categories' } },
         { path: 'logs', component: () => import('@/views/Logs.vue'), meta: { titleKey: 'nav.logs' } },
         { path: 'logs/:id', component: () => import('@/views/LogDetail.vue'), meta: { titleKey: 'logs.detailTitle' } },
         { path: 'audit', component: () => import('@/views/Audit.vue'), meta: { titleKey: 'nav.audit', adminOnly: true } },

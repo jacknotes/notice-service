@@ -115,6 +115,13 @@ export const userApi = {
   forceDisable2FA: (id: number) => client.post(`/users/${id}/2fa-disable`).then((r) => r.data),
 }
 
+export const categoryApi = {
+  list: (): Promise<{ id: number; name: string; created_at: string }[]> => client.get('/categories').then((r) => r.data),
+  unused: (): Promise<string[]> => client.get('/categories/unused').then((r) => r.data),
+  create: (name: string): Promise<{ id: number; name: string }> => client.post('/categories', { name }).then((r) => r.data),
+  remove: (name: string) => client.delete(`/categories/${encodeURIComponent(name)}`).then((r) => r.data),
+}
+
 export const auditApi = {
   list: (params: {
     keyword?: string

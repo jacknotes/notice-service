@@ -4,10 +4,12 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"notice-service/internal/crypto"
 	"notice-service/internal/model"
+	"notice-service/internal/repository"
 )
 
 // exportVersion 备份格式版本：导出写入、导入校验，必须一致。
@@ -24,16 +26,18 @@ type ExportBundle struct {
 
 // ExportService 数据导出导入（备份迁移）。仅管理员调用。
 type ExportService struct {
-	channels  *ChannelService
-	templates *TemplateService
-	tasks     *TaskService
+	channels    *ChannelService
+	templates   *TemplateService
+	tasks       *TaskService
+	categoryRepo *repository.CategoryRepo
 }
 
 func NewExportService(db *sql.DB, cipher *crypto.Cipher, sched Scheduler) *ExportService {
 	return &ExportService{
-		channels:  NewChannelService(db, cipher),
-		templates: NewTemplateService(db),
-		tasks:     NewTaskService(db, sched),
+		channels:    NewChannelService(db, cipher),
+		templates:   NewTemplateService(db),
+		tasks:       NewTaskService(db, sched),
+		categoryRepo: repository.NewCategoryRepo(db),
 	}
 }
 
@@ -82,6 +86,10 @@ func (s *ExportService) Import(userID int64, b *ExportBundle) (*ImportResult, er
 	}
 	if b.Version != exportVersion {
 		return nil, errors.New("不支持的备份版本")
+	}
+	// 先把备份中引用的分类并入共享分类池，避免校验新建失败
+	if err := s.ensureBundleCategories(b); err != nil {
+		return nil, err
 	}
 	res := &ImportResult{}
 	chMap := map[int64]int64{} // 导出渠道 id -> 新渠道 id
@@ -174,6 +182,36 @@ func remapID(m map[int64]int64, oldID int64) int64 {
 		return v
 	}
 	return 0
+}
+
+// ensureBundleCategories 把备份中出现的分类加入共享分类池（幂等）。
+func (s *ExportService) ensureBundleCategories(b *ExportBundle) error {
+	seen := map[string]bool{}
+	var names []string
+	add := func(cat string) {
+		cat = strings.TrimSpace(cat)
+		if cat == "" || seen[cat] {
+			return
+		}
+		seen[cat] = true
+		names = append(names, cat)
+	}
+	for _, c := range b.Channels {
+		if c != nil {
+			add(c.Category)
+		}
+	}
+	for _, t := range b.Templates {
+		if t != nil {
+			add(t.Category)
+		}
+	}
+	for _, t := range b.Tasks {
+		if t != nil {
+			add(t.Category)
+		}
+	}
+	return s.categoryRepo.EnsureExists(names)
 }
 
 // nameExists 检查名称冲突：渠道按 (name,type)，模板/任务按 name（均排除软删）。

@@ -13,12 +13,13 @@ import (
 )
 
 type ChannelService struct {
-	repo   *repository.ChannelRepo
-	cipher *crypto.Cipher
+	repo        *repository.ChannelRepo
+	categoryRepo *repository.CategoryRepo
+	cipher      *crypto.Cipher
 }
 
 func NewChannelService(db *sql.DB, cipher *crypto.Cipher) *ChannelService {
-	return &ChannelService{repo: repository.NewChannelRepo(db), cipher: cipher}
+	return &ChannelService{repo: repository.NewChannelRepo(db), categoryRepo: repository.NewCategoryRepo(db), cipher: cipher}
 }
 
 // Name 返回渠道 ID 对应的名称（用于审计详情可读性；不存在返回错误）。
@@ -58,7 +59,9 @@ func (s *ChannelService) Create(userID int64, in *model.Channel) error {
 	if _, ok := channel.Get(in.Type); !ok {
 		return errors.New("不支持的渠道类型")
 	}
-	normalizeCategory(&in.Category)
+	if err := validateSharedCategory(&in.Category, s.categoryRepo); err != nil {
+		return err
+	}
 	enc, err := s.encryptConfig(in.Config)
 	if err != nil {
 		return err
@@ -76,7 +79,9 @@ func (s *ChannelService) Update(userID, id int64, in *model.Channel) error {
 	if _, ok := channel.Get(in.Type); !ok {
 		return errors.New("不支持的渠道类型")
 	}
-	normalizeCategory(&in.Category)
+	if err := validateSharedCategory(&in.Category, s.categoryRepo); err != nil {
+		return err
+	}
 	enc, err := s.encryptConfig(in.Config)
 	if err != nil {
 		return err

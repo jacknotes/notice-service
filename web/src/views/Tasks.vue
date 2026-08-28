@@ -42,7 +42,7 @@
         clearable
         :placeholder="t('tasks.allCategories')"
       >
-        <el-option v-for="cg in taskCategories" :key="cg" :label="cg" :value="cg" />
+        <el-option v-for="cg in categories" :key="cg.name" :label="cg.name" :value="cg.name" />
       </el-select>
     </div>
 
@@ -214,12 +214,10 @@
           <el-select
             v-model="form.category"
             filterable
-            allow-create
-            default-first-option
             :placeholder="t('tasks.categoryPlaceholder')"
             style="width: 100%"
           >
-            <el-option v-for="cg in taskCategories" :key="cg" :label="cg" :value="cg" />
+            <el-option v-for="cg in categories" :key="cg.name" :label="cg.name" :value="cg.name" />
           </el-select>
         </el-form-item>
 
@@ -401,7 +399,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import type { FormInstance, FormRules, TableInstance } from 'element-plus'
 import { Plus, CopyDocument, Search, Delete, View } from '@element-plus/icons-vue'
 import { useI18n } from 'vue-i18n'
-import { channelApi, taskApi, templateApi } from '@/api'
+import { channelApi, taskApi, templateApi, categoryApi } from '@/api'
 import { useAuthStore } from '@/stores/auth'
 import { useTablePaging } from '@/composables/useTablePaging'
 import MarkdownPreview from '@/components/MarkdownPreview.vue'
@@ -459,12 +457,8 @@ const keyword = ref('')
 const triggerFilter = ref<string>('')
 const categoryFilter = ref<string>('')
 
-// 已使用到的任务分类（去重排序），供筛选下拉与分类输入复用
-const taskCategories = computed<string[]>(() =>
-  Array.from(new Set(tasks.value.map((t) => t.category || 'default')))
-    .filter(Boolean)
-    .sort()
-)
+// 共享分类池（渠道/模板/任务统一引用）：只在「分类管理」一处创建
+const categories = ref<{ id: number; name: string }[]>([])
 
 // 按任务名称、或绑定的渠道 / 模板名称 / 触发方式 / 分类做客户端过滤
 const filteredTasks = computed<TaskRow[]>(() => {
@@ -650,9 +644,10 @@ async function load() {
 
 async function loadOptions() {
   try {
-    const [chs, tpls] = await Promise.all([channelApi.list(), templateApi.list()])
+    const [chs, tpls, cats] = await Promise.all([channelApi.list(), templateApi.list(), categoryApi.list()])
     channels.value = chs || []
     templates.value = tpls || []
+    categories.value = cats || []
   } catch (e: any) {
     ElMessage.error(errMsg(e, t('tasks.optionsLoadFailed')))
   }

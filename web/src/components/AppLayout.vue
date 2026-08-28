@@ -216,6 +216,7 @@ const navItems: NavItem[] = [
   { path: '/channels', labelKey: 'nav.channels', icon: Connection },
   { path: '/templates', labelKey: 'nav.templates', icon: Document },
   { path: '/tasks', labelKey: 'nav.tasks', icon: AlarmClock },
+  { path: '/categories', labelKey: 'nav.categories', icon: List },
   { path: '/logs', labelKey: 'nav.logs', icon: MessageBox },
   { path: '/audit', labelKey: 'nav.audit', icon: List, adminOnly: true },
   { path: '/users', labelKey: 'nav.users', icon: User, adminOnly: true },

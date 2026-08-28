@@ -82,6 +82,7 @@ func NewRouter(db *sql.DB, authSvc *service.AuthService, cipher *crypto.Cipher, 
 	}
 	taskH := handler.NewTaskHandler(db, schedIf, queue)
 	webhookH := handler.NewWebhookHandler(db, queue)
+	categoryH := handler.NewCategoryHandler(db)
 	dashH := handler.NewDashboardHandler(db)
 	userH := handler.NewUserHandler(db)
 	auditH := handler.NewAuditHandler(db)
@@ -119,6 +120,8 @@ func NewRouter(db *sql.DB, authSvc *service.AuthService, cipher *crypto.Cipher, 
 		// 读操作：所有登录用户可见全部共享数据
 		auth.GET("/channels", channelH.List)
 		auth.GET("/templates", templateH.List)
+		auth.GET("/categories", categoryH.List)
+		auth.GET("/categories/unused", categoryH.Unused)
 		auth.POST("/templates/:id/preview", templateH.Preview)
 		auth.GET("/tasks", taskH.List)
 		auth.POST("/tasks/preview", taskH.Preview) // 任务发送预览（渲染，不发送）
@@ -143,6 +146,9 @@ func NewRouter(db *sql.DB, authSvc *service.AuthService, cipher *crypto.Cipher, 
 			admin.DELETE("/channels/:id", channelH.Delete)
 			admin.POST("/channels/:id/test", channelH.Test)
 			admin.POST("/channels/batch-delete", channelH.BatchDelete)
+
+			admin.POST("/categories", categoryH.Create)
+			admin.DELETE("/categories/:name", categoryH.Delete)
 
 			admin.POST("/templates", templateH.Create)
 			admin.PUT("/templates/:id", templateH.Update)

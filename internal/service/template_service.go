@@ -10,11 +10,12 @@ import (
 )
 
 type TemplateService struct {
-	repo *repository.TemplateRepo
+	repo        *repository.TemplateRepo
+	categoryRepo *repository.CategoryRepo
 }
 
 func NewTemplateService(db *sql.DB) *TemplateService {
-	return &TemplateService{repo: repository.NewTemplateRepo(db)}
+	return &TemplateService{repo: repository.NewTemplateRepo(db), categoryRepo: repository.NewCategoryRepo(db)}
 }
 
 // Name 返回模板 ID 对应的名称（用于审计详情可读性；不存在返回错误）。
@@ -44,6 +45,9 @@ func (s *TemplateService) Create(userID int64, in *model.Template) error {
 		return err
 	}
 	in.UserID = userID
+	if err := validateSharedCategory(&in.Category, s.categoryRepo); err != nil {
+		return err
+	}
 	in.VariablesJSON = string(b)
 	return s.repo.Create(in)
 }
@@ -60,6 +64,9 @@ func (s *TemplateService) Update(userID, id int64, in *model.Template) error {
 	in.ID = id
 	// 保持原属主：管理员可编辑任意用户的模板
 	in.UserID = ex.UserID
+	if err := validateSharedCategory(&in.Category, s.categoryRepo); err != nil {
+		return err
+	}
 	in.VariablesJSON = string(b)
 	return s.repo.Update(in)
 }

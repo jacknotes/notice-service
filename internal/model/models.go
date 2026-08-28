@@ -49,6 +49,7 @@ type Template struct {
 	ID            int64         `json:"id"`
 	UserID        int64         `json:"user_id"`
 	Name          string        `json:"name"`
+	Category      string        `json:"category"`
 	Subject       string        `json:"subject"`
 	ContentMD     string        `json:"content_md"`
 	Variables     []TemplateVar `json:"variables"`
@@ -123,4 +124,11 @@ type SendJob struct {
 	UpdatedAt   time.Time  `json:"updated_at"`
 	SentAt      *time.Time `json:"-"`
 	DedupeKey   string     `json:"-"`
+}
+
+// Category 共享分类：渠道、模板、任务统一引用的分类池。
+type Category struct {
+	ID        int64     `json:"id"`
+	Name      string    `json:"name"`
+	CreatedAt time.Time `json:"created_at"`
 }

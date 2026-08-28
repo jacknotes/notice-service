@@ -39,7 +39,7 @@
         clearable
         :placeholder="t('channels.allCategories')"
       >
-        <el-option v-for="cg in channelCategories" :key="cg" :label="cg" :value="cg" />
+        <el-option v-for="cg in categories" :key="cg.name" :label="cg.name" :value="cg.name" />
       </el-select>
     </div>
 
@@ -152,12 +152,10 @@
           <el-select
             v-model="form.category"
             filterable
-            allow-create
-            default-first-option
             :placeholder="t('channels.categoryPlaceholder')"
             style="width: 100%"
           >
-            <el-option v-for="cg in channelCategories" :key="cg" :label="cg" :value="cg" />
+            <el-option v-for="cg in categories" :key="cg.name" :label="cg.name" :value="cg.name" />
           </el-select>
         </el-form-item>
 
@@ -209,7 +207,7 @@ import type { FormInstance, FormRules, TableInstance } from 'element-plus'
 import { Plus, Edit, Delete, Promotion, Search } from '@element-plus/icons-vue'
 import { useI18n } from 'vue-i18n'
 import client from '@/api/client'
-import { channelApi } from '@/api'
+import { channelApi, categoryApi } from '@/api'
 import { useAuthStore } from '@/stores/auth'
 import { useTablePaging } from '@/composables/useTablePaging'
 
@@ -290,12 +288,8 @@ const keyword = ref('')
 // 分类筛选（客户端）
 const categoryFilter = ref<string>('')
 
-// 已使用到的渠道分类（去重排序），供筛选下拉与分类输入复用
-const channelCategories = computed<string[]>(() =>
-  Array.from(new Set(channels.value.map((c) => c.category || 'default')))
-    .filter(Boolean)
-    .sort()
-)
+// 共享分类池（渠道/模板/任务统一引用）
+const categories = ref<{ id: number; name: string }[]>([])
 
 // 按名称、类型（原始值 / 本地化标签）或分类做客户端过滤
 const filteredChannels = computed<ChannelRow[]>(() => {
@@ -365,6 +359,15 @@ async function load() {
     ElMessage.error(errMsg(e, t('channels.loadFailed')))
   } finally {
     loading.value = false
+  }
+}
+
+// 共享分类池（渠道/模板/任务统一引用）：只在「分类管理」一处创建
+async function loadCategories() {
+  try {
+    categories.value = (await categoryApi.list()) || []
+  } catch (e: any) {
+    ElMessage.error(errMsg(e, t('channels.loadFailed')))
   }
 }
 
@@ -499,7 +502,10 @@ async function batchDelete() {
   }
 }
 
-onMounted(load)
+onMounted(() => {
+  load()
+  loadCategories()
+})
 </script>
 
 <style scoped>
