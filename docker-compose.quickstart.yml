@@ -13,7 +13,7 @@
 # ${VAR:?err} 语法：关键变量缺失时 docker compose 直接报错退出，避免以弱默认密钥裸跑。
 services:
   notice-service:
-    image: jacknotes/notice-service:v8
+    image: jacknotes/notice-service:v10
     ports:
       - "8081:8080"
     environment:
