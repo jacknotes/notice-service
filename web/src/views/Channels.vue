@@ -48,7 +48,7 @@
         ref="tableRef"
         :data="paged"
         style="width: 100%"
-        highlight-current-row
+        :row-class-name="rowClassName"
         :empty-text="t('channels.emptyTable')"
         @selection-change="onSelectionChange"
         @sort-change="onSortChange"
@@ -374,18 +374,31 @@ async function loadCategories() {
   }
 }
 
-/* ── 外部跳转高亮（发送日志 → 渠道管理 → ?edit=<id>） ──────────────── */
+/* ── 外部跳转闪烁定位（发送日志 → 渠道管理 → ?edit=<id>） ────────────
+   目标行短暂闪烁两次后恢复默认样式，不常驻高亮。 */
 const highlightId = ref<number | null>(null)
+const flashRowId = ref<number | null>(null)
+
+// 行 class：目标行在闪烁期间附加 flash 样式（动画结束后由下方定时器清除）
+function rowClassName({ row }: { row: ChannelRow }) {
+  return flashRowId.value === row.id ? 'flash-row' : ''
+}
 
 function highlightById(id: number) {
   const row = channels.value.find((c) => c.id === id)
   if (!row) return
-  highlightId.value = id
-  // 行可能跨页：切到含该行的页再 setCurrentRow
+  // 行可能跨页：切到含该行的页再 setCurrentRow 滚动定位
   const idx = channels.value.findIndex((c) => c.id === id)
   const targetPage = Math.floor(idx / size.value) + 1
   if (targetPage !== page.value) page.value = targetPage
-  nextTick(() => tableRef.value?.setCurrentRow(row))
+  nextTick(() => {
+    tableRef.value?.setCurrentRow(row)
+    flashRowId.value = id
+    // 动画约 0.9s（闪烁两次），结束后清除 class 恢复正常显示
+    window.setTimeout(() => {
+      flashRowId.value = null
+    }, 1000)
+  })
 }
 
 onMounted(() => {
@@ -395,7 +408,7 @@ onMounted(() => {
   if (Number.isInteger(id) && id > 0) highlightId.value = id
 })
 
-// 渠道数据就绪后执行高亮（数据可能晚于 onMounted 返回）
+// 渠道数据就绪后执行闪烁（数据可能晚于 onMounted 返回）
 watch(
   () => channels.value,
   (list) => {
@@ -582,6 +595,15 @@ async function batchDelete() {
 .id-cell {
   color: var(--text-faint);
   font-size: var(--text-xs);
+}
+
+/* 外部跳转定位闪烁：目标行闪烁两次后恢复默认（约 0.9s） */
+:deep(.flash-row > td.el-table__cell) {
+  animation: flash-target 0.45s ease-in-out 2;
+}
+@keyframes flash-target {
+  0%, 100% { background-color: transparent; }
+  50% { background-color: rgba(129, 140, 248, 0.28); }
 }
 .ch-name {
   color: var(--text-primary);
