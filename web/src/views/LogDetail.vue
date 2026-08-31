@@ -31,11 +31,25 @@
           </el-descriptions-item>
           <el-descriptions-item :label="t('logs.taskCol')">
             <span class="name-cell">{{ taskName }}</span>
-            <span class="mono name-id">#{{ log.task_id }}</span>
+            <el-link
+              class="mono name-id"
+              type="primary"
+              :underline="false"
+              @click="goTask(log.task_id)"
+            >
+              #{{ log.task_id }}
+            </el-link>
           </el-descriptions-item>
           <el-descriptions-item :label="t('logs.channelCol')">
             <span class="name-cell">{{ channelName }}</span>
-            <span class="mono name-id">#{{ log.channel_id }}</span>
+            <el-link
+              class="mono name-id"
+              type="primary"
+              :underline="false"
+              @click="goChannel(log.channel_id)"
+            >
+              #{{ log.channel_id }}
+            </el-link>
           </el-descriptions-item>
           <el-descriptions-item :label="t('logs.category')">
             <el-tag effect="plain" size="small" class="category-tag">{{ log.category || 'default' }}</el-tag>
@@ -100,7 +114,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { useI18n } from 'vue-i18n'
 import { channelApi, logApi, taskApi } from '@/api'
@@ -127,6 +141,7 @@ interface LogDetail {
 }
 
 const route = useRoute()
+const router = useRouter()
 
 const id = computed(() => Number(route.params.id))
 
@@ -145,6 +160,14 @@ const channelName = computed(() => {
   if (!log.value) return ''
   return channels.value.find((x) => x.id === log.value!.channel_id)?.name || t('logs.channelFallback', { id: log.value!.channel_id })
 })
+
+// 跳转到对应任务/渠道管理页，并在目标页高亮该行（不弹编辑框）
+function goTask(taskId: number) {
+  router.push({ path: '/tasks', query: { edit: String(taskId) } })
+}
+function goChannel(channelId: number) {
+  router.push({ path: '/channels', query: { edit: String(channelId) } })
+}
 
 // 触发方式 → 本地化标签 / 标签配色（与列表页一致）
 const TRIGGER_KEY: Record<string, string> = {
@@ -285,7 +308,6 @@ watch(
   margin-right: 8px;
 }
 .name-id {
-  color: var(--indigo-400);
   font-size: var(--text-xs);
 }
 .faint {

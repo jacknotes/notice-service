@@ -6,6 +6,9 @@
         <p class="sub">{{ t('logs.subtitle') }}</p>
       </div>
       <div class="actions">
+        <el-button :icon="Refresh" :loading="loading" @click="refreshAll">
+          {{ t('common.refresh') }}
+        </el-button>
         <el-button
           v-if="isAdmin"
           :icon="Download"
@@ -22,6 +25,7 @@
         <span class="filter-label">{{ t('logs.taskCol') }}</span>
         <el-select
           v-model="taskFilter"
+          filterable
           clearable
           :placeholder="t('logs.allTasks')"
           style="width: 220px"
@@ -39,6 +43,7 @@
         <span class="filter-label">{{ t('logs.category') }}</span>
         <el-select
           v-model="categoryFilter"
+          filterable
           clearable
           :placeholder="t('logs.allCategories')"
           style="width: 150px"
@@ -174,14 +179,28 @@
         <el-table-column :label="t('logs.taskCol')" min-width="160" sortable="custom" prop="task_id">
           <template #default="{ row }">
             <span class="task-name-cell">{{ taskName(row.task_id) }}</span>
-            <span class="mono task-id-cell">#{{ row.task_id }}</span>
+            <el-link
+              class="mono task-id-cell"
+              type="primary"
+              :underline="false"
+              @click="goTask(row.task_id)"
+            >
+              #{{ row.task_id }}
+            </el-link>
           </template>
         </el-table-column>
 
         <el-table-column :label="t('logs.channelCol')" min-width="150" sortable="custom" prop="channel_id">
           <template #default="{ row }">
             <span class="task-name-cell">{{ channelName(row.channel_id) }}</span>
-            <span class="mono task-id-cell">#{{ row.channel_id }}</span>
+            <el-link
+              class="mono task-id-cell"
+              type="primary"
+              :underline="false"
+              @click="goChannel(row.channel_id)"
+            >
+              #{{ row.channel_id }}
+            </el-link>
           </template>
         </el-table-column>
 
@@ -226,7 +245,11 @@
         v-else-if="!loading && tasksLoaded"
         :description="emptyDescription"
         class="logs-empty"
-      />
+      >
+        <el-button v-if="total === 0" :icon="Refresh" @click="refreshAll">
+          {{ t('common.refresh') }}
+        </el-button>
+      </el-empty>
     </div>
 
     <div v-if="total > 0" class="pager-row">
@@ -248,7 +271,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Download, Search } from '@element-plus/icons-vue'
+import { Download, Refresh, Search } from '@element-plus/icons-vue'
 import { useI18n } from 'vue-i18n'
 import { categoryApi, channelApi, logApi, taskApi } from '@/api'
 import { useAuthStore } from '@/stores/auth'
@@ -382,6 +405,14 @@ function onDateRangeChange() {
 
 const taskName = (id: number) => tasks.value.find((x) => x.id === id)?.name || t('logs.taskFallback', { id })
 const channelName = (id: number) => channels.value.find((x) => x.id === id)?.name || t('logs.channelFallback', { id })
+
+// 跳转到对应任务/渠道管理页，并在目标页高亮该行（不弹编辑框）
+function goTask(id: number) {
+  router.push({ path: '/tasks', query: { edit: String(id) } })
+}
+function goChannel(id: number) {
+  router.push({ path: '/channels', query: { edit: String(id) } })
+}
 
 // 把 ISO 时间格式化为本地 "YYYY-MM-DD HH:mm:ss"；零值/非法显示 "—"
 function fmtTime(iso?: string) {
@@ -539,12 +570,19 @@ async function loadLogs() {
 async function loadMeta() {
   try {
     const [list, chList, catList] = await Promise.all([taskApi.list(), channelApi.list(), categoryApi.list()])
-    tasks.value = list || []
+    // 按名称排序：下拉选项随任务增多时保持稳定，配合 filterable 便于查找
+    tasks.value = [...(list || [])].sort((a, b) => (a.name || '').localeCompare(b.name || '', 'zh-Hans-CN'))
     channels.value = chList || []
     categories.value = catList || []
   } catch (e: any) {
     ElMessage.error(errMsg(e, t('logs.metaLoadFailed')))
   }
+}
+
+// 手动刷新：重新拉取任务/分类等元数据 + 当前页日志
+function refreshAll() {
+  loadMeta()
+  loadLogs()
 }
 
 function onPageSizeChange() {
@@ -637,7 +675,6 @@ onMounted(() => {
   font-weight: 500;
 }
 .task-id-cell {
-  color: var(--indigo-400);
   font-size: var(--text-xs);
 }
 .task-name-cell {

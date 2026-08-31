@@ -7,6 +7,7 @@
 ## [Unreleased]
 
 ### 已实现
+- **发送日志页体验**：任务/分类筛选下拉支持输入过滤（`filterable`）且任务选项按名称稳定排序；新增「刷新」按钮（头部 + 空状态两处），手动拉取最新日志与任务/分类元数据；任务、渠道 ID 变为超链接，点击跳转到对应「任务管理 / 渠道管理」页并高亮该行（不弹编辑框）
 - **发送日志分类**：列表筛选与表格新增「分类」（任务的当前分类，读取时 JOIN，不落库），支持后端排序；日志详情页展示分类；CSV 导出新增 `category` 列且支持 `category` 筛选参数
 - **前端自动化测试（R9）**：引入 Vitest + Vue Test Utils，覆盖 auth store / api 客户端与接口封装 / useTablePaging / useTheme / MarkdownPreview；CI 前端 job 追加 `npm run test`
 - **前端国际化（i18n）**：vue-i18n（zh-CN/en-US，默认中文），顶栏 + 个人设置双入口切换，Element Plus 内置文案同步；后端错误消息保持原样

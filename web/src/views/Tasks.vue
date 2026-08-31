@@ -51,6 +51,7 @@
         ref="tableRef"
         :data="paged"
         style="width: 100%"
+        highlight-current-row
         :empty-text="t('tasks.emptyTable')"
         @selection-change="onSelectionChange"
         @sort-change="onSortChange"
@@ -393,8 +394,8 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { FormInstance, FormRules, TableInstance } from 'element-plus'
 import { Plus, CopyDocument, Search, Delete, View } from '@element-plus/icons-vue'
@@ -434,6 +435,7 @@ interface TemplateVar {
 }
 
 const router = useRouter()
+const route = useRoute()
 
 const auth = useAuthStore()
 const isAdmin = computed(() => auth.user?.role === 'admin')
@@ -652,6 +654,39 @@ async function loadOptions() {
     ElMessage.error(errMsg(e, t('tasks.optionsLoadFailed')))
   }
 }
+
+/* ── 外部跳转高亮（发送日志 → 任务管理 → ?edit=<id>） ──────────────── */
+const highlightId = ref<number | null>(null)
+
+function highlightById(id: number) {
+  const row = tasks.value.find((t) => t.id === id)
+  if (!row) return
+  highlightId.value = id
+  // 行可能跨页：切到含该行的页再 setCurrentRow
+  const idx = tasks.value.findIndex((t) => t.id === id)
+  const targetPage = Math.floor(idx / size.value) + 1
+  if (targetPage !== page.value) page.value = targetPage
+  nextTick(() => tableRef.value?.setCurrentRow(row))
+}
+
+onMounted(() => {
+  load()
+  loadOptions()
+  const id = Number(route.query.edit)
+  if (Number.isInteger(id) && id > 0) highlightId.value = id
+})
+
+// 任务数据就绪后执行高亮（数据可能晚于 onMounted 返回）
+watch(
+  () => tasks.value,
+  (list) => {
+    if (highlightId.value && list.length) {
+      highlightById(highlightId.value)
+      highlightId.value = null
+    }
+  },
+  { immediate: true }
+)
 
 /* ── Toggle ────────────────────────────────────────────────────────── */
 async function toggleTask(row: TaskRow, enabled: boolean) {
@@ -880,10 +915,6 @@ async function batchDelete() {
   }
 }
 
-onMounted(() => {
-  load()
-  loadOptions()
-})
 </script>
 
 <style scoped>

@@ -48,6 +48,7 @@
         ref="tableRef"
         :data="paged"
         style="width: 100%"
+        highlight-current-row
         :empty-text="t('channels.emptyTable')"
         @selection-change="onSelectionChange"
         @sort-change="onSortChange"
@@ -201,7 +202,8 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { FormInstance, FormRules, TableInstance } from 'element-plus'
 import { Plus, Edit, Delete, Promotion, Search } from '@element-plus/icons-vue'
@@ -272,6 +274,7 @@ const configFields: Record<string, ConfigField[]> = {
 
 const auth = useAuthStore()
 const isAdmin = computed(() => auth.user?.role === 'admin')
+const route = useRoute()
 
 const loading = ref(false)
 const channels = ref<ChannelRow[]>([])
@@ -370,6 +373,39 @@ async function loadCategories() {
     ElMessage.error(errMsg(e, t('channels.loadFailed')))
   }
 }
+
+/* ── 外部跳转高亮（发送日志 → 渠道管理 → ?edit=<id>） ──────────────── */
+const highlightId = ref<number | null>(null)
+
+function highlightById(id: number) {
+  const row = channels.value.find((c) => c.id === id)
+  if (!row) return
+  highlightId.value = id
+  // 行可能跨页：切到含该行的页再 setCurrentRow
+  const idx = channels.value.findIndex((c) => c.id === id)
+  const targetPage = Math.floor(idx / size.value) + 1
+  if (targetPage !== page.value) page.value = targetPage
+  nextTick(() => tableRef.value?.setCurrentRow(row))
+}
+
+onMounted(() => {
+  load()
+  loadCategories()
+  const id = Number(route.query.edit)
+  if (Number.isInteger(id) && id > 0) highlightId.value = id
+})
+
+// 渠道数据就绪后执行高亮（数据可能晚于 onMounted 返回）
+watch(
+  () => channels.value,
+  (list) => {
+    if (highlightId.value && list.length) {
+      highlightById(highlightId.value)
+      highlightId.value = null
+    }
+  },
+  { immediate: true }
+)
 
 /* ── Create / edit ───────────────────────────────────────────────── */
 function openCreate() {
@@ -502,10 +538,6 @@ async function batchDelete() {
   }
 }
 
-onMounted(() => {
-  load()
-  loadCategories()
-})
 </script>
 
 <style scoped>
