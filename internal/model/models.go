@@ -50,6 +50,7 @@ type Template struct {
 	UserID        int64         `json:"user_id"`
 	Name          string        `json:"name"`
 	Category      string        `json:"category"`
+	Enabled       bool          `json:"enabled"`
 	Subject       string        `json:"subject"`
 	ContentMD     string        `json:"content_md"`
 	Variables     []TemplateVar `json:"variables"`

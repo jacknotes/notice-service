@@ -129,6 +129,56 @@ func (h *TemplateHandler) BatchDelete(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"ok": true})
 }
 
+// BatchToggle 批量启用/禁用模板（仅 admin）。
+// BatchToggle 批量启用/禁用模板
+// @Summary 批量启用/禁用模板
+// @Tags 模板
+// @Security BearerAuth
+// @Param body body object true "ids + enabled"
+// @Success 200 {object} map[string]interface{}
+// @Router /api/templates/batch-toggle [post]
+func (h *TemplateHandler) BatchToggle(c *gin.Context) {
+	var req struct {
+		IDs     []int64 `json:"ids"`
+		Enabled bool    `json:"enabled"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "参数错误"})
+		return
+	}
+	if err := h.svc.BatchToggle(req.IDs, req.Enabled); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": sanitizeErr(err)})
+		return
+	}
+	auditf(c, h.db, "template.batch_toggle", "批量%s模板 %d 条", boolWord(req.Enabled), len(req.IDs))
+	c.JSON(http.StatusOK, gin.H{"ok": true})
+}
+
+// BatchSetCategory 批量变更模板分类（仅 admin）。
+// BatchSetCategory 批量变更模板分类
+// @Summary 批量变更模板分类
+// @Tags 模板
+// @Security BearerAuth
+// @Param body body object true "ids + category"
+// @Success 200 {object} map[string]interface{}
+// @Router /api/templates/batch-category [post]
+func (h *TemplateHandler) BatchSetCategory(c *gin.Context) {
+	var req struct {
+		IDs      []int64 `json:"ids"`
+		Category string  `json:"category"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "参数错误"})
+		return
+	}
+	if err := h.svc.BatchSetCategory(req.IDs, req.Category); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": sanitizeErr(err)})
+		return
+	}
+	auditf(c, h.db, "template.batch_update", "批量变更 %d 条模板分类为 %q", len(req.IDs), req.Category)
+	c.JSON(http.StatusOK, gin.H{"ok": true})
+}
+
 // Preview 模板预览：用当前表单值（而非已保存值）渲染，支持未保存的新模板。
 // @Summary 用变量渲染模板预览（使用当前表单值）
 // @Tags 模板

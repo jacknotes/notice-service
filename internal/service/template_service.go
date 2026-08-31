@@ -83,6 +83,19 @@ func (s *TemplateService) BatchDelete(ids []int64) error {
 	return s.repo.BatchDelete(ids)
 }
 
+// BatchToggle 批量启用/禁用模板。
+func (s *TemplateService) BatchToggle(ids []int64, enabled bool) error {
+	return s.repo.SetEnabledBatch(ids, enabled)
+}
+
+// BatchSetCategory 批量变更模板分类（须属于共享分类池）。
+func (s *TemplateService) BatchSetCategory(ids []int64, category string) error {
+	if err := validateSharedCategory(&category, s.categoryRepo); err != nil {
+		return err
+	}
+	return s.repo.SetCategoryBatch(ids, category)
+}
+
 // Get 不再校验属主：所有用户可读任意模板。
 func (s *TemplateService) Get(userID, id int64) (*model.Template, error) {
 	t, err := s.repo.GetByID(id)

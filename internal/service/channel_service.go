@@ -105,6 +105,19 @@ func (s *ChannelService) BatchDelete(ids []int64) error {
 	return s.repo.BatchDelete(ids)
 }
 
+// BatchToggle 批量启用/禁用渠道。
+func (s *ChannelService) BatchToggle(ids []int64, enabled bool) error {
+	return s.repo.SetEnabledBatch(ids, enabled)
+}
+
+// BatchSetCategory 批量变更渠道分类（须属于共享分类池）。
+func (s *ChannelService) BatchSetCategory(ids []int64, category string) error {
+	if err := validateSharedCategory(&category, s.categoryRepo); err != nil {
+		return err
+	}
+	return s.repo.SetCategoryBatch(ids, category)
+}
+
 func (s *ChannelService) Test(userID int64, id int64, cfg map[string]string) error {
 	if id > 0 {
 		c, err := s.repo.GetByID(id)

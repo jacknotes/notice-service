@@ -140,6 +140,106 @@ func (h *TaskHandler) BatchDelete(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"ok": true})
 }
 
+// BatchToggle 批量启用/禁用任务（仅 admin）。
+// BatchToggle 批量启用/禁用任务
+// @Summary 批量启用/禁用任务
+// @Tags 任务
+// @Security BearerAuth
+// @Param body body object true "ids + enabled"
+// @Success 200 {object} map[string]interface{}
+// @Router /api/tasks/batch-toggle [post]
+func (h *TaskHandler) BatchToggle(c *gin.Context) {
+	var req struct {
+		IDs     []int64 `json:"ids"`
+		Enabled bool    `json:"enabled"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "参数错误"})
+		return
+	}
+	if err := h.svc.BatchToggle(req.IDs, req.Enabled); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": sanitizeErr(err)})
+		return
+	}
+	auditf(c, h.db, "task.batch_toggle", "批量%s任务 %d 条", boolWord(req.Enabled), len(req.IDs))
+	c.JSON(http.StatusOK, gin.H{"ok": true})
+}
+
+// BatchSetCategory 批量变更任务分类（仅 admin）。
+// BatchSetCategory 批量变更任务分类
+// @Summary 批量变更任务分类
+// @Tags 任务
+// @Security BearerAuth
+// @Param body body object true "ids + category"
+// @Success 200 {object} map[string]interface{}
+// @Router /api/tasks/batch-category [post]
+func (h *TaskHandler) BatchSetCategory(c *gin.Context) {
+	var req struct {
+		IDs      []int64 `json:"ids"`
+		Category string  `json:"category"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "参数错误"})
+		return
+	}
+	if err := h.svc.BatchSetCategory(req.IDs, req.Category); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": sanitizeErr(err)})
+		return
+	}
+	auditf(c, h.db, "task.batch_update", "批量变更 %d 条任务分类为 %q", len(req.IDs), req.Category)
+	c.JSON(http.StatusOK, gin.H{"ok": true})
+}
+
+// BatchSetChannels 批量变更任务投递渠道（仅 admin）。
+// BatchSetChannels 批量变更任务投递渠道
+// @Summary 批量变更任务投递渠道
+// @Tags 任务
+// @Security BearerAuth
+// @Param body body object true "ids + channel_ids"
+// @Success 200 {object} map[string]interface{}
+// @Router /api/tasks/batch-channels [post]
+func (h *TaskHandler) BatchSetChannels(c *gin.Context) {
+	var req struct {
+		IDs        []int64 `json:"ids"`
+		ChannelIDs []int64 `json:"channel_ids"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "参数错误"})
+		return
+	}
+	if err := h.svc.BatchSetChannels(req.IDs, req.ChannelIDs); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": sanitizeErr(err)})
+		return
+	}
+	auditf(c, h.db, "task.batch_update", "批量变更 %d 条任务投递渠道为 %d 个渠道", len(req.IDs), len(req.ChannelIDs))
+	c.JSON(http.StatusOK, gin.H{"ok": true})
+}
+
+// BatchSetReceivers 批量变更任务接收地址（仅 admin）。
+// BatchSetReceivers 批量变更任务接收地址
+// @Summary 批量变更任务接收地址
+// @Tags 任务
+// @Security BearerAuth
+// @Param body body object true "ids + receivers"
+// @Success 200 {object} map[string]interface{}
+// @Router /api/tasks/batch-receivers [post]
+func (h *TaskHandler) BatchSetReceivers(c *gin.Context) {
+	var req struct {
+		IDs       []int64  `json:"ids"`
+		Receivers []string `json:"receivers"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "参数错误"})
+		return
+	}
+	if err := h.svc.BatchSetReceivers(req.IDs, req.Receivers); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": sanitizeErr(err)})
+		return
+	}
+	auditf(c, h.db, "task.batch_update", "批量变更 %d 条任务接收地址", len(req.IDs))
+	c.JSON(http.StatusOK, gin.H{"ok": true})
+}
+
 // Toggle 启停任务
 // @Summary 启用/停用任务（仅管理员）
 // @Tags 任务

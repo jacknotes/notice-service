@@ -2,6 +2,7 @@ package repository
 
 import (
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"strings"
 	"time"
@@ -231,6 +232,77 @@ func (r *TaskRepo) CountByName(name string) (int, error) {
 // SetEnabled 启用/禁用。
 func (r *TaskRepo) SetEnabled(taskID int64, enabled bool) error {
 	_, err := r.db.Exec("UPDATE tasks SET enabled = ? WHERE id = ?", enabled, taskID)
+	return err
+}
+
+// SetEnabledBatch 批量启用/禁用任务（单条 UPDATE；cron 注册/注销由 service 层负责）。
+func (r *TaskRepo) SetEnabledBatch(ids []int64, enabled bool) error {
+	if len(ids) == 0 {
+		return nil
+	}
+	placeholders := strings.TrimSuffix(strings.Repeat("?,", len(ids)), ",")
+	args := make([]interface{}, len(ids)+1)
+	args[0] = enabled
+	for i, id := range ids {
+		args[i+1] = id
+	}
+	_, err := r.db.Exec(
+		"UPDATE tasks SET enabled=? WHERE id IN ("+placeholders+") AND deleted_at IS NULL", args...)
+	return err
+}
+
+// SetCategoryBatch 批量变更任务分类（单条 UPDATE）。
+func (r *TaskRepo) SetCategoryBatch(ids []int64, category string) error {
+	if len(ids) == 0 {
+		return nil
+	}
+	placeholders := strings.TrimSuffix(strings.Repeat("?,", len(ids)), ",")
+	args := make([]interface{}, len(ids)+1)
+	args[0] = category
+	for i, id := range ids {
+		args[i+1] = id
+	}
+	_, err := r.db.Exec(
+		"UPDATE tasks SET category=? WHERE id IN ("+placeholders+") AND deleted_at IS NULL", args...)
+	return err
+}
+
+// SetChannelsBatch 批量变更任务投递渠道：channel_id 取第一个渠道，channel_ids 存完整列表。
+func (r *TaskRepo) SetChannelsBatch(ids []int64, channelIDs []int64) error {
+	if len(ids) == 0 {
+		return nil
+	}
+	chIDsJSON, _ := json.Marshal(channelIDs)
+	firstID := int64(0)
+	if len(channelIDs) > 0 {
+		firstID = channelIDs[0]
+	}
+	placeholders := strings.TrimSuffix(strings.Repeat("?,", len(ids)), ",")
+	args := make([]interface{}, len(ids)+2)
+	args[0] = firstID
+	args[1] = varsJSON(string(chIDsJSON))
+	for i, id := range ids {
+		args[i+2] = id
+	}
+	_, err := r.db.Exec(
+		"UPDATE tasks SET channel_id=?, channel_ids=? WHERE id IN ("+placeholders+") AND deleted_at IS NULL", args...)
+	return err
+}
+
+// SetReceiversBatch 批量变更任务接收地址（单条 UPDATE）。
+func (r *TaskRepo) SetReceiversBatch(ids []int64, receivers []string) error {
+	if len(ids) == 0 {
+		return nil
+	}
+	recvJSON, _ := json.Marshal(receivers)
+	placeholders := strings.TrimSuffix(strings.Repeat("?,", len(ids)), ",")
+	args := make([]interface{}, len(ids)+1)
+	args[0] = string(recvJSON)
+	for i, id := range ids {
+		args[i+1] = id
+	}
+	_, err := r.db.Exec(
+		"UPDATE tasks SET receivers=? WHERE id IN ("+placeholders+") AND deleted_at IS NULL", args...)
 	return err
 }
 

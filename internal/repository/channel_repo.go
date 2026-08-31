@@ -88,6 +88,38 @@ func (r *ChannelRepo) BatchDelete(ids []int64) error {
 	return err
 }
 
+// SetEnabledBatch 批量启用/禁用渠道（单条 UPDATE）。
+func (r *ChannelRepo) SetEnabledBatch(ids []int64, enabled bool) error {
+	if len(ids) == 0 {
+		return nil
+	}
+	placeholders := strings.TrimSuffix(strings.Repeat("?,", len(ids)), ",")
+	args := make([]interface{}, len(ids)+1)
+	args[0] = enabled
+	for i, id := range ids {
+		args[i+1] = id
+	}
+	_, err := r.db.Exec(
+		"UPDATE channels SET enabled=? WHERE id IN ("+placeholders+") AND deleted_at IS NULL", args...)
+	return err
+}
+
+// SetCategoryBatch 批量变更渠道分类（单条 UPDATE）。
+func (r *ChannelRepo) SetCategoryBatch(ids []int64, category string) error {
+	if len(ids) == 0 {
+		return nil
+	}
+	placeholders := strings.TrimSuffix(strings.Repeat("?,", len(ids)), ",")
+	args := make([]interface{}, len(ids)+1)
+	args[0] = category
+	for i, id := range ids {
+		args[i+1] = id
+	}
+	_, err := r.db.Exec(
+		"UPDATE channels SET category=? WHERE id IN ("+placeholders+") AND deleted_at IS NULL", args...)
+	return err
+}
+
 // CountByNameType 统计同名同类型未删除渠道数（导入冲突检测）。
 func (r *ChannelRepo) CountByNameType(name, typ string) (int, error) {
 	var n int

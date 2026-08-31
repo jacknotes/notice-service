@@ -146,6 +146,8 @@ func NewRouter(db *sql.DB, authSvc *service.AuthService, cipher *crypto.Cipher, 
 			admin.DELETE("/channels/:id", channelH.Delete)
 			admin.POST("/channels/:id/test", channelH.Test)
 			admin.POST("/channels/batch-delete", channelH.BatchDelete)
+			admin.POST("/channels/batch-toggle", channelH.BatchToggle)
+			admin.POST("/channels/batch-category", channelH.BatchSetCategory)
 
 			admin.POST("/categories", categoryH.Create)
 			admin.PUT("/categories/:name", categoryH.Update)
@@ -155,6 +157,8 @@ func NewRouter(db *sql.DB, authSvc *service.AuthService, cipher *crypto.Cipher, 
 			admin.PUT("/templates/:id", templateH.Update)
 			admin.DELETE("/templates/:id", templateH.Delete)
 			admin.POST("/templates/batch-delete", templateH.BatchDelete)
+			admin.POST("/templates/batch-toggle", templateH.BatchToggle)
+			admin.POST("/templates/batch-category", templateH.BatchSetCategory)
 
 			admin.POST("/tasks", taskH.Create)
 			admin.PUT("/tasks/:id", taskH.Update)
@@ -162,6 +166,10 @@ func NewRouter(db *sql.DB, authSvc *service.AuthService, cipher *crypto.Cipher, 
 			admin.POST("/tasks/:id/toggle", taskH.Toggle)
 			admin.POST("/tasks/:id/send", taskH.SendNow) // 立即发送（入队）
 			admin.POST("/tasks/batch-delete", taskH.BatchDelete)
+			admin.POST("/tasks/batch-toggle", taskH.BatchToggle)
+			admin.POST("/tasks/batch-category", taskH.BatchSetCategory)
+			admin.POST("/tasks/batch-channels", taskH.BatchSetChannels)
+			admin.POST("/tasks/batch-receivers", taskH.BatchSetReceivers)
 			admin.POST("/logs/:id/retry", taskH.RetryLog) // 重试失败日志（定向重发）
 			admin.GET("/logs/export", taskH.ExportLogs)   // 发送日志 CSV 导出（仅管理员）
 

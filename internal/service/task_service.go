@@ -194,6 +194,84 @@ func (s *TaskService) BatchDelete(ids []int64) error {
 	return s.repo.BatchDelete(ids)
 }
 
+// BatchToggle 批量启用/禁用任务：cron 任务随状态同步注册/注销调度（sched 为 nil 时跳过）。
+func (s *TaskService) BatchToggle(ids []int64, enabled bool) error {
+	if len(ids) == 0 {
+		return nil
+	}
+	if s.sched != nil {
+		all, err := s.repo.List()
+		if err != nil {
+			return err
+		}
+		byID := map[int64]*model.Task{}
+		for _, t := range all {
+			byID[t.ID] = t
+		}
+		for _, id := range ids {
+			ex, ok := byID[id]
+			if !ok || ex.TriggerType != "cron" {
+				continue
+			}
+			if enabled {
+				s.sched.RegisterTask(id, ex.CronExpr)
+			} else {
+				s.sched.UnregisterTask(id)
+			}
+		}
+	}
+	return s.repo.SetEnabledBatch(ids, enabled)
+}
+
+// BatchSetCategory 批量变更任务分类（须属于共享分类池）。
+func (s *TaskService) BatchSetCategory(ids []int64, category string) error {
+	if err := validateSharedCategory(&category, s.categoryRepo); err != nil {
+		return err
+	}
+	return s.repo.SetCategoryBatch(ids, category)
+}
+
+// BatchSetChannels 批量变更任务投递渠道：校验渠道存在，且邮箱渠道须有接收地址。
+func (s *TaskService) BatchSetChannels(ids []int64, channelIDs []int64) error {
+	if len(channelIDs) == 0 {
+		return errors.New("必须至少选择一个投递渠道")
+	}
+	hasEmail := false
+	for _, cid := range channelIDs {
+		ch, err := s.channelRepo.GetByID(cid)
+		if err != nil {
+			return errors.New("投递渠道不存在")
+		}
+		if ch.Type == "email" {
+			hasEmail = true
+		}
+	}
+	// 批量改渠道：若目标渠道含邮箱，则要求所有目标任务都有接收地址。
+	// 逐个读取任务校验，避免把无接收地址的任务改成不可发送状态。
+	if hasEmail {
+		for _, id := range ids {
+			ex, err := s.repo.GetByID(id)
+			if err != nil {
+				return err
+			}
+			var recv []string
+			_ = json.Unmarshal([]byte(ex.ReceiversJSON), &recv)
+			if len(recv) == 0 {
+				return errors.New("任务包含邮箱渠道但没有接收地址，请先设置接收地址")
+			}
+		}
+	}
+	return s.repo.SetChannelsBatch(ids, channelIDs)
+}
+
+// BatchSetReceivers 批量变更任务接收地址。
+func (s *TaskService) BatchSetReceivers(ids []int64, receivers []string) error {
+	if len(receivers) == 0 {
+		return errors.New("接收地址不能为空")
+	}
+	return s.repo.SetReceiversBatch(ids, receivers)
+}
+
 // SetAPIKey 覆盖任务的 api_key（导入备份时保留 webhook URL）。
 func (s *TaskService) SetAPIKey(taskID int64, key string) error {
 	return s.repo.SetAPIKey(taskID, key)

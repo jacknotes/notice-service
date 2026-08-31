@@ -82,3 +82,11 @@ func auditRefs(names []string, ids []int64) string {
 	}
 	return strings.Join(parts, "、")
 }
+
+// boolWord 布尔 → 中文动作词（审计文案用）：true=启用，false=停用。
+func boolWord(b bool) string {
+	if b {
+		return "启用"
+	}
+	return "停用"
+}

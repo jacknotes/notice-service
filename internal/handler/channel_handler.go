@@ -130,6 +130,56 @@ func (h *ChannelHandler) BatchDelete(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"ok": true})
 }
 
+// BatchToggle 批量启用/禁用渠道（仅 admin）。
+// BatchToggle 批量启用/禁用渠道
+// @Summary 批量启用/禁用渠道
+// @Tags 渠道
+// @Security BearerAuth
+// @Param body body object true "ids + enabled"
+// @Success 200 {object} map[string]interface{}
+// @Router /api/channels/batch-toggle [post]
+func (h *ChannelHandler) BatchToggle(c *gin.Context) {
+	var req struct {
+		IDs     []int64 `json:"ids"`
+		Enabled bool    `json:"enabled"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "参数错误"})
+		return
+	}
+	if err := h.svc.BatchToggle(req.IDs, req.Enabled); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": sanitizeErr(err)})
+		return
+	}
+	auditf(c, h.db, "channel.batch_toggle", "批量%s渠道 %d 条", boolWord(req.Enabled), len(req.IDs))
+	c.JSON(http.StatusOK, gin.H{"ok": true})
+}
+
+// BatchSetCategory 批量变更渠道分类（仅 admin）。
+// BatchSetCategory 批量变更渠道分类
+// @Summary 批量变更渠道分类
+// @Tags 渠道
+// @Security BearerAuth
+// @Param body body object true "ids + category"
+// @Success 200 {object} map[string]interface{}
+// @Router /api/channels/batch-category [post]
+func (h *ChannelHandler) BatchSetCategory(c *gin.Context) {
+	var req struct {
+		IDs      []int64 `json:"ids"`
+		Category string  `json:"category"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "参数错误"})
+		return
+	}
+	if err := h.svc.BatchSetCategory(req.IDs, req.Category); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": sanitizeErr(err)})
+		return
+	}
+	auditf(c, h.db, "channel.batch_update", "批量变更 %d 条渠道分类为 %q", len(req.IDs), req.Category)
+	c.JSON(http.StatusOK, gin.H{"ok": true})
+}
+
 // Test 测试渠道
 // @Summary 测试渠道连通性
 // @Tags 渠道
