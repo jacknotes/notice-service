@@ -301,12 +301,32 @@ onMounted(load)
   justify-content: space-between;
 }
 
+/* 夜晚（默认深色控制台）：信息类警告用深蓝灰背景，与卡片/页面底色融为一体。
+   白天模式由下方 [data-theme='light'] 块还原为 Element Plus 默认 info 浅色。
+   class 直接落在 el-alert 根元素上（.el-alert.unused-alert），!important 覆盖 EP 背景。 */
+.unused-alert,
+.edit-hint {
+  background-color: #1e2a3f !important;
+  color: var(--text-secondary) !important;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  --el-alert-bg-color: #1e2a3f;
+}
+
 .unused-alert {
   margin-bottom: var(--space-3);
 }
 
 .edit-hint {
   margin-bottom: var(--space-3);
+}
+
+/* 白天模式：还原 Element Plus 默认 info 浅色 alert */
+[data-theme='light'] .unused-alert,
+[data-theme='light'] .edit-hint {
+  background-color: #f4f4f5 !important;
+  color: var(--text-primary) !important;
+  border: 1px solid transparent;
+  --el-alert-bg-color: #f4f4f5;
 }
 
 .title-row {

@@ -18,7 +18,7 @@
         />
         <el-dropdown
           v-if="isAdmin"
-          trigger="click"
+          trigger="hover"
           :disabled="!selectedRows.length"
           @command="onBatchCommand"
         >
@@ -80,20 +80,6 @@
           </template>
         </el-table-column>
 
-        <el-table-column :label="t('common.status')" width="110" align="center" sortable="custom" prop="enabled">
-          <template #default="{ row }">
-            <el-switch
-              :model-value="row.enabled"
-              :loading="togglingId === row.id"
-              :disabled="!isAdmin"
-              inline-prompt
-              :active-text="t('tasks.on')"
-              :inactive-text="t('tasks.off')"
-              @change="(v: boolean) => toggleTemplate(row, v)"
-            />
-          </template>
-        </el-table-column>
-
         <el-table-column prop="subject" :label="t('templates.subject')" min-width="220" show-overflow-tooltip sortable="custom">
           <template #default="{ row }">
             <span class="subject-cell">{{ row.subject || '—' }}</span>
@@ -110,6 +96,20 @@
         <el-table-column :label="t('templates.updatedAt')" min-width="150" sortable="custom" prop="updated_at">
           <template #default="{ row }">
             <span class="mono time-cell">{{ row.updated_at || '—' }}</span>
+          </template>
+        </el-table-column>
+
+        <el-table-column :label="t('common.status')" width="110" align="center" sortable="custom" prop="enabled">
+          <template #default="{ row }">
+            <el-switch
+              :model-value="row.enabled"
+              :loading="togglingId === row.id"
+              :disabled="!isAdmin"
+              inline-prompt
+              :active-text="t('tasks.on')"
+              :inactive-text="t('tasks.off')"
+              @change="(v: boolean) => toggleTemplate(row, v)"
+            />
           </template>
         </el-table-column>
 
@@ -568,7 +568,9 @@ function onBatchCommand(cmd: string) {
   if (cmd === 'enable') return doBatchToggle(true)
   if (cmd === 'disable') return doBatchToggle(false)
   if (cmd === 'category') {
-    batchCategory.value = ''
+    // 带出原有值：若所有选中模板分类一致则默认选中该分类，否则留空
+    const cats = selectedRows.value.map((r) => r.category || 'default')
+    batchCategory.value = cats.every((c) => c === cats[0]) ? cats[0] : ''
     batchCategoryVisible.value = true
     return
   }

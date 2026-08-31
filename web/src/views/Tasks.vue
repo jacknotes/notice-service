@@ -18,7 +18,7 @@
         />
         <el-dropdown
           v-if="isAdmin"
-          trigger="click"
+          trigger="hover"
           :disabled="!selectedRows.length"
           @command="onBatchCommand"
         >
@@ -1029,17 +1029,31 @@ function onBatchCommand(cmd: string) {
   if (cmd === 'enable') return doBatchToggle(true)
   if (cmd === 'disable') return doBatchToggle(false)
   if (cmd === 'category') {
-    batchCategory.value = ''
+    // 带出原有值：若所有选中任务分类一致则默认选中该分类，否则留空
+    const cats = selectedRows.value.map((r) => r.category || 'default')
+    batchCategory.value = cats.every((c) => c === cats[0]) ? cats[0] : ''
     batchCategoryVisible.value = true
     return
   }
   if (cmd === 'channel') {
-    batchChannelIds.value = []
+    // 带出原有值：所有选中任务共有的投递渠道
+    const all = selectedRows.value.map((r) => r.channel_ids?.length ? r.channel_ids : [r.channel_id])
+    const common = all.reduce<number[]>((acc, cur) => {
+      if (!acc.length) return cur
+      return acc.filter((id) => cur.includes(id))
+    }, all[0] || [])
+    batchChannelIds.value = [...common]
     batchChannelVisible.value = true
     return
   }
   if (cmd === 'receivers') {
-    batchReceiversText.value = ''
+    // 带出原有值：所有选中任务共有的接收地址
+    const all = selectedRows.value.map((r) => r.receivers || [])
+    const common = all.reduce<string[]>((acc, cur) => {
+      if (!acc.length) return cur
+      return acc.filter((r) => cur.includes(r))
+    }, all[0] || [])
+    batchReceiversText.value = common.join('\n')
     batchReceiversVisible.value = true
     return
   }
