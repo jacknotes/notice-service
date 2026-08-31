@@ -40,7 +40,31 @@
     "date": "Date",
     "readOnlyMode": "Read-only",
     "batchDeleteConfirmMsg": "Delete {n} selected item(s)?",
-    "copySuffix": " (copy)"
+    "copySuffix": " (copy)",
+    "batchOps": "Actions",
+    "batchChangeCategory": "Change category",
+    "batchChangeChannel": "Change delivery channels",
+    "batchChangeReceivers": "Change recipients",
+    "batchEnable": "Enable",
+    "batchDisable": "Disable",
+    "selectCategory": "Select new category",
+    "selectChannel": "Select delivery channels",
+    "inputReceivers": "Recipients (one per line)",
+    "batchCategoryTitle": "Batch change category",
+    "batchCategoryConfirmMsg": "Change category of selected {n} items to \"{name}\"?",
+    "batchCategoryOk": "Categories updated",
+    "batchChannelTitle": "Batch change delivery channels",
+    "batchChannelConfirmMsg": "Change delivery channels of selected {n} tasks?",
+    "batchChannelOk": "Delivery channels updated",
+    "batchReceiversTitle": "Batch change recipients",
+    "batchReceiversConfirmMsg": "Change recipients of selected {n} tasks to the addresses below?",
+    "batchReceiversOk": "Recipients updated",
+    "batchToggleTitle": "Batch enable/disable",
+    "batchEnableConfirmMsg": "Enable selected {n} items?",
+    "batchDisableConfirmMsg": "Disable selected {n} items?",
+    "batchToggleOk": "Status updated",
+    "channelSelectPlaceholder": "Select channels (multiple)",
+    "receiversPlaceholder": "One recipient per line"
   },
   "nav": {
     "dashboard": "Dashboard",
@@ -221,7 +245,10 @@
     "updatedOk": "Channel updated",
     "deletedOk": "Channel deleted",
     "batchDeletedOk": "Deleted {n} channels",
-    "loadFailed": "Failed to load channels"
+    "loadFailed": "Failed to load channels",
+    "enabledOk": "Channel enabled",
+    "disabledOk": "Channel disabled",
+    "toggleFailed": "Failed to update channel status"
   },
   "templates": {
     "subtitle": "Maintain notification templates: subject, Markdown body and injectable variables",
@@ -259,7 +286,10 @@
     "updatedOk": "Template updated",
     "deletedOk": "Template deleted",
     "batchDeletedOk": "Deleted {n} templates",
-    "loadFailed": "Failed to load templates"
+    "loadFailed": "Failed to load templates",
+    "enabledOk": "Template enabled",
+    "disabledOk": "Template disabled",
+    "toggleFailed": "Failed to update template status"
   },
   "categories": {
     "subtitle": "Manage the shared category pool used by channels, templates and tasks",

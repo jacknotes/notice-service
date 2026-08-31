@@ -40,7 +40,31 @@
     "date": "日期",
     "readOnlyMode": "只读模式",
     "batchDeleteConfirmMsg": "确认删除选中的 {n} 项？",
-    "copySuffix": "（副本）"
+    "copySuffix": "（副本）",
+    "batchOps": "操作",
+    "batchChangeCategory": "变更分类",
+    "batchChangeChannel": "变更投递渠道",
+    "batchChangeReceivers": "变更接收地址",
+    "batchEnable": "启用",
+    "batchDisable": "停用",
+    "selectCategory": "选择新分类",
+    "selectChannel": "选择投递渠道",
+    "inputReceivers": "接收地址（每行一个）",
+    "batchCategoryTitle": "批量变更分类",
+    "batchCategoryConfirmMsg": "将选中的 {n} 项分类变更为「{name}」？",
+    "batchCategoryOk": "分类已批量变更",
+    "batchChannelTitle": "批量变更投递渠道",
+    "batchChannelConfirmMsg": "将选中的 {n} 项任务投递渠道变更为所选渠道？",
+    "batchChannelOk": "投递渠道已批量变更",
+    "batchReceiversTitle": "批量变更接收地址",
+    "batchReceiversConfirmMsg": "将选中的 {n} 项任务接收地址变更为以下地址？",
+    "batchReceiversOk": "接收地址已批量变更",
+    "batchToggleTitle": "批量启停",
+    "batchEnableConfirmMsg": "启用选中的 {n} 项？",
+    "batchDisableConfirmMsg": "停用选中的 {n} 项？",
+    "batchToggleOk": "状态已批量更新",
+    "channelSelectPlaceholder": "选择渠道（可多选）",
+    "receiversPlaceholder": "每行一个接收地址"
   },
   "nav": {
     "dashboard": "仪表盘",
@@ -221,7 +245,10 @@
     "updatedOk": "渠道已更新",
     "deletedOk": "渠道已删除",
     "batchDeletedOk": "已删除 {n} 个渠道",
-    "loadFailed": "渠道列表加载失败"
+    "loadFailed": "渠道列表加载失败",
+    "enabledOk": "渠道已启用",
+    "disabledOk": "渠道已停用",
+    "toggleFailed": "渠道状态更新失败"
   },
   "templates": {
     "subtitle": "维护通知模板：标题、Markdown 正文与可注入变量",
@@ -259,7 +286,10 @@
     "updatedOk": "模板已更新",
     "deletedOk": "模板已删除",
     "batchDeletedOk": "已删除 {n} 个模板",
-    "loadFailed": "模板列表加载失败"
+    "loadFailed": "模板列表加载失败",
+    "enabledOk": "模板已启用",
+    "disabledOk": "模板已停用",
+    "toggleFailed": "模板状态更新失败"
   },
   "categories": {
     "subtitle": "维护共享分类池：渠道、模板、任务统一引用，在一个地方创建",

@@ -44,6 +44,10 @@ describe('api/index 各接口封装', () => {
     expect(mockClient.delete).toHaveBeenCalledWith('/channels/4')
     await channelApi.batchRemove([1, 2])
     expect(mockClient.post).toHaveBeenCalledWith('/channels/batch-delete', { ids: [1, 2] })
+    await channelApi.batchToggle([1, 2], false)
+    expect(mockClient.post).toHaveBeenCalledWith('/channels/batch-toggle', { ids: [1, 2], enabled: false })
+    await channelApi.batchCategory([1, 2], '工作')
+    expect(mockClient.post).toHaveBeenCalledWith('/channels/batch-category', { ids: [1, 2], category: '工作' })
     await channelApi.test(9, { key: 'v' })
     expect(mockClient.post).toHaveBeenCalledWith('/channels/9/test', { config: { key: 'v' } })
   })
@@ -64,6 +68,13 @@ describe('api/index 各接口封装', () => {
     expect(out).toEqual({ subject: 's', content: 'c' })
   })
 
+  it('templateApi 批量启停/改分类的 URL', async () => {
+    await templateApi.batchToggle([1, 2], false)
+    expect(mockClient.post).toHaveBeenCalledWith('/templates/batch-toggle', { ids: [1, 2], enabled: false })
+    await templateApi.batchCategory([1, 2], '工作')
+    expect(mockClient.post).toHaveBeenCalledWith('/templates/batch-category', { ids: [1, 2], category: '工作' })
+  })
+
   it('taskApi.toggle/sendNow/logs/preview 的 URL', async () => {
     await taskApi.toggle(5, false)
     expect(mockClient.post).toHaveBeenCalledWith('/tasks/5/toggle', { enabled: false })
@@ -73,6 +84,17 @@ describe('api/index 各接口封装', () => {
     expect(mockClient.get).toHaveBeenCalledWith('/tasks/5/logs')
     await taskApi.preview({ template_id: 1, variables: {}, receivers: ['a@b.c'] })
     expect(mockClient.post).toHaveBeenCalledWith('/tasks/preview', { template_id: 1, variables: {}, receivers: ['a@b.c'] })
+  })
+
+  it('taskApi 批量启停/改分类/改渠道/改接收地址的 URL', async () => {
+    await taskApi.batchToggle([1, 2], true)
+    expect(mockClient.post).toHaveBeenCalledWith('/tasks/batch-toggle', { ids: [1, 2], enabled: true })
+    await taskApi.batchCategory([1, 2], '工作')
+    expect(mockClient.post).toHaveBeenCalledWith('/tasks/batch-category', { ids: [1, 2], category: '工作' })
+    await taskApi.batchChannels([1, 2], [3, 4])
+    expect(mockClient.post).toHaveBeenCalledWith('/tasks/batch-channels', { ids: [1, 2], channel_ids: [3, 4] })
+    await taskApi.batchReceivers([1, 2], ['a@b.c'])
+    expect(mockClient.post).toHaveBeenCalledWith('/tasks/batch-receivers', { ids: [1, 2], receivers: ['a@b.c'] })
   })
 
   it('taskApi.logs 透传 data', async () => {

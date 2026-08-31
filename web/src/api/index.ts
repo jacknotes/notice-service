@@ -46,6 +46,8 @@ export const channelApi = {
   update: (id: number, d: any) => client.put(`/channels/${id}`, d).then((r) => r.data),
   remove: (id: number) => client.delete(`/channels/${id}`).then((r) => r.data),
   batchRemove: (ids: number[]) => client.post('/channels/batch-delete', { ids }).then((r) => r.data),
+  batchToggle: (ids: number[], enabled: boolean) => client.post('/channels/batch-toggle', { ids, enabled }).then((r) => r.data),
+  batchCategory: (ids: number[], category: string) => client.post('/channels/batch-category', { ids, category }).then((r) => r.data),
   test: (id: number, config?: any) => client.post(`/channels/${id}/test`, { config }).then((r) => r.data),
 }
 
@@ -55,6 +57,8 @@ export const templateApi = {
   update: (id: number, d: any) => client.put(`/templates/${id}`, d).then((r) => r.data),
   remove: (id: number) => client.delete(`/templates/${id}`).then((r) => r.data),
   batchRemove: (ids: number[]) => client.post('/templates/batch-delete', { ids }).then((r) => r.data),
+  batchToggle: (ids: number[], enabled: boolean) => client.post('/templates/batch-toggle', { ids, enabled }).then((r) => r.data),
+  batchCategory: (ids: number[], category: string) => client.post('/templates/batch-category', { ids, category }).then((r) => r.data),
   // 预览使用当前表单值：subject/content_md 缺省回退已保存值；id=0 表示未保存的新模板
   preview: (
     id: number,
@@ -69,6 +73,10 @@ export const taskApi = {
   update: (id: number, d: any) => client.put(`/tasks/${id}`, d).then((r) => r.data),
   remove: (id: number) => client.delete(`/tasks/${id}`).then((r) => r.data),
   batchRemove: (ids: number[]) => client.post('/tasks/batch-delete', { ids }).then((r) => r.data),
+  batchToggle: (ids: number[], enabled: boolean) => client.post('/tasks/batch-toggle', { ids, enabled }).then((r) => r.data),
+  batchCategory: (ids: number[], category: string) => client.post('/tasks/batch-category', { ids, category }).then((r) => r.data),
+  batchChannels: (ids: number[], channel_ids: number[]) => client.post('/tasks/batch-channels', { ids, channel_ids }).then((r) => r.data),
+  batchReceivers: (ids: number[], receivers: string[]) => client.post('/tasks/batch-receivers', { ids, receivers }).then((r) => r.data),
   toggle: (id: number, enabled: boolean) => client.post(`/tasks/${id}/toggle`, { enabled }).then((r) => r.data),
   sendNow: (id: number) => client.post(`/tasks/${id}/send`).then((r) => r.data),
   logs: (id: number) => client.get(`/tasks/${id}/logs`).then((r) => r.data),

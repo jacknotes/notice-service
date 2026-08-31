@@ -16,16 +16,27 @@
           :prefix-icon="Search"
           :placeholder="t('channels.searchPlaceholder')"
         />
-        <el-button
+        <el-dropdown
           v-if="isAdmin"
-          type="danger"
-          plain
-          :icon="Delete"
+          trigger="click"
           :disabled="!selectedRows.length"
-          @click="batchDelete"
+          @command="onBatchCommand"
         >
-          {{ t('common.batchDelete') }}
-        </el-button>
+          <el-button type="primary" plain :disabled="!selectedRows.length">
+            {{ t('common.batchOps') }}
+            <el-icon class="el-icon--right"><ArrowDown /></el-icon>
+          </el-button>
+          <template #dropdown>
+            <el-dropdown-menu>
+              <el-dropdown-item command="enable" :icon="CircleCheck">{{ t('common.batchEnable') }}</el-dropdown-item>
+              <el-dropdown-item command="disable" :icon="CircleClose">{{ t('common.batchDisable') }}</el-dropdown-item>
+              <el-dropdown-item command="category" :icon="CollectionTag">{{ t('common.batchChangeCategory') }}</el-dropdown-item>
+              <el-dropdown-item divided command="delete" :icon="Delete" class="danger-dropdown-item">
+                {{ t('common.batchDelete') }}
+              </el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
         <el-button v-if="isAdmin" type="primary" :icon="Plus" @click="openCreate">
           {{ t('channels.createTitle') }}
         </el-button>
@@ -82,9 +93,15 @@
 
         <el-table-column :label="t('common.status')" width="110" align="center" sortable="custom" prop="enabled">
           <template #default="{ row }">
-            <el-tag :type="row.enabled ? 'success' : 'info'" effect="light" size="small">
-              {{ row.enabled ? t('common.enabled') : t('common.disabled') }}
-            </el-tag>
+            <el-switch
+              :model-value="row.enabled"
+              :loading="togglingId === row.id"
+              :disabled="!isAdmin"
+              inline-prompt
+              :active-text="t('tasks.on')"
+              :inactive-text="t('tasks.off')"
+              @change="(v: boolean) => toggleChannel(row, v)"
+            />
           </template>
         </el-table-column>
 
@@ -198,6 +215,27 @@
         </div>
       </template>
     </el-dialog>
+
+    <!-- ── 批量变更分类 dialog ─────────────────────────────────────── -->
+    <el-dialog
+      v-model="batchCategoryVisible"
+      :title="t('common.batchCategoryTitle')"
+      width="440px"
+      :close-on-click-modal="false"
+      destroy-on-close
+    >
+      <p class="batch-desc">{{ t('common.batchCategoryConfirmMsg', { n: selectedRows.length, name: batchCategory || '' }) }}</p>
+      <el-select v-model="batchCategory" filterable :placeholder="t('common.selectCategory')" style="width: 100%">
+        <el-option v-for="cg in categories" :key="cg.name" :label="cg.name" :value="cg.name" />
+      </el-select>
+      <template #footer>
+        <div class="dialog-footer">
+          <span class="footer-grow"></span>
+          <el-button @click="batchCategoryVisible = false">{{ t('common.cancel') }}</el-button>
+          <el-button type="primary" :loading="batching" @click="doBatchCategory">{{ t('common.confirm') }}</el-button>
+        </div>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -206,7 +244,7 @@ import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { FormInstance, FormRules, TableInstance } from 'element-plus'
-import { Plus, Edit, Delete, Promotion, Search } from '@element-plus/icons-vue'
+import { Plus, Edit, Delete, Promotion, Search, ArrowDown, CircleCheck, CircleClose, CollectionTag } from '@element-plus/icons-vue'
 import { useI18n } from 'vue-i18n'
 import client from '@/api/client'
 import { channelApi, categoryApi } from '@/api'
@@ -551,6 +589,83 @@ async function batchDelete() {
   }
 }
 
+/* ── 状态开关（单条） ─────────────────────────────────────────────── */
+const togglingId = ref<number | null>(null)
+
+async function toggleChannel(row: ChannelRow, enabled: boolean) {
+  togglingId.value = row.id
+  try {
+    await channelApi.batchToggle([row.id], enabled)
+    row.enabled = enabled
+    ElMessage.success(enabled ? t('channels.enabledOk') : t('channels.disabledOk'))
+  } catch (e: any) {
+    ElMessage.error(errMsg(e, t('channels.toggleFailed')))
+  } finally {
+    togglingId.value = null
+  }
+}
+
+/* ── 批量操作（操作下拉） ─────────────────────────────────────────── */
+const batching = ref(false)
+const batchCategoryVisible = ref(false)
+const batchCategory = ref('')
+
+function onBatchCommand(cmd: string) {
+  if (!selectedRows.value.length) return
+  if (cmd === 'enable') return doBatchToggle(true)
+  if (cmd === 'disable') return doBatchToggle(false)
+  if (cmd === 'category') {
+    batchCategory.value = ''
+    batchCategoryVisible.value = true
+    return
+  }
+  if (cmd === 'delete') return batchDelete()
+}
+
+async function doBatchToggle(enabled: boolean) {
+  const rows = selectedRows.value
+  if (!rows.length) return
+  try {
+    await ElMessageBox.confirm(
+      enabled ? t('common.batchEnableConfirmMsg', { n: rows.length }) : t('common.batchDisableConfirmMsg', { n: rows.length }),
+      t('common.batchToggleTitle'),
+      { confirmButtonText: t('common.confirm'), cancelButtonText: t('common.cancel'), type: 'warning' }
+    )
+  } catch {
+    return
+  }
+  batching.value = true
+  try {
+    await channelApi.batchToggle(rows.map((r) => r.id), enabled)
+    ElMessage.success(t('common.batchToggleOk'))
+    tableRef.value?.clearSelection()
+    await load()
+  } catch (e: any) {
+    ElMessage.error(errMsg(e, t('common.batchDeleteFailed')))
+  } finally {
+    batching.value = false
+  }
+}
+
+async function doBatchCategory() {
+  if (!batchCategory.value) {
+    ElMessage.warning(t('common.selectCategory'))
+    return
+  }
+  batching.value = true
+  try {
+    await channelApi.batchCategory(selectedRows.value.map((r) => r.id), batchCategory.value)
+    ElMessage.success(t('common.batchCategoryOk'))
+    batchCategoryVisible.value = false
+    tableRef.value?.clearSelection()
+    await load()
+  } catch (e: any) {
+    ElMessage.error(errMsg(e, t('common.batchDeleteFailed')))
+  } finally {
+    batching.value = false
+  }
+}
+
 </script>
 
 <style scoped>
@@ -640,6 +755,17 @@ async function batchDelete() {
   width: 100%;
 }
 .footer-grow { flex: 1; }
+
+/* ── 批量操作下拉与弹窗 ──────────────────────────────────────────── */
+.danger-dropdown-item {
+  color: var(--rose-400) !important;
+}
+.batch-desc {
+  margin: 0 0 var(--space-3);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  line-height: 1.7;
+}
 
 @media (max-width: 480px) {
   .form-row { flex-direction: column; }
