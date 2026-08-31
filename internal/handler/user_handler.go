@@ -168,6 +168,149 @@ func (h *UserHandler) BatchDelete(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"ok": true})
 }
 
+// BatchToggle 批量启用/禁用用户（仅 admin）。
+// BatchToggle 批量启用/禁用用户
+// @Summary 批量启用/禁用用户（仅管理员）
+// @Tags 用户
+// @Security BearerAuth
+// @Param body body object true "ids + enabled"
+// @Success 200 {object} map[string]interface{}
+// @Router /api/users/batch-toggle [post]
+func (h *UserHandler) BatchToggle(c *gin.Context) {
+	if c.GetString("role") != "admin" {
+		c.JSON(http.StatusForbidden, gin.H{"error": "无权操作"})
+		return
+	}
+	var req struct {
+		IDs     []int64 `json:"ids"`
+		Enabled bool    `json:"enabled"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "参数错误"})
+		return
+	}
+	names := make([]string, len(req.IDs))
+	for i, uid := range req.IDs {
+		names[i] = h.svc.Username(uid)
+	}
+	var err error
+	if req.Enabled {
+		err = h.svc.BatchEnable(operatorFromCtx(c), req.IDs)
+	} else {
+		err = h.svc.BatchDisable(operatorFromCtx(c), req.IDs)
+	}
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": sanitizeErr(err)})
+		return
+	}
+	action := "user.batch_disable"
+	desc := "批量禁用用户"
+	if req.Enabled {
+		action = "user.batch_enable"
+		desc = "批量启用用户"
+	}
+	auditf(c, h.db, action, "%s %s", desc, auditRefs(names, req.IDs))
+	c.JSON(http.StatusOK, gin.H{"ok": true})
+}
+
+// BatchResetPassword 批量重置用户密码为统一新密码（仅 admin）。
+// BatchResetPassword 批量重置密码
+// @Summary 批量重置用户密码（仅管理员）
+// @Tags 用户
+// @Security BearerAuth
+// @Param body body object true "ids + password"
+// @Success 200 {object} map[string]interface{}
+// @Router /api/users/batch-reset-password [post]
+func (h *UserHandler) BatchResetPassword(c *gin.Context) {
+	if c.GetString("role") != "admin" {
+		c.JSON(http.StatusForbidden, gin.H{"error": "无权操作"})
+		return
+	}
+	var req struct {
+		IDs      []int64 `json:"ids"`
+		Password string  `json:"password"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "参数错误"})
+		return
+	}
+	names := make([]string, len(req.IDs))
+	for i, uid := range req.IDs {
+		names[i] = h.svc.Username(uid)
+	}
+	if err := h.svc.BatchResetPassword(operatorFromCtx(c), req.IDs, req.Password); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": sanitizeErr(err)})
+		return
+	}
+	auditf(c, h.db, "user.batch_reset_password", "批量重置用户密码 %s", auditRefs(names, req.IDs))
+	c.JSON(http.StatusOK, gin.H{"ok": true})
+}
+
+// BatchForceEnable2FA 批量强制开启双因子认证（仅 admin），返回逐用户密钥与备用码。
+// BatchForceEnable2FA 批量强制开启双因子认证
+// @Summary 批量强制开启双因子认证（仅管理员）
+// @Tags 用户
+// @Security BearerAuth
+// @Param body body object true "ids"
+// @Success 200 {array} service.BatchUser2FAResult
+// @Router /api/users/batch-2fa-enable [post]
+func (h *UserHandler) BatchForceEnable2FA(c *gin.Context) {
+	if c.GetString("role") != "admin" {
+		c.JSON(http.StatusForbidden, gin.H{"error": "无权操作"})
+		return
+	}
+	var req struct {
+		IDs []int64 `json:"ids"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "参数错误"})
+		return
+	}
+	res, err := h.svc.BatchForceEnable2FA(operatorFromCtx(c), req.IDs)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": sanitizeErr(err)})
+		return
+	}
+	names := make([]string, len(req.IDs))
+	for i, uid := range req.IDs {
+		names[i] = h.svc.Username(uid)
+	}
+	auditf(c, h.db, "user.batch_2fa_enable", "批量强制开启双因子认证 %s", auditRefs(names, req.IDs))
+	c.JSON(http.StatusOK, gin.H{"items": res})
+}
+
+// BatchForceDisable2FA 批量强制关闭双因子认证（仅 admin）。
+// BatchForceDisable2FA 批量强制关闭双因子认证
+// @Summary 批量强制关闭双因子认证（仅管理员）
+// @Tags 用户
+// @Security BearerAuth
+// @Param body body object true "ids"
+// @Success 200 {object} map[string]interface{}
+// @Router /api/users/batch-2fa-disable [post]
+func (h *UserHandler) BatchForceDisable2FA(c *gin.Context) {
+	if c.GetString("role") != "admin" {
+		c.JSON(http.StatusForbidden, gin.H{"error": "无权操作"})
+		return
+	}
+	var req struct {
+		IDs []int64 `json:"ids"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "参数错误"})
+		return
+	}
+	names := make([]string, len(req.IDs))
+	for i, uid := range req.IDs {
+		names[i] = h.svc.Username(uid)
+	}
+	if err := h.svc.BatchForceDisable2FA(operatorFromCtx(c), req.IDs); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": sanitizeErr(err)})
+		return
+	}
+	auditf(c, h.db, "user.batch_2fa_disable", "批量强制关闭双因子认证 %s", auditRefs(names, req.IDs))
+	c.JSON(http.StatusOK, gin.H{"ok": true})
+}
+
 // Disable 禁用用户（仅 admin）：登录与已签发令牌立即失效，数据保留可重新启用。
 // Disable 禁用用户
 // @Summary 禁用用户（仅管理员）

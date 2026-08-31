@@ -595,6 +595,39 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/channels/batch-category": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "tags": [
+                    "渠道"
+                ],
+                "summary": "批量变更渠道分类",
+                "parameters": [
+                    {
+                        "description": "ids + category",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
         "/api/channels/batch-delete": {
             "post": {
                 "security": [
@@ -609,6 +642,39 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "description": "ids",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/channels/batch-toggle": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "tags": [
+                    "渠道"
+                ],
+                "summary": "批量启用/禁用渠道",
+                "parameters": [
+                    {
+                        "description": "ids + enabled",
                         "name": "body",
                         "in": "body",
                         "required": true,
@@ -1230,6 +1296,72 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/tasks/batch-category": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "tags": [
+                    "任务"
+                ],
+                "summary": "批量变更任务分类",
+                "parameters": [
+                    {
+                        "description": "ids + category",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/tasks/batch-channels": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "tags": [
+                    "任务"
+                ],
+                "summary": "批量变更任务投递渠道",
+                "parameters": [
+                    {
+                        "description": "ids + channel_ids",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
         "/api/tasks/batch-delete": {
             "post": {
                 "security": [
@@ -1244,6 +1376,72 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "description": "ids",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/tasks/batch-receivers": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "tags": [
+                    "任务"
+                ],
+                "summary": "批量变更任务接收地址",
+                "parameters": [
+                    {
+                        "description": "ids + receivers",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/tasks/batch-toggle": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "tags": [
+                    "任务"
+                ],
+                "summary": "批量启用/禁用任务",
+                "parameters": [
+                    {
+                        "description": "ids + enabled",
                         "name": "body",
                         "in": "body",
                         "required": true,
@@ -1535,6 +1733,39 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/templates/batch-category": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "tags": [
+                    "模板"
+                ],
+                "summary": "批量变更模板分类",
+                "parameters": [
+                    {
+                        "description": "ids + category",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
         "/api/templates/batch-delete": {
             "post": {
                 "security": [
@@ -1549,6 +1780,39 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "description": "ids",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/templates/batch-toggle": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "tags": [
+                    "模板"
+                ],
+                "summary": "批量启用/禁用模板",
+                "parameters": [
+                    {
+                        "description": "ids + enabled",
                         "name": "body",
                         "in": "body",
                         "required": true,
@@ -1742,6 +2006,74 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/users/batch-2fa-disable": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "tags": [
+                    "用户"
+                ],
+                "summary": "批量强制关闭双因子认证（仅管理员）",
+                "parameters": [
+                    {
+                        "description": "ids",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/users/batch-2fa-enable": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "tags": [
+                    "用户"
+                ],
+                "summary": "批量强制开启双因子认证（仅管理员）",
+                "parameters": [
+                    {
+                        "description": "ids",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/service.BatchUser2FAResult"
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/api/users/batch-delete": {
             "post": {
                 "security": [
@@ -1756,6 +2088,72 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "description": "ids",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/users/batch-reset-password": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "tags": [
+                    "用户"
+                ],
+                "summary": "批量重置用户密码（仅管理员）",
+                "parameters": [
+                    {
+                        "description": "ids + password",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/users/batch-toggle": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "tags": [
+                    "用户"
+                ],
+                "summary": "批量启用/禁用用户（仅管理员）",
+                "parameters": [
+                    {
+                        "description": "ids + enabled",
                         "name": "body",
                         "in": "body",
                         "required": true,
@@ -2217,6 +2615,9 @@ const docTemplate = `{
                 "created_at": {
                     "type": "string"
                 },
+                "enabled": {
+                    "type": "boolean"
+                },
                 "id": {
                     "type": "integer"
                 },
@@ -2253,6 +2654,29 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "type": {
+                    "type": "string"
+                }
+            }
+        },
+        "service.BatchUser2FAResult": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "integer"
+                },
+                "otpauth_url": {
+                    "type": "string"
+                },
+                "recovery_codes": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "secret": {
+                    "type": "string"
+                },
+                "username": {
                     "type": "string"
                 }
             }

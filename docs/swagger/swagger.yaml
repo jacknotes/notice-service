@@ -115,6 +115,8 @@ definitions:
         type: string
       created_at:
         type: string
+      enabled:
+        type: boolean
       id:
         type: integer
       name:
@@ -139,6 +141,21 @@ definitions:
       name:
         type: string
       type:
+        type: string
+    type: object
+  service.BatchUser2FAResult:
+    properties:
+      id:
+        type: integer
+      otpauth_url:
+        type: string
+      recovery_codes:
+        items:
+          type: string
+        type: array
+      secret:
+        type: string
+      username:
         type: string
     type: object
   service.ExportBundle:
@@ -588,6 +605,26 @@ paths:
       summary: 测试渠道连通性
       tags:
       - 渠道
+  /api/channels/batch-category:
+    post:
+      parameters:
+      - description: ids + category
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 批量变更渠道分类
+      tags:
+      - 渠道
   /api/channels/batch-delete:
     post:
       parameters:
@@ -606,6 +643,26 @@ paths:
       security:
       - BearerAuth: []
       summary: 批量删除渠道
+      tags:
+      - 渠道
+  /api/channels/batch-toggle:
+    post:
+      parameters:
+      - description: ids + enabled
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 批量启用/禁用渠道
       tags:
       - 渠道
   /api/dashboard/channel-stats:
@@ -1024,6 +1081,46 @@ paths:
       summary: 启用/停用任务（仅管理员）
       tags:
       - 任务
+  /api/tasks/batch-category:
+    post:
+      parameters:
+      - description: ids + category
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 批量变更任务分类
+      tags:
+      - 任务
+  /api/tasks/batch-channels:
+    post:
+      parameters:
+      - description: ids + channel_ids
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 批量变更任务投递渠道
+      tags:
+      - 任务
   /api/tasks/batch-delete:
     post:
       parameters:
@@ -1042,6 +1139,46 @@ paths:
       security:
       - BearerAuth: []
       summary: 批量删除任务（仅管理员）
+      tags:
+      - 任务
+  /api/tasks/batch-receivers:
+    post:
+      parameters:
+      - description: ids + receivers
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 批量变更任务接收地址
+      tags:
+      - 任务
+  /api/tasks/batch-toggle:
+    post:
+      parameters:
+      - description: ids + enabled
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 批量启用/禁用任务
       tags:
       - 任务
   /api/tasks/preview:
@@ -1174,6 +1311,26 @@ paths:
       summary: 用变量渲染模板预览（使用当前表单值）
       tags:
       - 模板
+  /api/templates/batch-category:
+    post:
+      parameters:
+      - description: ids + category
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 批量变更模板分类
+      tags:
+      - 模板
   /api/templates/batch-delete:
     post:
       parameters:
@@ -1192,6 +1349,26 @@ paths:
       security:
       - BearerAuth: []
       summary: 批量删除模板
+      tags:
+      - 模板
+  /api/templates/batch-toggle:
+    post:
+      parameters:
+      - description: ids + enabled
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 批量启用/禁用模板
       tags:
       - 模板
   /api/users:
@@ -1370,6 +1547,47 @@ paths:
       summary: 为用户生成一次性重置令牌（仅管理员）
       tags:
       - 用户
+  /api/users/batch-2fa-disable:
+    post:
+      parameters:
+      - description: ids
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 批量强制关闭双因子认证（仅管理员）
+      tags:
+      - 用户
+  /api/users/batch-2fa-enable:
+    post:
+      parameters:
+      - description: ids
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/service.BatchUser2FAResult'
+            type: array
+      security:
+      - BearerAuth: []
+      summary: 批量强制开启双因子认证（仅管理员）
+      tags:
+      - 用户
   /api/users/batch-delete:
     post:
       parameters:
@@ -1388,6 +1606,46 @@ paths:
       security:
       - BearerAuth: []
       summary: 批量删除用户（仅管理员）
+      tags:
+      - 用户
+  /api/users/batch-reset-password:
+    post:
+      parameters:
+      - description: ids + password
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 批量重置用户密码（仅管理员）
+      tags:
+      - 用户
+  /api/users/batch-toggle:
+    post:
+      parameters:
+      - description: ids + enabled
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 批量启用/禁用用户（仅管理员）
       tags:
       - 用户
   /api/webhook/{api_key}:

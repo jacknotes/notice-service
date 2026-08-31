@@ -179,6 +179,10 @@ func NewRouter(db *sql.DB, authSvc *service.AuthService, cipher *crypto.Cipher, 
 			admin.DELETE("/users/:id", userH.Delete)
 			admin.POST("/users/:id/reset-token", userH.ResetToken) // 生成一次性重置令牌
 			admin.POST("/users/batch-delete", userH.BatchDelete)
+			admin.POST("/users/batch-toggle", userH.BatchToggle)
+			admin.POST("/users/batch-reset-password", userH.BatchResetPassword)
+			admin.POST("/users/batch-2fa-enable", userH.BatchForceEnable2FA)
+			admin.POST("/users/batch-2fa-disable", userH.BatchForceDisable2FA)
 			admin.POST("/users/:id/2fa-enable", userH.ForceEnable2FA)   // 强制开启双因子认证
 			admin.POST("/users/:id/2fa-disable", userH.ForceDisable2FA) // 强制关闭双因子认证
 			admin.POST("/users/:id/disable", userH.Disable)             // 禁用用户（登录/令牌立即失效，可重新启用）

@@ -316,3 +316,130 @@ func (s *UserService) ForceDisable2FA(userID int64) error {
 	}
 	return s.users.DisableTOTP(userID)
 }
+
+/* ── 批量操作（仅管理员） ───────────────────────────────────────────── */
+
+// BatchDisable 批量禁用用户：先逐个校验（规则同 DisableUser），校验通过后
+// 单条 SQL 批量置 enabled=false。
+func (s *UserService) BatchDisable(operator *model.User, ids []int64) error {
+	if operator.Role != "admin" {
+		return errors.New("无权操作")
+	}
+	if err := s.validateBatchTargets(operator, ids, "禁用"); err != nil {
+		return err
+	}
+	return s.users.SetEnabledBatch(ids, false)
+}
+
+// BatchEnable 批量启用用户：先逐个校验（规则同 EnableUser），校验通过后
+// 单条 SQL 批量置 enabled=true。
+func (s *UserService) BatchEnable(operator *model.User, ids []int64) error {
+	if operator.Role != "admin" {
+		return errors.New("无权操作")
+	}
+	if err := s.validateBatchTargets(operator, ids, "启用"); err != nil {
+		return err
+	}
+	return s.users.SetEnabledBatch(ids, true)
+}
+
+// BatchResetPassword 批量重置用户密码为统一新密码：逐个校验（不能对自己、
+// 不能是内置 admin、普通管理员不能操作管理员），bcrypt 后逐个更新。
+func (s *UserService) BatchResetPassword(operator *model.User, ids []int64, newPassword string) error {
+	if operator.Role != "admin" {
+		return errors.New("无权操作")
+	}
+	if err := validatePassword(newPassword); err != nil {
+		return err
+	}
+	if err := s.validateBatchTargets(operator, ids, "重置密码"); err != nil {
+		return err
+	}
+	hash, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return err
+	}
+	for _, id := range ids {
+		if err := s.users.UpdatePassword(id, string(hash)); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// BatchUser2FAResult 批量强制开启 2FA 时，单个用户的密钥与备用码结果。
+type BatchUser2FAResult struct {
+	ID            int64    `json:"id"`
+	Username      string   `json:"username"`
+	Secret        string   `json:"secret"`
+	OtpauthURL    string   `json:"otpauth_url"`
+	RecoveryCodes []string `json:"recovery_codes"`
+}
+
+// BatchForceEnable2FA 批量强制开启双因子认证：逐个生成密钥与备用码，
+// 返回每个用户的凭据供管理员线下转交。内置 admin 账号不可强制开启。
+func (s *UserService) BatchForceEnable2FA(operator *model.User, ids []int64) ([]BatchUser2FAResult, error) {
+	if operator.Role != "admin" {
+		return nil, errors.New("无权操作")
+	}
+	// 先校验全部目标（含是否内置 admin），再逐个生成，避免部分生成后报错。
+	targets := make([]*model.User, 0, len(ids))
+	for _, id := range ids {
+		t, err := s.users.GetByID(id)
+		if err != nil {
+			return nil, errors.New("用户不存在")
+		}
+		if isDefaultAdmin(t) {
+			return nil, errors.New("不能对内置 admin 账号强制开启双因子认证")
+		}
+		targets = append(targets, t)
+	}
+	out := make([]BatchUser2FAResult, 0, len(targets))
+	for _, t := range targets {
+		secret, uri, codes, err := s.ForceEnable2FA(t.ID)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, BatchUser2FAResult{
+			ID: t.ID, Username: t.Username, Secret: secret, OtpauthURL: uri, RecoveryCodes: codes,
+		})
+	}
+	return out, nil
+}
+
+// BatchForceDisable2FA 批量强制关闭双因子认证。
+func (s *UserService) BatchForceDisable2FA(operator *model.User, ids []int64) error {
+	if operator.Role != "admin" {
+		return errors.New("无权操作")
+	}
+	for _, id := range ids {
+		if err := s.ForceDisable2FA(id); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// validateBatchTargets 批量操作的公共校验：每个目标必须存在；不能是自己；
+// 不能是内置 admin；普通管理员不能操作管理员账号。
+func (s *UserService) validateBatchTargets(operator *model.User, ids []int64, action string) error {
+	for _, id := range ids {
+		if id == operator.ID {
+			return errors.New("不能对当前登录账号执行「" + action + "」")
+		}
+		target, err := s.users.GetByID(id)
+		if err != nil {
+			if errors.Is(err, repository.ErrNotFound) {
+				return errors.New("用户不存在")
+			}
+			return err
+		}
+		if isDefaultAdmin(target) {
+			return errors.New("不能对内置 admin 账号执行「" + action + "」")
+		}
+		if target.Role == "admin" && !isDefaultAdmin(operator) {
+			return errors.New("普通管理员不能操作管理员账号")
+		}
+	}
+	return nil
+}

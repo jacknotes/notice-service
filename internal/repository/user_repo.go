@@ -135,6 +135,22 @@ func (r *UserRepo) SetEnabled(id int64, enabled bool) error {
 	return err
 }
 
+// SetEnabledBatch 批量启用/禁用用户（单条 UPDATE；权限校验在 service 层完成）。
+func (r *UserRepo) SetEnabledBatch(ids []int64, enabled bool) error {
+	if len(ids) == 0 {
+		return nil
+	}
+	placeholders := strings.TrimSuffix(strings.Repeat("?,", len(ids)), ",")
+	args := make([]interface{}, len(ids)+1)
+	args[0] = enabled
+	for i, id := range ids {
+		args[i+1] = id
+	}
+	_, err := r.db.Exec(
+		"UPDATE users SET enabled=? WHERE id IN ("+placeholders+") AND deleted_at IS NULL", args...)
+	return err
+}
+
 // CountAdmins 统计未删除的管理员数量。
 func (r *UserRepo) CountAdmins() (int, error) {
 	var n int
