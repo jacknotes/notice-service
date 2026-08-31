@@ -377,20 +377,18 @@ type BatchUser2FAResult struct {
 }
 
 // BatchForceEnable2FA 批量强制开启双因子认证：逐个生成密钥与备用码，
-// 返回每个用户的凭据供管理员线下转交。内置 admin 账号不可强制开启。
+// 返回每个用户的凭据供管理员线下转交。与删除/禁用/重置密码不同，2FA 是可恢复
+// 的配置（关闭后重新开启即可），因此允许对内置 admin 账号操作（含普通管理员）。
 func (s *UserService) BatchForceEnable2FA(operator *model.User, ids []int64) ([]BatchUser2FAResult, error) {
 	if operator.Role != "admin" {
 		return nil, errors.New("无权操作")
 	}
-	// 先校验全部目标（含是否内置 admin），再逐个生成，避免部分生成后报错。
+	// 先校验全部目标存在，再逐个生成，避免部分生成后报错。
 	targets := make([]*model.User, 0, len(ids))
 	for _, id := range ids {
 		t, err := s.users.GetByID(id)
 		if err != nil {
 			return nil, errors.New("用户不存在")
-		}
-		if isDefaultAdmin(t) {
-			return nil, errors.New("不能对内置 admin 账号强制开启双因子认证")
 		}
 		targets = append(targets, t)
 	}

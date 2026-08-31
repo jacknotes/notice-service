@@ -141,13 +141,43 @@ func TestUserBatch2FA(t *testing.T) {
 		t.Fatalf("batch 2fa disable = %d body=%s", w.Code, w.Body.String())
 	}
 
-	// 含内置 admin 批量强制开启 → 400
+	// 含内置 admin 批量强制开启 → 200（2FA 是可恢复配置，允许对 admin 操作）
 	var adminID int64
 	if err := testDB(t).QueryRow("SELECT id FROM users WHERE username='admin'").Scan(&adminID); err != nil {
 		t.Fatalf("get admin id: %v", err)
 	}
 	withAdmin, _ := json.Marshal([]int64{ids[0], adminID})
-	if w := authReq(t, r, adminTok, "POST", "/api/users/batch-2fa-enable", `{"ids":`+string(withAdmin)+`}`); w.Code != 400 {
-		t.Fatalf("batch 2fa enable with builtin admin = %d, want 400 body=%s", w.Code, w.Body.String())
+	if w := authReq(t, r, adminTok, "POST", "/api/users/batch-2fa-enable", `{"ids":`+string(withAdmin)+`}`); w.Code != 200 {
+		t.Fatalf("batch 2fa enable with builtin admin = %d, want 200 body=%s", w.Code, w.Body.String())
+	}
+}
+
+// TestUserBatch2FAByNormalAdmin: 普通管理员也能对内置 admin 强制开/关 2FA。
+func TestUserBatch2FAByNormalAdmin(t *testing.T) {
+	r := testRouter(t)
+	adminTok := login(t, r)
+	// 创建另一个普通管理员
+	w := authReq(t, r, adminTok, "POST", "/api/users", `{"username":"op2fa","password":"TestPass123!","role":"admin"}`)
+	if w.Code != 200 {
+		t.Fatalf("create admin2 = %d body=%s", w.Code, w.Body.String())
+	}
+	t.Cleanup(func() { testDB(t).Exec("DELETE FROM users WHERE username='op2fa'") })
+	opTok := loginAs(t, r, "op2fa", "TestPass123!")
+
+	var adminID int64
+	if err := testDB(t).QueryRow("SELECT id FROM users WHERE username='admin'").Scan(&adminID); err != nil {
+		t.Fatalf("get admin id: %v", err)
+	}
+	// 普通管理员对内置 admin 强制开启 2FA → 200
+	if w := authReq(t, r, opTok, "POST", "/api/users/batch-2fa-enable", `{"ids":[`+num(adminID)+`]}`); w.Code != 200 {
+		t.Fatalf("normal admin 2fa-enable builtin admin = %d, want 200 body=%s", w.Code, w.Body.String())
+	}
+	// 普通管理员对内置 admin 强制关闭 2FA → 200
+	if w := authReq(t, r, opTok, "POST", "/api/users/batch-2fa-disable", `{"ids":[`+num(adminID)+`]}`); w.Code != 200 {
+		t.Fatalf("normal admin 2fa-disable builtin admin = %d, want 200 body=%s", w.Code, w.Body.String())
+	}
+	// 但普通管理员不能对内置 admin 禁用 → 400（其它操作仍被禁止）
+	if w := authReq(t, r, opTok, "POST", "/api/users/batch-toggle", `{"ids":[`+num(adminID)+`],"enabled":false}`); w.Code != 400 {
+		t.Fatalf("normal admin disable builtin admin = %d, want 400 body=%s", w.Code, w.Body.String())
 	}
 }

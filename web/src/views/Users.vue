@@ -454,9 +454,11 @@ function onSelectionChange(rows: UserRow[]) {
   selectedRows.value = rows
 }
 
-// 可勾选（批量删除）的行 = 当前操作者可删除的行
+// 可勾选（批量操作）的行：除当前登录账号外都可勾选。
+// 允许勾选内置 admin 行——批量强制开/关 2FA 对 admin 可用；
+// 批量删除/禁用/启用/重置密码若含 admin，由后端校验拒绝（不可锁死 admin）。
 function isSelectableRow(row: UserRow) {
-  return canDelete(row)
+  return row.id !== auth.user?.id
 }
 
 // 当前操作者是否为内置 admin（username=admin）账号

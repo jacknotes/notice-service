@@ -77,6 +77,37 @@ func TestResetPasswordUnknownUser(t *testing.T) {
 	}
 }
 
+// TestResetPasswordClears2FA: 离线重置密码必须同时清除该用户的 2FA——
+// 若用户开了 2FA 但丢失手机，仅重置密码会导致账号仍被 2FA 锁死。
+func TestResetPasswordClears2FA(t *testing.T) {
+	db := testDB(t)
+	hash, err := service.HashPassword("OldPass1234!")
+	if err != nil {
+		t.Fatal(err)
+	}
+	seedAdminUser(t, db, "rp_2fa", hash)
+	// 给用户设置 2FA（模拟已开启）
+	if _, err := db.Exec(
+		"UPDATE users SET totp_secret='s3cret', totp_enabled=1, totp_recovery_codes='[\"hash\"]' WHERE username='rp_2fa'",
+	); err != nil {
+		t.Fatal(err)
+	}
+	if err := resetPassword(db, "rp_2fa", "NewPass1234!"); err != nil {
+		t.Fatal(err)
+	}
+	var enabled bool
+	var secret sql.NullString
+	if err := db.QueryRow("SELECT totp_enabled, totp_secret FROM users WHERE username='rp_2fa'").Scan(&enabled, &secret); err != nil {
+		t.Fatal(err)
+	}
+	if enabled {
+		t.Error("2FA should be disabled after reset-password")
+	}
+	if secret.Valid && secret.String != "" {
+		t.Error("totp_secret should be cleared after reset-password")
+	}
+}
+
 func TestPromptNewPasswordFromStdin(t *testing.T) {
 	pw, err := promptNewPassword(strings.NewReader("NewPass123!\n"), &bytes.Buffer{})
 	if err != nil {
