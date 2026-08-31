@@ -13,13 +13,13 @@
         @click="nodesVisible = true"
       >
         <span class="dot-live" :class="{ 'is-offline': signal === 'offline', 'is-partial': signal === 'partial' }"></span>
-        <span>{{ signalLabel }}</span>
+        <span class="pill-label">{{ signalLabel }}</span>
       </button>
 
       <el-menu router :default-active="route.path" class="side-menu">
         <el-menu-item v-for="item in visibleNavItems" :key="item.path" :index="item.path">
           <el-icon><component :is="item.icon" /></el-icon>
-          <span v-if="!collapsed">{{ t(item.labelKey) }}</span>
+          <span class="menu-label">{{ t(item.labelKey) }}</span>
         </el-menu-item>
       </el-menu>
 
@@ -475,8 +475,9 @@ async function onLogout() {
 }
 
 /* ── 侧边栏折叠态：收窄为图标栏 ─────────────────────────────────────── */
+/* 宽度过渡用 --dur-base（240ms）+ ease-in-out，避免收缩/展开过于生硬 */
 .sidebar {
-  transition: width var(--dur-fast) var(--ease-out);
+  transition: width var(--dur-base) var(--ease-in-out);
 }
 .sidebar.is-collapsed {
   padding-left: 8px;
@@ -487,10 +488,26 @@ async function onLogout() {
   padding-left: 0;
   padding-right: 0;
 }
+/* 文字类元素：折叠时淡出并塌缩宽度（保留 DOM 以支持过渡），展开时淡入。
+   display:none 会瞬间显隐，过渡动画无法生效。 */
+.brand-name,
+.status-pill .pill-label,
+.ver,
+.menu-label {
+  display: inline-block;
+  overflow: hidden;
+  white-space: nowrap;
+  max-width: 140px;
+  opacity: 1;
+  transition: opacity var(--dur-base) var(--ease-out),
+              max-width var(--dur-base) var(--ease-out);
+}
 .sidebar.is-collapsed .brand-name,
-.sidebar.is-collapsed .status-pill span,
-.sidebar.is-collapsed .ver {
-  display: none;
+.sidebar.is-collapsed .status-pill .pill-label,
+.sidebar.is-collapsed .ver,
+.sidebar.is-collapsed .menu-label {
+  max-width: 0;
+  opacity: 0;
 }
 .sidebar.is-collapsed .status-pill {
   justify-content: center;
@@ -515,7 +532,7 @@ async function onLogout() {
 .main {
   flex: 1;
   margin-left: var(--sbw);
-  transition: margin-left var(--dur-fast) var(--ease-out);
+  transition: margin-left var(--dur-base) var(--ease-in-out);
   min-width: 0;
   display: flex;
   flex-direction: column;

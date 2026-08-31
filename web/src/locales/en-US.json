@@ -319,7 +319,8 @@
     "refTemplates": "Templates",
     "refTasks": "Tasks",
     "unused": "Unused",
-    "usedCount": "{n} reference(s)"
+    "usedCount": "{n} reference(s)",
+    "batchDeletedOk": "{n} categories deleted"
   },
   "tasks": {
     "subtitle": "Configure scheduled / webhook delivery tasks bound to channels and templates",
@@ -538,7 +539,22 @@
     "scanBind": "Scan to bind",
     "secretLabel": "Secret",
     "recoveryCodesLabel": "One-time backup codes (shown only this once)",
-    "copyAllRecovery": "Copy all recovery codes"
+    "copyAllRecovery": "Copy all recovery codes",
+    "batchResetPassword": "Reset password",
+    "batchForce2FAOn": "Force enable 2FA",
+    "batchForce2FAOff": "Force disable 2FA",
+    "batchResetPasswordTitle": "Batch reset password",
+    "batchResetPasswordHint": "Reset {n} selected users to a common new password",
+    "batchNewPassword": "New password",
+    "batchNewPasswordConfirm": "Confirm new password",
+    "batchNewPasswordRequired": "Please enter new password",
+    "batchPasswordMismatch": "Passwords do not match",
+    "batchResetPasswordOk": "Passwords reset",
+    "batchForce2FAOnConfirmMsg": "Force enable 2FA for {n} selected users?",
+    "batchForce2FAOffConfirmMsg": "Force disable 2FA for {n} selected users?",
+    "batchForce2FAOffOk": "2FA disabled for selected users",
+    "batchForce2FAResultTitle": "Batch enable 2FA results",
+    "batchForce2FAResultHint": "Hand each user their secret and recovery codes"
   },
   "settings": {
     "subtitle": "View your account information and session",

@@ -135,6 +135,17 @@ describe('api/index 各接口封装', () => {
     expect(mockClient.post).toHaveBeenCalledWith('/users/2/2fa-disable')
   })
 
+  it('userApi 批量操作的 URL', async () => {
+    await userApi.batchToggle([1, 2], false)
+    expect(mockClient.post).toHaveBeenCalledWith('/users/batch-toggle', { ids: [1, 2], enabled: false })
+    await userApi.batchResetPassword([1, 2], 'Newpass456!x')
+    expect(mockClient.post).toHaveBeenCalledWith('/users/batch-reset-password', { ids: [1, 2], password: 'Newpass456!x' })
+    await userApi.batchForceEnable2FA([1, 2])
+    expect(mockClient.post).toHaveBeenCalledWith('/users/batch-2fa-enable', { ids: [1, 2] })
+    await userApi.batchForceDisable2FA([1, 2])
+    expect(mockClient.post).toHaveBeenCalledWith('/users/batch-2fa-disable', { ids: [1, 2] })
+  })
+
   it('userApi.list 透传 data', async () => {
     vi.mocked(mockClient.get).mockResolvedValue({ data: [{ id: 1, username: 'u', role: 'admin' }] })
     const out = await userApi.list()

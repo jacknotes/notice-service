@@ -6,15 +6,28 @@
         <p class="sub">{{ t('users.subtitle') }}</p>
       </div>
       <div class="actions">
-        <el-button
-          type="danger"
-          plain
-          :icon="Delete"
+        <el-dropdown
+          trigger="hover"
           :disabled="!selectedRows.length"
-          @click="batchDelete"
+          @command="onBatchCommand"
         >
-          {{ t('common.batchDelete') }}
-        </el-button>
+          <el-button type="primary" :disabled="!selectedRows.length">
+            {{ t('common.batchOps') }}
+            <el-icon class="el-icon--right"><ArrowDown /></el-icon>
+          </el-button>
+          <template #dropdown>
+            <el-dropdown-menu>
+              <el-dropdown-item command="enable" :icon="CircleCheck">{{ t('common.batchEnable') }}</el-dropdown-item>
+              <el-dropdown-item command="disable" :icon="CircleClose">{{ t('common.batchDisable') }}</el-dropdown-item>
+              <el-dropdown-item command="resetPassword" :icon="Key">{{ t('users.batchResetPassword') }}</el-dropdown-item>
+              <el-dropdown-item command="force2faOn" :icon="Lock">{{ t('users.batchForce2FAOn') }}</el-dropdown-item>
+              <el-dropdown-item command="force2faOff" :icon="Unlock">{{ t('users.batchForce2FAOff') }}</el-dropdown-item>
+              <el-dropdown-item divided command="delete" :icon="Delete" class="danger-dropdown-item">
+                {{ t('common.batchDelete') }}
+              </el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
         <el-button type="primary" :icon="Plus" @click="openCreate">{{ t('users.createTitle') }}</el-button>
       </div>
     </div>
@@ -141,19 +154,6 @@
                 </el-button>
               </span>
             </el-tooltip>
-            <el-dropdown trigger="click" @command="(cmd: string) => on2FACommand(cmd, row)">
-              <el-button link type="primary" size="small">
-                2FA<el-icon class="el-icon--right"><ArrowDown /></el-icon>
-              </el-button>
-              <template #dropdown>
-                <el-dropdown-menu>
-                  <el-dropdown-item command="enable">{{ t('users.force2faMenuOn') }}</el-dropdown-item>
-                  <el-dropdown-item command="disable" :disabled="!row.totp_enabled">
-                    {{ t('users.force2faMenuOff') }}
-                  </el-dropdown-item>
-                </el-dropdown-menu>
-              </template>
-            </el-dropdown>
             <el-tooltip
               :disabled="canDelete(row)"
               :content="deleteHint(row)"
@@ -355,6 +355,63 @@
         </div>
       </template>
     </el-dialog>
+
+    <!-- ── 批量重置密码 dialog ─────────────────────────────────────── -->
+    <el-dialog
+      v-model="batchResetPasswordVisible"
+      :title="t('users.batchResetPasswordTitle')"
+      width="440px"
+      :close-on-click-modal="false"
+      destroy-on-close
+    >
+      <p class="batch-desc">{{ t('users.batchResetPasswordHint', { n: selectedRows.length }) }}</p>
+      <el-form label-position="top" @submit.prevent>
+        <el-form-item :label="t('users.batchNewPassword')">
+          <el-input v-model="batchNewPassword" type="password" show-password :placeholder="t('users.batchNewPassword')" />
+        </el-form-item>
+        <el-form-item :label="t('users.batchNewPasswordConfirm')">
+          <el-input v-model="batchNewPasswordConfirm" type="password" show-password :placeholder="t('users.batchNewPasswordConfirm')" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <div class="dialog-footer">
+          <span class="footer-grow"></span>
+          <el-button @click="batchResetPasswordVisible = false">{{ t('common.cancel') }}</el-button>
+          <el-button type="primary" :loading="batching" @click="doBatchResetPassword">{{ t('common.confirm') }}</el-button>
+        </div>
+      </template>
+    </el-dialog>
+
+    <!-- ── 批量强制开启 2FA 结果 dialog ─────────────────────────────── -->
+    <el-dialog
+      v-model="batch2FAVisible"
+      :title="t('users.batchForce2FAResultTitle')"
+      width="640px"
+      :close-on-click-modal="false"
+      destroy-on-close
+    >
+      <p class="batch-desc">{{ t('users.batchForce2FAResultHint') }}</p>
+      <div class="batch-2fa-list">
+        <div v-for="it in batch2FAItems" :key="it.username" class="batch-2fa-item">
+          <div class="batch-2fa-user">{{ it.username }}</div>
+          <div class="batch-2fa-secret-row">
+            <code class="mono secret-value">{{ it.secret }}</code>
+            <el-button size="small" :icon="CopyDocument" @click="copyText(it.secret)">
+              {{ t('common.copy') }}
+            </el-button>
+          </div>
+          <div class="batch-2fa-codes">
+            <code v-for="code in it.recovery_codes" :key="code" class="mono code-item">{{ code }}</code>
+          </div>
+        </div>
+      </div>
+      <template #footer>
+        <div class="dialog-footer">
+          <span class="footer-grow"></span>
+          <el-button @click="batch2FAVisible = false">{{ t('common.close') }}</el-button>
+        </div>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -362,7 +419,7 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { FormInstance, FormRules, TableInstance } from 'element-plus'
-import { Plus, Delete, CopyDocument, ArrowDown } from '@element-plus/icons-vue'
+import { Plus, Delete, CopyDocument, ArrowDown, CircleCheck, CircleClose, Key, Lock, Unlock } from '@element-plus/icons-vue'
 import QRCode from 'qrcode'
 import { useI18n } from 'vue-i18n'
 import { userApi } from '@/api'
@@ -776,6 +833,127 @@ async function batchDelete() {
   }
 }
 
+/* ── 批量操作（操作下拉） ─────────────────────────────────────────── */
+const batching = ref(false)
+const batchResetPasswordVisible = ref(false)
+const batchNewPassword = ref('')
+const batchNewPasswordConfirm = ref('')
+const batch2FAVisible = ref(false)
+const batch2FAItems = ref<{ username: string; secret: string; otpauth_url: string; recovery_codes: string[] }[]>([])
+
+function onBatchCommand(cmd: string) {
+  if (!selectedRows.value.length) return
+  if (cmd === 'enable') return doBatchToggle(true)
+  if (cmd === 'disable') return doBatchToggle(false)
+  if (cmd === 'resetPassword') {
+    batchNewPassword.value = ''
+    batchNewPasswordConfirm.value = ''
+    batchResetPasswordVisible.value = true
+    return
+  }
+  if (cmd === 'force2faOn') return doBatchForce2FAOn()
+  if (cmd === 'force2faOff') return doBatchForce2FAOff()
+  if (cmd === 'delete') return batchDelete()
+}
+
+async function doBatchToggle(enabled: boolean) {
+  const rows = selectedRows.value
+  if (!rows.length) return
+  try {
+    await ElMessageBox.confirm(
+      enabled ? t('common.batchEnableConfirmMsg', { n: rows.length }) : t('common.batchDisableConfirmMsg', { n: rows.length }),
+      t('common.batchToggleTitle'),
+      { confirmButtonText: t('common.confirm'), cancelButtonText: t('common.cancel'), type: 'warning' }
+    )
+  } catch {
+    return
+  }
+  batching.value = true
+  try {
+    await userApi.batchToggle(rows.map((r) => r.id), enabled)
+    ElMessage.success(t('common.batchToggleOk'))
+    tableRef.value?.clearSelection()
+    await load()
+  } catch (e: any) {
+    ElMessage.error(errMsg(e, t('users.opFailed')))
+  } finally {
+    batching.value = false
+  }
+}
+
+async function doBatchResetPassword() {
+  if (!batchNewPassword.value) {
+    ElMessage.warning(t('users.batchNewPasswordRequired'))
+    return
+  }
+  if (batchNewPassword.value !== batchNewPasswordConfirm.value) {
+    ElMessage.warning(t('users.batchPasswordMismatch'))
+    return
+  }
+  batching.value = true
+  try {
+    await userApi.batchResetPassword(selectedRows.value.map((r) => r.id), batchNewPassword.value)
+    ElMessage.success(t('users.batchResetPasswordOk'))
+    batchResetPasswordVisible.value = false
+    tableRef.value?.clearSelection()
+    await load()
+  } catch (e: any) {
+    ElMessage.error(errMsg(e, t('users.opFailed')))
+  } finally {
+    batching.value = false
+  }
+}
+
+async function doBatchForce2FAOn() {
+  const rows = selectedRows.value
+  if (!rows.length) return
+  try {
+    await ElMessageBox.confirm(
+      t('users.batchForce2FAOnConfirmMsg', { n: rows.length }),
+      t('users.batchForce2FAOn'),
+      { confirmButtonText: t('common.confirm'), cancelButtonText: t('common.cancel'), type: 'warning' }
+    )
+  } catch {
+    return
+  }
+  batching.value = true
+  try {
+    const data = await userApi.batchForceEnable2FA(rows.map((r) => r.id))
+    batch2FAItems.value = (data?.items || []) as { username: string; secret: string; otpauth_url: string; recovery_codes: string[] }[]
+    batch2FAVisible.value = true
+    await load()
+  } catch (e: any) {
+    ElMessage.error(errMsg(e, t('users.force2faOnFailed')))
+  } finally {
+    batching.value = false
+  }
+}
+
+async function doBatchForce2FAOff() {
+  const rows = selectedRows.value
+  if (!rows.length) return
+  try {
+    await ElMessageBox.confirm(
+      t('users.batchForce2FAOffConfirmMsg', { n: rows.length }),
+      t('users.batchForce2FAOff'),
+      { confirmButtonText: t('common.confirm'), cancelButtonText: t('common.cancel'), type: 'warning' }
+    )
+  } catch {
+    return
+  }
+  batching.value = true
+  try {
+    await userApi.batchForceDisable2FA(rows.map((r) => r.id))
+    ElMessage.success(t('users.batchForce2FAOffOk'))
+    tableRef.value?.clearSelection()
+    await load()
+  } catch (e: any) {
+    ElMessage.error(errMsg(e, t('users.force2faOffFailed')))
+  } finally {
+    batching.value = false
+  }
+}
+
 onMounted(load)
 </script>
 
@@ -931,10 +1109,44 @@ onMounted(load)
 }
 .footer-grow { flex: 1; }
 
-.dialog-footer {
+/* ── 批量操作下拉与弹窗 ──────────────────────────────────────────── */
+.danger-dropdown-item {
+  color: var(--rose-400) !important;
+}
+.batch-desc {
+  margin: 0 0 var(--space-3);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  line-height: 1.7;
+}
+.batch-2fa-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  max-height: 50vh;
+  overflow: auto;
+}
+.batch-2fa-item {
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: rgba(148, 163, 184, 0.06);
+}
+.batch-2fa-user {
+  color: var(--text-primary);
+  font-weight: 600;
+  font-size: var(--text-sm);
+  margin-bottom: var(--space-2);
+}
+.batch-2fa-secret-row {
   display: flex;
   align-items: center;
-  width: 100%;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
 }
-.footer-grow { flex: 1; }
+.batch-2fa-codes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
 </style>

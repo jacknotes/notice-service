@@ -9,6 +9,24 @@
         <p class="sub">{{ t('categories.subtitle') }}</p>
       </div>
       <div class="actions">
+        <el-dropdown
+          v-if="isAdmin"
+          trigger="hover"
+          :disabled="!selectedRows.length"
+          @command="onBatchCommand"
+        >
+          <el-button type="primary" :disabled="!selectedRows.length">
+            {{ t('common.batchOps') }}
+            <el-icon class="el-icon--right"><ArrowDown /></el-icon>
+          </el-button>
+          <template #dropdown>
+            <el-dropdown-menu>
+              <el-dropdown-item command="delete" :icon="Delete" class="danger-dropdown-item">
+                {{ t('common.batchDelete') }}
+              </el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
         <el-button v-if="isAdmin" type="primary" :icon="Plus" @click="openCreate">{{ t('categories.createTitle') }}</el-button>
       </div>
     </div>
@@ -24,11 +42,20 @@
 
     <div v-loading="loading" class="card table-card">
       <el-table
+        ref="tableRef"
         :data="paged"
         style="width: 100%"
         :empty-text="t('categories.emptyTable')"
+        @selection-change="onSelectionChange"
         @sort-change="onSortChange"
       >
+        <el-table-column
+          v-if="isAdmin"
+          type="selection"
+          width="48"
+          align="center"
+          :selectable="isSelectableRow"
+        />
         <el-table-column prop="id" label="ID" width="72" align="center" sortable="custom">
           <template #default="{ row }">
             <span class="mono id-cell">#{{ row.id }}</span>
@@ -143,8 +170,8 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import type { FormInstance, FormRules } from 'element-plus'
-import { Plus } from '@element-plus/icons-vue'
+import type { FormInstance, FormRules, TableInstance } from 'element-plus'
+import { Plus, ArrowDown, Delete } from '@element-plus/icons-vue'
 import { useI18n } from 'vue-i18n'
 import { categoryApi, channelApi, templateApi, taskApi } from '@/api'
 import { useAuthStore } from '@/stores/auth'
@@ -176,6 +203,51 @@ const pagedSource = computed<CategoryRow[]>(() => rows.value)
 const { page, size, onSortChange, paged, total, onPageSizeChange } = useTablePaging<CategoryRow>(pagedSource)
 
 const unusedHint = computed(() => t('categories.unusedHint'))
+
+/* ── 批量删除（操作下拉） ─────────────────────────────────────────── */
+const tableRef = ref<TableInstance>()
+const selectedRows = ref<CategoryRow[]>([])
+
+function onSelectionChange(rows: CategoryRow[]) {
+  selectedRows.value = rows
+}
+
+// 只允许勾选未被引用的分类（default 与已被引用的分类不可批量删除）
+function isSelectableRow(row: CategoryRow) {
+  return row.name !== 'default' && row.total === 0
+}
+
+function onBatchCommand(cmd: string) {
+  if (cmd === 'delete') return batchDelete()
+}
+
+async function batchDelete() {
+  const rows = selectedRows.value
+  if (!rows.length) return
+  try {
+    await ElMessageBox.confirm(
+      t('common.batchDeleteConfirmMsg', { n: rows.length }),
+      t('common.batchDelete'),
+      { confirmButtonText: t('common.delete'), cancelButtonText: t('common.cancel'), type: 'warning' }
+    )
+  } catch {
+    return
+  }
+  // 分类删除语义是逐个校验引用（default 与已引用不可删），循环调用单条删除
+  let ok = 0
+  for (const row of rows) {
+    try {
+      await categoryApi.remove(row.name)
+      ok++
+    } catch {
+      /* 单条失败不中断，继续删除其余 */
+    }
+  }
+  if (ok > 0) ElMessage.success(t('categories.batchDeletedOk', { n: ok }))
+  if (ok < rows.length) ElMessage.warning(t('common.batchDeleteFailed'))
+  tableRef.value?.clearSelection()
+  await load()
+}
 
 const dialogVisible = ref(false)
 const saving = ref(false)
@@ -314,6 +386,11 @@ onMounted(load)
 
 .unused-alert {
   margin-bottom: var(--space-3);
+}
+
+/* ── 批量操作下拉 ─────────────────────────────────────────────────── */
+.danger-dropdown-item {
+  color: var(--rose-400) !important;
 }
 
 .edit-hint {

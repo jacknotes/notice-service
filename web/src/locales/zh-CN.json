@@ -319,7 +319,8 @@
     "refTemplates": "模板",
     "refTasks": "任务",
     "unused": "未使用",
-    "usedCount": "{n} 处引用"
+    "usedCount": "{n} 处引用",
+    "batchDeletedOk": "已删除 {n} 个分类"
   },
   "tasks": {
     "subtitle": "配置定时 / Webhook 投递任务，绑定渠道与模板",
@@ -480,7 +481,22 @@
     "scanBind": "扫码绑定",
     "secretLabel": "密钥",
     "recoveryCodesLabel": "一次性备用码（仅本次显示）",
-    "copyAllRecovery": "复制全部备用码"
+    "copyAllRecovery": "复制全部备用码",
+    "batchResetPassword": "批量重置密码",
+    "batchForce2FAOn": "强制开启双因子认证",
+    "batchForce2FAOff": "强制关闭双因子认证",
+    "batchResetPasswordTitle": "批量重置密码",
+    "batchResetPasswordHint": "将选中 {n} 个用户的密码统一重置为新密码",
+    "batchNewPassword": "新密码",
+    "batchNewPasswordConfirm": "确认新密码",
+    "batchNewPasswordRequired": "请输入新密码",
+    "batchPasswordMismatch": "两次输入的密码不一致",
+    "batchResetPasswordOk": "密码已批量重置",
+    "batchForce2FAOnConfirmMsg": "强制开启选中 {n} 个用户的双因子认证？",
+    "batchForce2FAOffConfirmMsg": "强制关闭选中 {n} 个用户的双因子认证？",
+    "batchForce2FAOffOk": "双因子认证已批量关闭",
+    "batchForce2FAResultTitle": "批量开启双因子认证结果",
+    "batchForce2FAResultHint": "请逐个转交每个用户的密钥与备用码"
   },
   "settings": {
     "subtitle": "查看当前账号信息与会话",

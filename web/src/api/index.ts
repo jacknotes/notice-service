@@ -116,6 +116,11 @@ export const userApi = {
     client.put(`/users/${id}`, d).then((r) => r.data),
   remove: (id: number) => client.delete(`/users/${id}`).then((r) => r.data),
   batchRemove: (ids: number[]) => client.post('/users/batch-delete', { ids }).then((r) => r.data),
+  batchToggle: (ids: number[], enabled: boolean) => client.post('/users/batch-toggle', { ids, enabled }).then((r) => r.data),
+  batchResetPassword: (ids: number[], password: string) => client.post('/users/batch-reset-password', { ids, password }).then((r) => r.data),
+  batchForceEnable2FA: (ids: number[]): Promise<{ items: { id: number; username: string; secret: string; otpauth_url: string; recovery_codes: string[] }[] }> =>
+    client.post('/users/batch-2fa-enable', { ids }).then((r) => r.data),
+  batchForceDisable2FA: (ids: number[]) => client.post('/users/batch-2fa-disable', { ids }).then((r) => r.data),
   resetToken: (id: number) => client.post(`/users/${id}/reset-token`).then((r) => r.data),
   disable: (id: number) => client.post(`/users/${id}/disable`).then((r) => r.data),
   enable: (id: number) => client.post(`/users/${id}/enable`).then((r) => r.data),

@@ -22,7 +22,7 @@
           :disabled="!selectedRows.length"
           @command="onBatchCommand"
         >
-          <el-button type="primary" plain :disabled="!selectedRows.length">
+          <el-button type="primary" :disabled="!selectedRows.length">
             {{ t('common.batchOps') }}
             <el-icon class="el-icon--right"><ArrowDown /></el-icon>
           </el-button>
