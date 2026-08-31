@@ -5,6 +5,11 @@
         <h1 class="grad-text">{{ t('nav.audit') }}</h1>
         <p class="sub">{{ t('audit.subtitle', { days: RETENTION_DAYS }) }}</p>
       </div>
+      <div class="actions">
+        <el-button :icon="Refresh" :loading="loading" @click="load">
+          {{ t('common.refresh') }}
+        </el-button>
+      </div>
     </div>
 
     <div class="filters">
@@ -144,7 +149,7 @@
 
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
-import { Search } from '@element-plus/icons-vue'
+import { Refresh, Search } from '@element-plus/icons-vue'
 import { useI18n } from 'vue-i18n'
 import { auditApi } from '@/api'
 
@@ -330,6 +335,7 @@ async function load() {
   } catch (e: any) {
     items.value = []
     total.value = 0
+    ElMessage.error(e?.response?.data?.error || e?.message || t('audit.loadFailed'))
   } finally {
     loading.value = false
   }

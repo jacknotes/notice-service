@@ -380,6 +380,7 @@
     "allActions": "All actions",
     "recordCount": "{n} records",
     "emptyTable": "No audit records",
+    "loadFailed": "Failed to load audit records",
     "userCol": "User",
     "ipCol": "Source IP",
     "detailCol": "Detail",

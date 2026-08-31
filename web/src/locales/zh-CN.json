@@ -537,6 +537,7 @@
     "allActions": "全部操作",
     "recordCount": "{n} 条记录",
     "emptyTable": "暂无审计记录",
+    "loadFailed": "审计记录加载失败",
     "userCol": "用户",
     "ipCol": "来源 IP",
     "detailCol": "详情",
