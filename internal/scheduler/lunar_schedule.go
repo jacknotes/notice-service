@@ -11,14 +11,15 @@ const lunarMaxLookaheadYears = 8
 
 // LunarSchedule 实现 cron.Schedule：按农历规则计算下一个触发时间点。
 // robfig 每次触发后自动调用 Next，形成「执行一次 → 算下一次」的链。
+// Months/Days/JieQis 支持多个候选值（来自逗号列表/连字符区间），Next 遍历全部组合。
 type LunarSchedule struct {
-	Kind  string // "monthly" | "yearly" | "term"
-	Month int    // yearly 用：农历月（1-12，普通月；闰月不支持负月）
-	Day   int    // monthly/yearly 用：农历日（1-30）
-	JieQi string // term 用：节气名（如 "清明"）
-	Hour  int
+	Kind   string   // "monthly" | "yearly" | "term"
+	Months []int    // yearly 用：农历月（1-12，普通月；闰月不支持负月）
+	Days   []int    // monthly/yearly 用：农历日（1-30）
+	JieQis []string // term 用：节气名（如 "清明"）
+	Hour   int
 	Minute int
-	Loc   *time.Location
+	Loc    *time.Location
 }
 
 // Next 返回 after 之后的下一个农历触发时间点；扫描上限内找不到返回零值（不触发）。
@@ -44,20 +45,28 @@ func (s *LunarSchedule) candidatesForYear(year int) []time.Time {
 	var out []time.Time
 	switch s.Kind {
 	case "monthly":
-		// 农历每年 1-12 月（普通月；闰月不额外触发，避免歧义）
+		// 农历每年 1-12 月（普通月；闰月不额外触发，避免歧义）x 每个候选日
 		for m := 1; m <= 12; m++ {
-			if ts, ok := s.lunarDayInYear(year, m, s.Day); ok {
-				out = append(out, ts)
+			for _, d := range s.Days {
+				if ts, ok := s.lunarDayInYear(year, m, d); ok {
+					out = append(out, ts)
+				}
 			}
 		}
 	case "yearly":
-		if ts, ok := s.lunarDayInYear(year, s.Month, s.Day); ok {
-			out = append(out, ts)
+		for _, mo := range s.Months {
+			for _, d := range s.Days {
+				if ts, ok := s.lunarDayInYear(year, mo, d); ok {
+					out = append(out, ts)
+				}
+			}
 		}
 	case "term":
-		out = s.termCandidatesInYear(year, s.JieQi)
+		for _, jq := range s.JieQis {
+			out = append(out, s.termCandidatesInYear(year, jq)...)
+		}
 	}
-	// 升序排列（每年候选点天然按时间先后，仍排序保证稳定）
+	// 升序排列
 	for i := 1; i < len(out); i++ {
 		for j := i; j > 0 && out[j].Before(out[j-1]); j-- {
 			out[j], out[j-1] = out[j-1], out[j]

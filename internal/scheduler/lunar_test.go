@@ -3,6 +3,8 @@ package scheduler
 import (
 	"testing"
 	"time"
+
+	"github.com/6tail/lunar-go/calendar"
 )
 
 func mustParseLunar(t *testing.T, spec string) *LunarSchedule {
@@ -69,6 +71,92 @@ func TestLunarParserRejectsBadSpec(t *testing.T) {
 		"@lunar monthly 31 09:00",   // 日超出 30
 		"@lunar yearly 13 1 09:00",  // 月超出 12
 		"@lunar nonsense 09:00",     // 不支持的规则
+	} {
+		if _, err := parseLunarSchedule(bad, time.Local); err == nil {
+			t.Fatalf("bad spec %q should error", bad)
+		}
+	}
+}
+
+// TestLunarYearlyMultiDayList: 农历十一月十七、十八（列表）在 2026 年应为阳历 12/25、12/26。
+func TestLunarYearlyMultiDayList(t *testing.T) {
+	s := mustParseLunar(t, "@lunar yearly 11 17,18 09:00")
+	// 2026 农历十一月十七/十八 → 阳历（用 lunar-go 实际验证）
+	solar17 := calendar.NewLunarFromYmd(2026, 11, 17).GetSolar()
+	solar18 := calendar.NewLunarFromYmd(2026, 11, 18).GetSolar()
+	after := time.Date(2026, 12, 1, 0, 0, 0, 0, time.Local)
+	next1 := s.Next(after)
+	want1 := time.Date(solar17.GetYear(), time.Month(solar17.GetMonth()), solar17.GetDay(), 9, 0, 0, 0, time.Local)
+	if !next1.Equal(want1) {
+		t.Fatalf("list next1 = %v, want %v", next1, want1)
+	}
+	next2 := s.Next(next1)
+	want2 := time.Date(solar18.GetYear(), time.Month(solar18.GetMonth()), solar18.GetDay(), 9, 0, 0, 0, time.Local)
+	if !next2.Equal(want2) {
+		t.Fatalf("list next2 = %v, want %v", next2, want2)
+	}
+}
+
+// TestLunarYearlyDayRange: 农历十一月 17-19（区间）在 2026 年应覆盖 3 天。
+func TestLunarYearlyDayRange(t *testing.T) {
+	s := mustParseLunar(t, "@lunar yearly 11 17-19 09:00")
+	if len(s.Days) != 3 || s.Days[0] != 17 || s.Days[2] != 19 {
+		t.Fatalf("days = %v, want [17 18 19]", s.Days)
+	}
+}
+
+// TestLunarMonthlyMultiDayList: 每月初一、十五（列表）2026-02-10 之后应先初一后十五。
+func TestLunarMonthlyMultiDayList(t *testing.T) {
+	s := mustParseLunar(t, "@lunar monthly 1,15 09:00")
+	// 2026 农历正月初一 = 2026-02-17，正月十五 = 2026-03-03（约）
+	after := time.Date(2026, 2, 10, 0, 0, 0, 0, time.Local)
+	next := s.Next(after)
+	solar1 := calendar.NewLunarFromYmd(2026, 1, 1).GetSolar()
+	want := time.Date(solar1.GetYear(), time.Month(solar1.GetMonth()), solar1.GetDay(), 9, 0, 0, 0, time.Local)
+	if !next.Equal(want) {
+		t.Fatalf("monthly list next = %v, want %v", next, want)
+	}
+}
+
+// TestLunarTermMultiList: 节气立春、清明（列表）2026-01-01 之后应先立春后清明。
+func TestLunarTermMultiList(t *testing.T) {
+	s := mustParseLunar(t, "@lunar term 立春,清明 09:00")
+	after := time.Date(2026, 1, 1, 0, 0, 0, 0, time.Local)
+	next := s.Next(after)
+	if next.Month() != time.February {
+		t.Fatalf("term list first should be 立春(2月), got %v", next)
+	}
+	next2 := s.Next(next)
+	if next2.Month() != time.April {
+		t.Fatalf("term list second should be 清明(4月), got %v", next2)
+	}
+}
+
+// TestLunarParserAcceptsListRange: 合法列表/区间应解析成功。
+func TestLunarParserAcceptsListRange(t *testing.T) {
+	good := []string{
+		"@lunar monthly 1,15 09:00",
+		"@lunar monthly 17-19 09:00",
+		"@lunar yearly 1,5,9 9 09:00",
+		"@lunar yearly 11 17,18 09:00",
+		"@lunar yearly 11 17-19 09:00",
+		"@lunar term 立春,清明 09:00",
+	}
+	for _, spec := range good {
+		if _, err := parseLunarSchedule(spec, time.Local); err != nil {
+			t.Fatalf("good spec %q should parse, got %v", spec, err)
+		}
+	}
+}
+
+// TestLunarParserRejectsBadListRange: 越界/非法列表区间应报错。
+func TestLunarParserRejectsBadListRange(t *testing.T) {
+	for _, bad := range []string{
+		"@lunar monthly 31 09:00",    // 日 31 超出 30
+		"@lunar yearly 13 1 09:00",   // 月 13 超出 12
+		"@lunar yearly 11 17-19-21 09:00", // 非法区间
+		"@lunar yearly 11 20-15 09:00", // 区间倒序
+		"@lunar monthly 1,,15 09:00", // 空项
 	} {
 		if _, err := parseLunarSchedule(bad, time.Local); err == nil {
 			t.Fatalf("bad spec %q should error", bad)
