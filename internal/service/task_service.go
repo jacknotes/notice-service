@@ -13,6 +13,7 @@ import (
 	"notice-service/internal/model"
 	"notice-service/internal/render"
 	"notice-service/internal/repository"
+	"notice-service/internal/scheduler"
 )
 
 // Scheduler 是任务服务对调度器的依赖（由 scheduler 包实现，避免循环依赖）。
@@ -365,6 +366,12 @@ func (s *TaskService) validate(t *model.Task) error {
 	}
 	if t.TriggerType == "cron" && strings.TrimSpace(t.CronExpr) == "" {
 		return errors.New("cron 任务必须填写 cron 表达式")
+	}
+	if t.TriggerType == "cron" && strings.HasPrefix(strings.TrimSpace(t.CronExpr), "@lunar") {
+		// 农历表达式语法预检：非法表达式在保存时即报错，而非等调度器注册失败
+		if _, err := scheduler.NewLunarParser().Parse(t.CronExpr); err != nil {
+			return errors.New("农历表达式不合法: " + err.Error())
+		}
 	}
 	// 接收地址只对邮箱渠道有实际意义：webhook/IM 渠道发送到机器人/token 绑定的目标。
 	// 只要选中的渠道里有任一邮箱渠道、或任一渠道无法校验（安全默认），就必须填写接收地址。

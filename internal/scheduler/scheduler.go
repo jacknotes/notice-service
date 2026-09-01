@@ -24,12 +24,16 @@ type Scheduler struct {
 
 // New 创建调度器。exec 为任务执行回调；repo 非空且 instanceID 非空时启用租约锁，
 // instanceID 标识本实例（ReleaseLease 的所有权校验依赖它，避免误释放其他实例的锁）。
+// 使用农历感知的解析器：标准 5 字段 cron 与 @lunar 农历表达式均可注册。
 func New(exec ExecFunc, repo *repository.TaskRepo, instanceID string) *Scheduler {
 	s := &Scheduler{
-		cron: cron.New(cron.WithChain(
-			cron.SkipIfStillRunning(cron.DefaultLogger),
-			cron.Recover(cron.DefaultLogger),
-		)),
+		cron: cron.New(
+			cron.WithParser(NewLunarParser()),
+			cron.WithChain(
+				cron.SkipIfStillRunning(cron.DefaultLogger),
+				cron.Recover(cron.DefaultLogger),
+			),
+		),
 		exec: exec,
 	}
 	if repo != nil && instanceID != "" {

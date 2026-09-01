@@ -278,6 +278,14 @@ func main() {
 
 	log.Printf("notice-service listening on :%s (build %s) (instance %s)", cfg.Port, buildVersion, cfg.InstanceID)
 	if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		// 启动失败（典型：端口被占用 bind error）：心跳 goroutine 已在 bind 前上报过
+		// 本实例，此处必须清理，否则 DB 遗留僵尸心跳 → 前端多显示一个离线节点。
+		// log.Fatal 会跳过上方 defer（含心跳清理），故先显式取消心跳并删除本实例行。
+		hbCancel()
+		hbWG.Wait()
+		if err2 := hbRepo.Remove(cfg.InstanceID); err2 != nil {
+			log.Printf("heartbeat: cleanup on startup failure: %v", err2)
+		}
 		log.Fatal(err)
 	}
 }
