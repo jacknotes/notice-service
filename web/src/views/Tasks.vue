@@ -77,13 +77,13 @@
           </template>
         </el-table-column>
 
-        <el-table-column prop="name" :label="t('common.name')" min-width="150" sortable="custom" show-overflow-tooltip>
+        <el-table-column prop="name" :label="t('common.name')" min-width="130" sortable="custom" show-overflow-tooltip>
           <template #default="{ row }">
             <span class="task-name">{{ row.name }}</span>
           </template>
         </el-table-column>
 
-        <el-table-column :label="t('tasks.trigger')" width="200" show-overflow-tooltip>
+        <el-table-column :label="t('tasks.trigger')" min-width="160" show-overflow-tooltip>
           <template #default="{ row }">
             <el-tag
               v-if="row.trigger_type === 'api'"
@@ -99,7 +99,7 @@
           </template>
         </el-table-column>
 
-        <el-table-column :label="t('tasks.channels')" min-width="170" show-overflow-tooltip>
+        <el-table-column :label="t('tasks.channels')" min-width="130" show-overflow-tooltip>
           <template #default="{ row }">
             <span class="channels-cell">{{ channelNames(row) || '—' }}</span>
           </template>
@@ -111,7 +111,7 @@
           </template>
         </el-table-column>
 
-        <el-table-column :label="t('tasks.receivers')" min-width="200" show-overflow-tooltip>
+        <el-table-column :label="t('tasks.receivers')" min-width="140" show-overflow-tooltip>
           <template #default="{ row }">
             <span class="mono receivers-cell">{{ (row.receivers || []).join(', ') || '—' }}</span>
           </template>
@@ -131,7 +131,7 @@
           </template>
         </el-table-column>
 
-        <el-table-column :label="t('common.action')" width="340" align="center" fixed="right">
+        <el-table-column :label="t('common.action')" width="320" align="center" fixed="right">
           <template #default="{ row }">
             <el-button
               v-if="isAdmin && row.trigger_type === 'api'"
