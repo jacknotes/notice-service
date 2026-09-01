@@ -113,14 +113,15 @@
           </template>
         </el-table-column>
 
-        <el-table-column :label="t('common.action')" width="190" align="center" fixed="right">
+        <el-table-column :label="t('common.action')" width="230" align="center" fixed="right">
           <template #default="{ row }">
+            <el-button link type="primary" size="small" @click="previewTemplate(row)">{{ t('templates.previewAction') }}</el-button>
             <template v-if="isAdmin">
               <el-button link type="primary" size="small" @click="openEdit(row)">{{ t('common.edit') }}</el-button>
               <el-button link type="success" size="small" @click="duplicateTemplate(row)">{{ t('templates.duplicateAction') }}</el-button>
               <el-button link type="danger" size="small" @click="removeTemplate(row)">{{ t('common.delete') }}</el-button>
             </template>
-            <span v-else class="text-muted">—</span>
+            <span v-if="!isAdmin" class="text-muted"></span>
           </template>
         </el-table-column>
       </el-table>
@@ -260,6 +261,35 @@
           <span class="footer-grow"></span>
           <el-button @click="batchCategoryVisible = false">{{ t('common.cancel') }}</el-button>
           <el-button type="primary" :loading="batching" @click="doBatchCategory">{{ t('common.confirm') }}</el-button>
+        </div>
+      </template>
+    </el-dialog>
+
+    <!-- ── 只读预览 dialog ─────────────────────────────────────────── -->
+    <el-dialog
+      v-model="readonlyPreviewVisible"
+      :title="t('templates.previewTitle')"
+      width="680px"
+      top="6vh"
+      :close-on-click-modal="false"
+      destroy-on-close
+    >
+      <div v-if="readonlyPreview" class="readonly-preview">
+        <div class="preview-block">
+          <span class="preview-label">{{ t('tasks.subject') }}</span>
+          <p class="readonly-subject">{{ readonlyPreview.subject || '—' }}</p>
+        </div>
+        <div class="preview-block">
+          <span class="preview-label">{{ t('tasks.content') }}</span>
+          <div class="preview-md">
+            <MarkdownPreview :content="readonlyPreview.content" />
+          </div>
+        </div>
+      </div>
+      <template #footer>
+        <div class="dialog-footer">
+          <span class="footer-grow"></span>
+          <el-button @click="readonlyPreviewVisible = false">{{ t('common.close') }}</el-button>
         </div>
       </template>
     </el-dialog>
@@ -497,6 +527,15 @@ async function useServerPreview() {
   } finally {
     previewing.value = false
   }
+}
+
+/* ── 只读预览（操作列按钮，所有登录用户可用） ─────────────────────── */
+const readonlyPreviewVisible = ref(false)
+const readonlyPreview = ref<{ subject: string; content: string } | null>(null)
+
+async function previewTemplate(row: TemplateRow) {
+  readonlyPreview.value = { subject: row.subject, content: row.content_md }
+  readonlyPreviewVisible.value = true
 }
 
 /* ── Delete ────────────────────────────────────────────────────────── */
@@ -774,6 +813,36 @@ onMounted(() => {
   color: var(--text-faint);
   font-size: var(--text-sm);
   text-align: center;
+}
+
+/* ── 只读预览（操作列按钮） ──────────────────────────────────────── */
+.readonly-preview {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+.readonly-preview .preview-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+.readonly-preview .readonly-subject {
+  margin: 6px 0 0;
+  color: var(--text-primary);
+  font-size: var(--text-md);
+  font-weight: 600;
+  word-break: break-word;
+}
+.readonly-preview .preview-md {
+  margin-top: 6px;
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: rgba(148, 163, 184, 0.05);
+  max-height: 48vh;
+  overflow: auto;
 }
 
 .dialog-footer {

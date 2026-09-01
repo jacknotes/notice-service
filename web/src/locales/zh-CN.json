@@ -46,7 +46,7 @@
     "batchChangeChannel": "变更投递渠道",
     "batchChangeReceivers": "变更接收地址",
     "batchEnable": "启用",
-    "batchDisable": "停用",
+    "batchDisable": "禁用",
     "selectCategory": "选择新分类",
     "selectChannel": "选择投递渠道",
     "inputReceivers": "接收地址（每行一个）",
@@ -61,7 +61,7 @@
     "batchReceiversOk": "接收地址已批量变更",
     "batchToggleTitle": "批量启停",
     "batchEnableConfirmMsg": "启用选中的 {n} 项？",
-    "batchDisableConfirmMsg": "停用选中的 {n} 项？",
+    "batchDisableConfirmMsg": "禁用选中的 {n} 项？",
     "batchToggleOk": "状态已批量更新",
     "channelSelectPlaceholder": "选择渠道（可多选）",
     "receiversPlaceholder": "每行一个接收地址"
@@ -289,7 +289,9 @@
     "loadFailed": "模板列表加载失败",
     "enabledOk": "模板已启用",
     "disabledOk": "模板已停用",
-    "toggleFailed": "模板状态更新失败"
+    "toggleFailed": "模板状态更新失败",
+    "previewTitle": "模板预览",
+    "previewAction": "预览"
   },
   "categories": {
     "subtitle": "维护共享分类池：渠道、模板、任务统一引用，在一个地方创建",
@@ -399,7 +401,14 @@
     "deleteConfirmTitle": "删除任务",
     "deleteConfirmMsg": "确定删除任务「{name}」吗？删除后不可恢复。",
     "batchDeletedOk": "已删除 {n} 个任务",
-    "apiKeyCopied": "API Key 已复制"
+    "apiKeyCopied": "API Key 已复制",
+    "lunarQuick": "农历快捷",
+    "lunarFirst": "每月初一 9点",
+    "lunarFifteen": "每月十五 9点",
+    "lunarSpringFestival": "正月初一 9点",
+    "lunarQingming": "清明 9点",
+    "lunarMidAutumn": "中秋 9点",
+    "lunarHint": "支持农历 cron：{'@'}lunar monthly <日> <HH:MM>（每月）、{'@'}lunar yearly <月> <日> <HH:MM>（每年）、{'@'}lunar term <节气> <HH:MM>（节气）"
   },
   "users": {
     "subtitle": "管理系统账号：创建普通用户与管理员，分配登录权限",

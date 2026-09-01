@@ -244,6 +244,19 @@
 
         <el-form-item v-if="form.trigger_type === 'cron'" :label="t('tasks.cronExpr')" prop="cron_expr">
           <el-input v-model="form.cron_expr" :placeholder="t('tasks.cronExprPlaceholder')" class="mono" />
+          <div class="lunar-row">
+            <span class="lunar-label">{{ t('tasks.lunarQuick') }}</span>
+            <el-button
+              v-for="p in lunarPresets"
+              :key="p.expr"
+              size="small"
+              plain
+              @click="form.cron_expr = p.expr"
+            >
+              {{ t(p.labelKey) }}
+            </el-button>
+          </div>
+          <div class="field-hint mono">{{ t('tasks.lunarHint') }}</div>
         </el-form-item>
 
         <el-form-item v-if="showReceivers" :label="t('tasks.receivers')" prop="receivers">
@@ -637,6 +650,16 @@ const rules = computed<FormRules>(() => ({
     },
   ],
 }))
+
+/* ── 农历 cron 快捷选择 ────────────────────────────────────────────
+   点击按钮把对应 @lunar 表达式填入 cron_expr（由后端 lunar parser 解析）。 */
+const lunarPresets = [
+  { expr: '@lunar monthly 1 09:00', labelKey: 'tasks.lunarFirst' },
+  { expr: '@lunar monthly 15 09:00', labelKey: 'tasks.lunarFifteen' },
+  { expr: '@lunar yearly 1 1 09:00', labelKey: 'tasks.lunarSpringFestival' },
+  { expr: '@lunar term 清明 09:00', labelKey: 'tasks.lunarQingming' },
+  { expr: '@lunar term 中秋 09:00', labelKey: 'tasks.lunarMidAutumn' },
+]
 
 /* ── Receiver field: only meaningful for the email channel ────────────
    渠道类型 → 显示名 key（与 Channels.vue 的 channels.type.* 保持一致）。 */
@@ -1282,6 +1305,24 @@ async function doBatchReceivers() {
   margin-top: 4px;
   color: var(--text-faint);
   font-size: 11px;
+}
+
+/* ── 农历 cron 快捷选择 ──────────────────────────────────────────── */
+.lunar-row {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+.lunar-label {
+  color: var(--text-muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
+.lunar-row .el-button {
+  margin: 0;
 }
 
 .receiver-note {

@@ -289,7 +289,9 @@
     "loadFailed": "Failed to load templates",
     "enabledOk": "Template enabled",
     "disabledOk": "Template disabled",
-    "toggleFailed": "Failed to update template status"
+    "toggleFailed": "Failed to update template status",
+    "previewTitle": "Template preview",
+    "previewAction": "Preview"
   },
   "categories": {
     "subtitle": "Manage the shared category pool used by channels, templates and tasks",
@@ -399,7 +401,14 @@
     "deleteConfirmTitle": "Delete Task",
     "deleteConfirmMsg": "Delete task \"{name}\"? This cannot be undone.",
     "batchDeletedOk": "Deleted {n} tasks",
-    "apiKeyCopied": "API Key copied"
+    "apiKeyCopied": "API Key copied",
+    "lunarQuick": "Lunar",
+    "lunarFirst": "1st 09:00",
+    "lunarFifteen": "15th 09:00",
+    "lunarSpringFestival": "Spring Fest 09:00",
+    "lunarQingming": "Qingming 09:00",
+    "lunarMidAutumn": "Mid-Autumn 09:00",
+    "lunarHint": "Lunar cron: {'@'}lunar monthly <day> <HH:MM>, {'@'}lunar yearly <month> <day> <HH:MM>, {'@'}lunar term <jieqi> <HH:MM>"
   },
   "audit": {
     "subtitle": "Track admin operations: who did what and when (retained for {days} days)",
