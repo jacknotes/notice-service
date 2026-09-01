@@ -163,3 +163,83 @@ func TestLunarParserRejectsBadListRange(t *testing.T) {
 		}
 	}
 }
+
+// TestLunarYearlyLast除夕: @lunar yearly 12 last 09:00 应触发当年腊月最后一天（除夕）。
+// 2026 腊月最后一天 = 农历 2026-12-29（2026 腊月是小月）→ 用 lunar-go 验证。
+func TestLunarYearlyLastChuxi(t *testing.T) {
+	s := mustParseLunar(t, "@lunar yearly 12 last 09:00")
+	// 2026 腊月天数
+	dayCount := calendar.NewLunarYear(2026).GetMonth(12).GetDayCount()
+	solar := calendar.NewLunarFromYmd(2026, 12, dayCount).GetSolar()
+	after := time.Date(2026, 11, 1, 0, 0, 0, 0, time.Local)
+	next := s.Next(after)
+	want := time.Date(solar.GetYear(), time.Month(solar.GetMonth()), solar.GetDay(), 9, 0, 0, 0, time.Local)
+	if !next.Equal(want) {
+		t.Fatalf("yearly 12 last next = %v, want %v", next, want)
+	}
+}
+
+// TestLunarMonthlyLast: @lunar monthly last 09:00 每月最后一天。
+// 2026 农历正月最后一天 = 正月天数 30（2026 正月大月）→ 阳历 2026-03-19 前后。
+func TestLunarMonthlyLast(t *testing.T) {
+	s := mustParseLunar(t, "@lunar monthly last 09:00")
+	dayCount := calendar.NewLunarYear(2026).GetMonth(1).GetDayCount()
+	solar := calendar.NewLunarFromYmd(2026, 1, dayCount).GetSolar()
+	after := time.Date(2026, 1, 1, 0, 0, 0, 0, time.Local)
+	next := s.Next(after)
+	want := time.Date(solar.GetYear(), time.Month(solar.GetMonth()), solar.GetDay(), 9, 0, 0, 0, time.Local)
+	if !next.Equal(want) {
+		t.Fatalf("monthly last next = %v, want %v", next, want)
+	}
+}
+
+// TestLunarTermSpringFestival: @lunar term 春节 09:00 应识别为农历节日（正月初一）。
+func TestLunarTermSpringFestival(t *testing.T) {
+	s := mustParseLunar(t, "@lunar term 春节 09:00")
+	solar := calendar.NewLunarFromYmd(2026, 1, 1).GetSolar()
+	after := time.Date(2026, 1, 1, 0, 0, 0, 0, time.Local)
+	next := s.Next(after)
+	want := time.Date(solar.GetYear(), time.Month(solar.GetMonth()), solar.GetDay(), 9, 0, 0, 0, time.Local)
+	if !next.Equal(want) {
+		t.Fatalf("term 春节 next = %v, want %v", next, want)
+	}
+}
+
+// TestLunarTermMidAutumn: @lunar term 中秋节 09:00 应识别为八月十五。
+func TestLunarTermMidAutumn(t *testing.T) {
+	s := mustParseLunar(t, "@lunar term 中秋节 09:00")
+	solar := calendar.NewLunarFromYmd(2026, 8, 15).GetSolar()
+	after := time.Date(2026, 1, 1, 0, 0, 0, 0, time.Local)
+	next := s.Next(after)
+	want := time.Date(solar.GetYear(), time.Month(solar.GetMonth()), solar.GetDay(), 9, 0, 0, 0, time.Local)
+	if !next.Equal(want) {
+		t.Fatalf("term 中秋节 next = %v, want %v", next, want)
+	}
+}
+
+// TestLunarParserAcceptsLast: last 表达式应解析成功。
+func TestLunarParserAcceptsLast(t *testing.T) {
+	good := []string{
+		"@lunar yearly 12 last 09:00",
+		"@lunar monthly last 09:00",
+		"@lunar term 春节 09:00",
+		"@lunar term 除夕 09:00",
+		"@lunar term 立春,春节 09:00",
+	}
+	for _, spec := range good {
+		if _, err := parseLunarSchedule(spec, time.Local); err != nil {
+			t.Fatalf("good spec %q should parse, got %v", spec, err)
+		}
+	}
+}
+
+// TestLunarParserRejectsBadLast: 非法 last 用法应报错（月不能用 last）。
+func TestLunarParserRejectsBadLast(t *testing.T) {
+	for _, bad := range []string{
+		"@lunar yearly last 1 09:00", // 月字段不支持 last
+	} {
+		if _, err := parseLunarSchedule(bad, time.Local); err == nil {
+			t.Fatalf("bad spec %q should error", bad)
+		}
+	}
+}

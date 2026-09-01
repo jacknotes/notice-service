@@ -80,23 +80,53 @@ func (s *LunarSchedule) candidatesForYear(year int) []time.Time {
 func (s *LunarSchedule) lunarDayInYear(year, lunarMonth, lunarDay int) (time.Time, bool) {
 	ly := calendar.NewLunarYear(year)
 	lm := ly.GetMonth(lunarMonth)
-	if lm == nil || lunarDay > lm.GetDayCount() {
-		return time.Time{}, false // 该月不存在或该日不存在（如小月无三十）
+	if lm == nil {
+		return time.Time{}, false // 该月不存在（如无闰月）
+	}
+	// lunarDayLast = 该农历月最后一天（精确表达除夕等「月尾」场景）
+	if lunarDay == lunarDayLast {
+		lunarDay = lm.GetDayCount()
+	}
+	if lunarDay > lm.GetDayCount() {
+		return time.Time{}, false // 该日不存在（如小月无三十）
 	}
 	solar := calendar.NewLunarFromYmd(year, lunarMonth, lunarDay).GetSolar()
 	return time.Date(solar.GetYear(), time.Month(solar.GetMonth()), solar.GetDay(),
 		s.Hour, s.Minute, 0, 0, s.Loc), true
 }
 
-// termCandidatesInYear 返回阳历 year 年内匹配指定节气的触发点（HH:MM）。
-// 方法：从当年 1 月 1 日起逐日推进农历，收集匹配节气的日期。
-func (s *LunarSchedule) termCandidatesInYear(year int, jieqi string) []time.Time {
+// lunarFestivals 农历节日名 → 农历月/日（供 term 识别节日，如春节=正月初一）。
+// 与 lunar-go 的 FESTIVAL 表一致；value 中的 -1 表示该月最后一天（除夕=腊月最后一天）。
+var lunarFestivals = map[string][2]int{
+	"春节":   {1, 1},
+	"元宵节": {1, 15},
+	"龙头节": {2, 2},
+	"端午节": {5, 5},
+	"七夕":   {7, 7},
+	"中秋节": {8, 15},
+	"重阳节": {9, 9},
+	"腊八节": {12, 8},
+	"除夕":   {12, lunarDayLast},
+}
+
+// termCandidatesInYear 返回阳历 year 年内匹配指定节气或农历节日的触发点（HH:MM）。
+// 节气：从当年 1 月 1 日起逐日推进农历，匹配节气名。
+// 节日：直接按对应农历月/日计算（如春节=正月初一、除夕=腊月最后一天）。
+func (s *LunarSchedule) termCandidatesInYear(year int, name string) []time.Time {
 	var out []time.Time
+	// 先尝试按农历节日匹配
+	if md, ok := lunarFestivals[name]; ok {
+		if ts, ok := s.lunarDayInYear(year, md[0], md[1]); ok {
+			out = append(out, ts)
+		}
+		return out
+	}
+	// 否则按节气匹配
 	solar := calendar.NewSolarFromYmd(year, 1, 1)
 	// 一年最多 366 天；每年有 24 个节气，遍历整年足够覆盖目标节气
 	for i := 0; i < 370; i++ {
 		lun := solar.GetLunar()
-		if cur := lun.GetCurrentJieQi(); cur != nil && cur.GetName() == jieqi {
+		if cur := lun.GetCurrentJieQi(); cur != nil && cur.GetName() == name {
 			sy := solar.GetYear()
 			if sy == year {
 				out = append(out, time.Date(sy, time.Month(solar.GetMonth()), solar.GetDay(),
