@@ -37,3 +37,6 @@ dump*.sql
 
 # Brainstorm/visual-companion working dir
 .superpowers/
+
+# ZCode 会话工作目录（计划/临时文件，非项目代码）
+.zcode/
