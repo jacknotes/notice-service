@@ -237,10 +237,10 @@ func (r *TaskLogRepo) Query(f LogFilter) (total int, logs []*model.TaskLog, err 
 }
 
 // CountByDay 单条 GROUP BY 统计 [from,to) 内每天的总发送数与成功/失败数（仪表盘趋势用）。
-// 返回 key = "MM-DD"（与前端趋势 x 轴格式一致）。
+// 返回 key = "YYYY-MM-DD"（含年份，避免跨年查询时同月同日的数据被合并）。
 func (r *TaskLogRepo) CountByDay(from, to time.Time) (map[string]struct{ Total, Success, Failed int }, error) {
 	rows, err := r.db.Query(
-		`SELECT DATE_FORMAT(sent_at, '%m-%d') AS d, COUNT(*), COALESCE(SUM(status='success'),0), COALESCE(SUM(status='failed'),0)
+		`SELECT DATE_FORMAT(sent_at, '%Y-%m-%d') AS d, COUNT(*), COALESCE(SUM(status='success'),0), COALESCE(SUM(status='failed'),0)
 		 FROM task_logs WHERE sent_at >= ? AND sent_at < ?
 		 GROUP BY d ORDER BY d`,
 		from, to)

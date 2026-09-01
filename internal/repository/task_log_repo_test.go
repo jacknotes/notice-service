@@ -159,3 +159,40 @@ func TestTaskLogGetByIDCategory(t *testing.T) {
 		t.Fatalf("category = %q, want 工作", got.Category)
 	}
 }
+
+// TestTaskLogCountByDayCrossYear: CountByDay 跨年时按 YYYY-MM-DD 分组，
+// 同月同日不同年的数据不得合并（回归趋势图跨年 bug）。
+func TestTaskLogCountByDayCrossYear(t *testing.T) {
+	db := openTestDB(t)
+	r := NewTaskLogRepo(db)
+	uid := seedUser(t, db)
+	chID := seedChannel(t, db, uid)
+	tplID := seedTemplate(t, db, uid)
+	tkID := seedTask(t, db, uid, chID, tplID)
+
+	// 2025-12-31 与 2026-12-31（同月同日不同年）各插一条
+	mk := func(sent time.Time) {
+		l := &model.TaskLog{TaskID: tkID, ChannelID: chID, Status: "success", SentAt: sent}
+		if err := r.Create(l); err != nil {
+			t.Fatal(err)
+		}
+	}
+	mk(time.Date(2025, 12, 31, 10, 0, 0, 0, time.Local))
+	mk(time.Date(2026, 12, 31, 10, 0, 0, 0, time.Local))
+
+	from := time.Date(2025, 12, 30, 0, 0, 0, 0, time.Local)
+	to := time.Date(2027, 1, 1, 0, 0, 0, 0, time.Local)
+	byDay, err := r.CountByDay(from, to)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := byDay["2025-12-31"]; !ok {
+		t.Errorf("missing 2025-12-31 in keys: %v", byDay)
+	}
+	if _, ok := byDay["2026-12-31"]; !ok {
+		t.Errorf("missing 2026-12-31 in keys: %v", byDay)
+	}
+	if byDay["2025-12-31"].Total != 1 || byDay["2026-12-31"].Total != 1 {
+		t.Errorf("should not merge: 2025=%+v 2026=%+v", byDay["2025-12-31"], byDay["2026-12-31"])
+	}
+}

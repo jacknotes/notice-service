@@ -64,7 +64,7 @@ func (s *DashboardService) StatsRange(from, to time.Time) (*Stats, error) {
 	return &Stats{TodayTotal: total, TodaySuccess: ok, TodayFailed: fail, SuccessRate: rate, TaskCount: tasks, ChannelCount: chans}, nil
 }
 
-// TrendRange 区间内逐日发送趋势（含成功/失败）。
+// TrendRange 区间内逐日发送趋势（含成功/失败）。date 为完整 "YYYY-MM-DD"（跨年不混淆）。
 func (s *DashboardService) TrendRange(from, to time.Time) ([]TrendPoint, error) {
 	byDay, err := s.logRepo.CountByDay(from, to)
 	if err != nil {
@@ -72,7 +72,7 @@ func (s *DashboardService) TrendRange(from, to time.Time) ([]TrendPoint, error) 
 	}
 	out := []TrendPoint{}
 	for d := from; d.Before(to); d = d.AddDate(0, 0, 1) {
-		key := d.Format("01-02")
+		key := d.Format("2006-01-02")
 		v := byDay[key]
 		out = append(out, TrendPoint{Date: key, Total: v.Total, Success: v.Success, Failed: v.Failed})
 	}

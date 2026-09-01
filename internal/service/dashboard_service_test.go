@@ -91,3 +91,45 @@ func TestDashboardTrendRangeAndTop(t *testing.T) {
 		t.Fatal("channel stats should have at least 1 entry")
 	}
 }
+
+// TestDashboardTrendCrossYear: 跨年查询时趋势日期必须含年份，
+// 同月同日不同年的数据不得合并（回归 2025-08-28 与 2026-08-28 相同的问题）。
+func TestDashboardTrendCrossYear(t *testing.T) {
+	db := testDB(t)
+	s := NewDashboardService(db)
+
+	// 在 2025-12-31 与 2026-01-01 各插一条日志（跨年边界）
+	day2025 := time.Date(2025, 12, 31, 10, 0, 0, 0, time.Local)
+	day2026 := time.Date(2026, 1, 1, 10, 0, 0, 0, time.Local)
+	seedLogsForRange(t, db, day2025) // 3 条在 2025-12-31
+	seedLogsForRange(t, db, day2026) // 3 条在 2026-01-01
+
+	from := time.Date(2025, 12, 30, 0, 0, 0, 0, time.Local)
+	to := time.Date(2026, 1, 3, 0, 0, 0, 0, time.Local)
+	tr, err := s.TrendRange(from, to)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// 期望 4 个日期点：2025-12-30, 12-31, 2026-01-01, 01-02
+	if len(tr) != 4 {
+		t.Fatalf("trend points = %d want 4", len(tr))
+	}
+	byDate := map[string]TrendPoint{}
+	for _, p := range tr {
+		byDate[p.Date] = p
+	}
+	// 日期必须带年份
+	if _, ok := byDate["2025-12-31"]; !ok {
+		t.Fatalf("missing 2025-12-31, got %v", byDate)
+	}
+	if _, ok := byDate["2026-01-01"]; !ok {
+		t.Fatalf("missing 2026-01-01, got %v", byDate)
+	}
+	// 2025-12-31 有 3 条，2026-01-01 有 3 条，互不合并
+	if byDate["2025-12-31"].Total < 3 {
+		t.Errorf("2025-12-31 total = %d want >= 3", byDate["2025-12-31"].Total)
+	}
+	if byDate["2026-01-01"].Total < 3 {
+		t.Errorf("2026-01-01 total = %d want >= 3", byDate["2026-01-01"].Total)
+	}
+}

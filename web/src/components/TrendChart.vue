@@ -30,6 +30,22 @@ let chart: echarts.ECharts | null = null
 
 const hasData = computed(() => Array.isArray(props.data) && props.data.length > 0)
 
+// 判断趋势数据是否跨年：跨年时 x 轴显示完整 YYYY-MM-DD，同一年内显示紧凑 MM-DD
+const crossYear = computed(() => {
+  const d = props.data || []
+  if (d.length < 2) return false
+  const first = d[0]?.date?.slice(0, 4)
+  const last = d[d.length - 1]?.date?.slice(0, 4)
+  return !!first && !!last && first !== last
+})
+
+// x 轴标签：跨年完整显示，同年紧凑显示（去掉年份前缀）
+function formatAxisDate(val: string) {
+  if (!val) return val
+  if (crossYear.value) return val
+  return val.length >= 10 ? val.slice(5) : val // "YYYY-MM-DD" → "MM-DD"
+}
+
 function render() {
   const el = chartEl.value
   if (!el) return
@@ -67,7 +83,12 @@ function render() {
       data: data.map((d) => d.date),
       axisLine: { lineStyle: { color: 'rgba(148, 163, 184, 0.2)' } },
       axisTick: { show: false },
-      axisLabel: { color: '#64748b', fontSize: 12, margin: 12 },
+      axisLabel: {
+        color: '#64748b',
+        fontSize: 12,
+        margin: 12,
+        formatter: (val: string) => formatAxisDate(val),
+      },
     },
     yAxis: {
       type: 'value',
