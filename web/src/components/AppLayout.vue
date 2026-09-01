@@ -502,6 +502,14 @@ async function onLogout() {
   transition: opacity var(--dur-base) var(--ease-out),
               max-width var(--dur-base) var(--ease-out);
 }
+/* 版本号特殊：展开态不限制宽度、允许换行，保证长版本号完整显示；
+   折叠态仍收窄为图标栏（见下方 is-collapsed 规则）。 */
+.sidebar:not(.is-collapsed) .ver {
+  max-width: none;
+  white-space: normal;
+  word-break: break-all;
+  line-height: 1.6;
+}
 .sidebar.is-collapsed .brand-name,
 .sidebar.is-collapsed .status-pill .pill-label,
 .sidebar.is-collapsed .ver,

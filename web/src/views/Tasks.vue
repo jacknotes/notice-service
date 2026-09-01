@@ -47,6 +47,7 @@
       <el-select v-model="triggerFilter" class="filter-select" :placeholder="t('tasks.allTriggers')">
         <el-option :label="t('tasks.allTriggers')" value="" />
         <el-option :label="t('tasks.filterCron')" value="cron" />
+        <el-option :label="t('tasks.filterLunar')" value="lunar" />
         <el-option label="Webhook API" value="api" />
       </el-select>
       <el-select
@@ -76,13 +77,13 @@
           </template>
         </el-table-column>
 
-        <el-table-column prop="name" :label="t('common.name')" min-width="150" sortable="custom">
+        <el-table-column prop="name" :label="t('common.name')" min-width="150" sortable="custom" show-overflow-tooltip>
           <template #default="{ row }">
             <span class="task-name">{{ row.name }}</span>
           </template>
         </el-table-column>
 
-        <el-table-column :label="t('tasks.trigger')" width="170">
+        <el-table-column :label="t('tasks.trigger')" width="200" show-overflow-tooltip>
           <template #default="{ row }">
             <el-tag
               v-if="row.trigger_type === 'api'"
@@ -98,7 +99,7 @@
           </template>
         </el-table-column>
 
-        <el-table-column :label="t('tasks.channels')" min-width="170">
+        <el-table-column :label="t('tasks.channels')" min-width="170" show-overflow-tooltip>
           <template #default="{ row }">
             <span class="channels-cell">{{ channelNames(row) || '—' }}</span>
           </template>
@@ -562,11 +563,14 @@ const categoryFilter = ref<string>('')
 // 共享分类池（渠道/模板/任务统一引用）：只在「分类管理」一处创建
 const categories = ref<{ id: number; name: string }[]>([])
 
-// 按任务名称、或绑定的渠道 / 模板名称 / 触发方式 / 分类做客户端过滤
+// 按任务名称、或绑定的渠道 / 模板名称 / 触发方式 / 分类 / cron 表达式做客户端过滤
 const filteredTasks = computed<TaskRow[]>(() => {
   const kw = keyword.value.trim().toLowerCase()
   return tasks.value.filter((t) => {
-    if (triggerFilter.value && t.trigger_type !== triggerFilter.value) return false
+    const isLunar = (t.cron_expr || '').trim().startsWith('@lunar')
+    if (triggerFilter.value === 'lunar' && !isLunar) return false
+    if (triggerFilter.value === 'cron' && isLunar) return false
+    if (triggerFilter.value === 'api' && t.trigger_type !== 'api') return false
     if (categoryFilter.value && (t.category || 'default') !== categoryFilter.value) return false
     if (!kw) return true
     const ids = t.channel_ids?.length ? t.channel_ids : [t.channel_id]
@@ -575,7 +579,8 @@ const filteredTasks = computed<TaskRow[]>(() => {
     return (
       (t.name || '').toLowerCase().includes(kw) ||
       chName.toLowerCase().includes(kw) ||
-      tplName.toLowerCase().includes(kw)
+      tplName.toLowerCase().includes(kw) ||
+      (t.cron_expr || '').toLowerCase().includes(kw)
     )
   })
 })
@@ -785,6 +790,11 @@ function highlightById(id: number) {
   nextTick(() => {
     tableRef.value?.setCurrentRow(row)
     flashRowId.value = id
+    // 滚动到可视区中间：行很多时目标行可能在页面底部/顶部，居中才可见
+    nextTick(() => {
+      const el = document.querySelector('.el-table .flash-row')
+      el?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+    })
     // 动画约 0.9s（闪烁两次），结束后清除 class 恢复正常显示
     window.setTimeout(() => {
       flashRowId.value = null

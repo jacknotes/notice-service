@@ -408,7 +408,8 @@
     "lunarSpringFestival": "Spring Fest 09:00",
     "lunarQingming": "Qingming 09:00",
     "lunarMidAutumn": "Mid-Autumn 09:00",
-    "lunarHint": "Lunar cron: {'@'}lunar monthly <day> <HH:MM>, {'@'}lunar yearly <month> <day> <HH:MM>, {'@'}lunar term <jieqi> <HH:MM>"
+    "lunarHint": "Lunar cron: {'@'}lunar monthly <day> <HH:MM>, {'@'}lunar yearly <month> <day> <HH:MM>, {'@'}lunar term <jieqi> <HH:MM>",
+    "filterLunar": "Lunar"
   },
   "audit": {
     "subtitle": "Track admin operations: who did what and when (retained for {days} days)",

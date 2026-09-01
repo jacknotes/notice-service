@@ -71,7 +71,7 @@
           </template>
         </el-table-column>
 
-        <el-table-column prop="name" :label="t('common.name')" min-width="160" sortable="custom">
+        <el-table-column prop="name" :label="t('common.name')" min-width="160" sortable="custom" show-overflow-tooltip>
           <template #default="{ row }">
             <span class="ch-name">{{ row.name }}</span>
           </template>
@@ -432,6 +432,11 @@ function highlightById(id: number) {
   nextTick(() => {
     tableRef.value?.setCurrentRow(row)
     flashRowId.value = id
+    // 滚动到可视区中间：行很多时目标行可能在页面底部/顶部，居中才可见
+    nextTick(() => {
+      const el = document.querySelector('.el-table .flash-row')
+      el?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+    })
     // 动画约 0.9s（闪烁两次），结束后清除 class 恢复正常显示
     window.setTimeout(() => {
       flashRowId.value = null

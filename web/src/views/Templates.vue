@@ -68,7 +68,7 @@
           </template>
         </el-table-column>
 
-        <el-table-column prop="name" :label="t('common.name')" min-width="170" sortable="custom">
+        <el-table-column prop="name" :label="t('common.name')" min-width="170" sortable="custom" show-overflow-tooltip>
           <template #default="{ row }">
             <span class="tpl-name">{{ row.name }}</span>
           </template>

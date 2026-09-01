@@ -62,7 +62,7 @@
           </template>
         </el-table-column>
 
-        <el-table-column :label="t('common.name')" min-width="180" sortable="custom" prop="name">
+        <el-table-column :label="t('common.name')" min-width="180" sortable="custom" prop="name" show-overflow-tooltip>
           <template #default="{ row }">
             <span class="cat-name">{{ row.name }}</span>
             <el-tag v-if="row.name === 'default'" effect="plain" size="small" class="default-tag">
@@ -71,7 +71,7 @@
           </template>
         </el-table-column>
 
-        <el-table-column :label="t('categories.usage')" min-width="220">
+        <el-table-column :label="t('categories.usage')" min-width="220" show-overflow-tooltip>
           <template #default="{ row }">
             <div v-if="row.total" class="usage-chips">
               <el-tag v-if="row.channels" size="small" effect="plain" class="usage-chip ch">

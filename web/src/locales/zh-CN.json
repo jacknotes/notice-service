@@ -408,7 +408,8 @@
     "lunarSpringFestival": "正月初一 9点",
     "lunarQingming": "清明 9点",
     "lunarMidAutumn": "中秋 9点",
-    "lunarHint": "支持农历 cron：{'@'}lunar monthly <日> <HH:MM>（每月）、{'@'}lunar yearly <月> <日> <HH:MM>（每年）、{'@'}lunar term <节气> <HH:MM>（节气）"
+    "lunarHint": "支持农历 cron：{'@'}lunar monthly <日> <HH:MM>（每月）、{'@'}lunar yearly <月> <日> <HH:MM>（每年）、{'@'}lunar term <节气> <HH:MM>（节气）",
+    "filterLunar": "农历"
   },
   "users": {
     "subtitle": "管理系统账号：创建普通用户与管理员，分配登录权限",
