@@ -9,8 +9,7 @@ import (
 )
 
 // createBatchUsers 创建 n 个普通用户，返回 id 列表。
-func createBatchUsers(t *testing.T, r *gin.Engine, adminTok string, prefix string, n int) []int64 {
-	t.Helper()
+func createBatchUsers(t *testing.T, r *gin.Engine, adminTok string, prefix string, n int) []int64 {	t.Helper()
 	var ids []int64
 	for i := 0; i < n; i++ {
 		name := prefix + "_" + num(int64(i))
@@ -180,4 +179,38 @@ func TestUserBatch2FAByNormalAdmin(t *testing.T) {
 	if w := authReq(t, r, opTok, "POST", "/api/users/batch-toggle", `{"ids":[`+num(adminID)+`],"enabled":false}`); w.Code != 400 {
 		t.Fatalf("normal admin disable builtin admin = %d, want 400 body=%s", w.Code, w.Body.String())
 	}
+}
+
+// TestUserRecreateAfterDelete: 删除用户后可用同名重建（username 唯一约束与软删除解耦）。
+func TestUserRecreateAfterDelete(t *testing.T) {
+	r := testRouter(t)
+	adminTok := login(t, r)
+	name := "recreate_me"
+
+	// 首次创建 → 200
+	w := authReq(t, r, adminTok, "POST", "/api/users", `{"username":"`+name+`","password":"TestPass123!","role":"user"}`)
+	if w.Code != 200 {
+		t.Fatalf("create = %d body=%s", w.Code, w.Body.String())
+	}
+	uid := int64(mustJSON(t, w)["id"].(float64))
+	t.Cleanup(func() { testDB(t).Exec("DELETE FROM users WHERE id=?", uid) })
+
+	// 删除 → 200
+	if w := authReq(t, r, adminTok, "DELETE", "/api/users/"+num(uid), ""); w.Code != 200 {
+		t.Fatalf("delete = %d body=%s", w.Code, w.Body.String())
+	}
+
+	// 同名重建 → 200（此前 1062 报「用户名已存在」）
+	w2 := authReq(t, r, adminTok, "POST", "/api/users", `{"username":"`+name+`","password":"TestPass123!","role":"user"}`)
+	if w2.Code != 200 {
+		t.Fatalf("recreate same name = %d body=%s, want 200", w2.Code, w2.Body.String())
+	}
+	uid2 := int64(mustJSON(t, w2)["id"].(float64))
+	t.Cleanup(func() { testDB(t).Exec("DELETE FROM users WHERE id=?", uid2) })
+	if uid2 == uid {
+		t.Fatal("recreated user should have a new id")
+	}
+
+	// 新用户可登录
+	_ = loginAs(t, r, name, "TestPass123!")
 }

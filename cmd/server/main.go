@@ -13,6 +13,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -43,7 +44,55 @@ var buildVersion = "dev"
 // heartbeatInterval 实例心跳上报间隔（「信号在线」多节点健康）。
 const heartbeatInterval = 5 * time.Second
 
+// usageText 程序用法说明（--help 时打印）。
+const usageText = `Usage: notice-service [options] [command]
+
+Options:
+  --config <path>   配置文件路径（默认 /etc/notice-service/config.yml）
+  -h, --help        显示本帮助并退出
+  -v, --version     显示构建版本并退出
+
+Commands:
+  reset-password    离线重置指定用户密码（并清除其双因子认证）：
+                    notice-service reset-password --username <name> --new-password <pw>
+`
+
+// handleCLIArgs 处理纯 CLI 参数（--help/-h/--version/-v/未知参数）。
+// 返回 (exitCode, handled)：handled=true 表示已处理并应退出（不启动服务）；
+// handled=false 表示是正常启动参数（无参数 / --config / reset-password），继续往下走。
+// 必须在任何副作用（加载配置/连库/监听端口/注册心跳）之前调用。
+func handleCLIArgs(args []string, stdout, stderr io.Writer) (int, bool) {
+	if len(args) == 0 {
+		return 0, false // 无参数 → 正常启动
+	}
+	first := args[0]
+	switch first {
+	case "-h", "--help":
+		fmt.Fprint(stdout, usageText)
+		return 0, true
+	case "-v", "--version":
+		fmt.Fprintf(stdout, "notice-service %s\n", buildVersion)
+		return 0, true
+	case "reset-password", "--config":
+		return 0, false // 由后续逻辑处理
+	}
+	if strings.HasPrefix(first, "--config=") {
+		return 0, false
+	}
+	// 未知参数：报错并提示用法，避免误启动完整服务
+	fmt.Fprintf(stderr, "未知参数: %s\n", first)
+	fmt.Fprint(stderr, usageText)
+	return 2, true
+}
+
 func main() {
+	// 纯 CLI 参数（--help/-h/--version/-v）在任何副作用（加载配置/连库/监听）之前处理：
+	// 避免 --help 误触发完整启动流程——连库、注册心跳、监听端口后 bind 失败退出，
+	// 却在 DB 遗留僵尸心跳节点（前端多显示一个离线节点）。未知参数同样提前报错退出。
+	if code, handled := handleCLIArgs(os.Args[1:], os.Stdout, os.Stderr); handled {
+		os.Exit(code)
+	}
+
 	cfg := config.Load()
 
 	// Gin 模式：GIN_MODE 环境变量优先（debug/release/test），默认 release。
