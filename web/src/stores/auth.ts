@@ -1,18 +1,16 @@
 import { defineStore } from 'pinia'
 import { authApi, type AuthResponse, type LoginResponse, type AuthUser } from '@/api'
+import { clearSession, getToken, getUser, initSession, saveSession } from '@/utils/session'
 
-function loadUser(): AuthUser | null {
-  try {
-    return JSON.parse(localStorage.getItem('user') || 'null')
-  } catch {
-    return null
-  }
-}
+// 会话凭据的读写统一走 utils/session：token/user 存 localStorage（同窗口多标签页
+// 共享登录），并用 sessionStorage 记录窗口会话 ID——关闭单个标签页不退出，
+// 关闭整个浏览器窗口后再打开需重新登录。
+initSession()
 
 export const useAuthStore = defineStore('auth', {
   state: () => ({
-    token: localStorage.getItem('token') || '',
-    user: loadUser() as AuthUser | null,
+    token: getToken(),
+    user: getUser() as AuthUser | null,
   }),
   getters: { isLoggedIn: (s) => !!s.token },
   actions: {
@@ -24,14 +22,12 @@ export const useAuthStore = defineStore('auth', {
     completeLogin(data: AuthResponse) {
       this.token = data.token
       this.user = data.user
-      localStorage.setItem('token', data.token)
-      localStorage.setItem('user', JSON.stringify(data.user))
+      saveSession(data.token, data.user)
     },
     logout() {
       this.token = ''
       this.user = null
-      localStorage.removeItem('token')
-      localStorage.removeItem('user')
+      clearSession()
     },
   },
 })

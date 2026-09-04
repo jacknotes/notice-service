@@ -85,7 +85,7 @@
           </template>
         </el-table-column>
 
-        <el-table-column :label="t('channels.category')" width="130">
+        <el-table-column :label="t('channels.category')" width="130" sortable="custom" prop="category">
           <template #default="{ row }">
             <el-tag effect="plain" size="small" class="category-tag">{{ row.category || 'default' }}</el-tag>
           </template>

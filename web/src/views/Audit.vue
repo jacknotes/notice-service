@@ -85,32 +85,33 @@
         :data="items"
         style="width: 100%"
         :empty-text="t('audit.emptyTable')"
+        @sort-change="onSortChange"
       >
-        <el-table-column prop="id" label="ID" width="80" align="center">
+        <el-table-column prop="id" label="ID" width="80" align="center" sortable="custom">
           <template #default="{ row }">
             <span class="mono id-cell">#{{ row.id }}</span>
           </template>
         </el-table-column>
 
-        <el-table-column :label="t('common.time')" min-width="170">
+        <el-table-column :label="t('common.time')" min-width="170" sortable="custom" prop="created_at">
           <template #default="{ row }">
             <span class="mono time-cell">{{ fmtTime(row.created_at) }}</span>
           </template>
         </el-table-column>
 
-        <el-table-column :label="t('audit.userCol')" min-width="130">
+        <el-table-column :label="t('audit.userCol')" min-width="130" sortable="custom" prop="username">
           <template #default="{ row }">
             <span class="user-cell">{{ row.username || '—' }}</span>
           </template>
         </el-table-column>
 
-        <el-table-column :label="t('audit.ipCol')" min-width="120">
+        <el-table-column :label="t('audit.ipCol')" min-width="120" sortable="custom" prop="ip">
           <template #default="{ row }">
             <span class="mono time-cell">{{ row.ip || '—' }}</span>
           </template>
         </el-table-column>
 
-        <el-table-column :label="t('common.action')" width="200">
+        <el-table-column :label="t('common.action')" width="200" sortable="custom" prop="action">
           <template #default="{ row }">
             <div class="action-cell">
               <el-tag :style="moduleTagStyle(row.module)" effect="plain" size="small" class="module-tag">
@@ -149,6 +150,7 @@
 
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
+import { ElMessage } from 'element-plus'
 import { Refresh, Search } from '@element-plus/icons-vue'
 import { useI18n } from 'vue-i18n'
 import { auditApi } from '@/api'
@@ -175,6 +177,22 @@ const pageSize = ref(20)
 const keyword = ref('')
 const actionFilter = ref('')
 const moduleFilter = ref('')
+
+/* ── 后端排序（仅白名单列生效，仓储层校验非法字段回退 id desc） ──────── */
+const sortBy = ref<string>('')
+const sortOrder = ref<'asc' | 'desc'>('desc')
+
+function onSortChange({ prop, order }: { prop: string; order: string | null }) {
+  if (!order) {
+    sortBy.value = ''
+    sortOrder.value = 'desc'
+  } else {
+    sortBy.value = prop
+    sortOrder.value = order === 'ascending' ? 'asc' : 'desc'
+  }
+  page.value = 1
+  load()
+}
 
 const RETENTION_DAYS = 180 // 与后端 AUDIT_RETENTION_DAYS 默认一致
 
@@ -320,7 +338,7 @@ async function load() {
   try {
     const params: {
       keyword?: string; action?: string; module?: string; from?: string; to?: string
-      page: number; page_size: number
+      page: number; page_size: number; sort_by?: string; sort_order?: 'asc' | 'desc'
     } = { page: page.value, page_size: pageSize.value }
     if (keyword.value.trim()) params.keyword = keyword.value.trim()
     if (actionFilter.value) params.action = actionFilter.value
@@ -328,6 +346,10 @@ async function load() {
     if (dateRange.value) {
       params.from = dateRange.value[0]
       params.to = dateRange.value[1]
+    }
+    if (sortBy.value) {
+      params.sort_by = sortBy.value
+      params.sort_order = sortOrder.value
     }
     const data = await auditApi.list(params)
     items.value = (data?.items || []) as AuditRow[]

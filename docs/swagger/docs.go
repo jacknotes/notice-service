@@ -62,6 +62,18 @@ const docTemplate = `{
                         "description": "每页数量",
                         "name": "page_size",
                         "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "排序字段（id/username/ip/action/module/created_at）",
+                        "name": "sort_by",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "排序方向 asc/desc",
+                        "name": "sort_order",
+                        "in": "query"
                     }
                 ],
                 "responses": {

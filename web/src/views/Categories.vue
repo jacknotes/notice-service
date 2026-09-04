@@ -71,7 +71,7 @@
           </template>
         </el-table-column>
 
-        <el-table-column :label="t('categories.usage')" min-width="220" show-overflow-tooltip>
+        <el-table-column :label="t('categories.usage')" min-width="220" show-overflow-tooltip sortable="custom" prop="total">
           <template #default="{ row }">
             <div v-if="row.total" class="usage-chips">
               <el-tag v-if="row.channels" size="small" effect="plain" class="usage-chip ch">
@@ -272,11 +272,14 @@ function errMsg(e: any, fallback: string) {
 async function load() {
   loading.value = true
   try {
+    // 共享分类池：各资源列表仅用其 category 字段统计引用数。
+    // 显式标注返回类型：channel/template/task API 返回 any，混入 Promise.all 后
+    // TS 会把解构出的变量推断为 unknown（countBy 泛型无法收窄），需在此断言。
     const [cats, chs, tpls, tasks] = await Promise.all([
       categoryApi.list(),
-      channelApi.list(),
-      templateApi.list(),
-      taskApi.list(),
+      channelApi.list() as Promise<Array<{ category?: string }>>,
+      templateApi.list() as Promise<Array<{ category?: string }>>,
+      taskApi.list() as Promise<Array<{ category?: string }>>,
     ])
     const chCount = countBy(chs, (c) => c.category || 'default')
     const tplCount = countBy(tpls, (c) => c.category || 'default')

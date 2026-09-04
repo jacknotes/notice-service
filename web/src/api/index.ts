@@ -146,6 +146,8 @@ export const auditApi = {
     to?: string
     page?: number
     page_size?: number
+    sort_by?: string
+    sort_order?: 'asc' | 'desc'
   }) => client.get('/audit', { params }).then((r) => r.data),
 }
 

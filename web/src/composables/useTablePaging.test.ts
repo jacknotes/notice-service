@@ -35,6 +35,59 @@ describe('useTablePaging', () => {
     expect(sorted.value.map((r) => r.name)).toEqual(['乙', '丙', '丁', '甲'].sort((a, b) => a.localeCompare(b, 'zh-Hans-CN')))
   })
 
+  it('布尔列 enabled 降序：开(true)排在关(false)前', () => {
+    const { onSortChange, sorted } = useTablePaging(rows)
+    onSortChange({ prop: 'enabled', order: 'descending' })
+    expect(sorted.value.map((r) => r.enabled)).toEqual([true, true, false, false])
+  })
+
+  it('布尔列 enabled 升序：关(false)排在开(true)前', () => {
+    const { onSortChange, sorted } = useTablePaging(rows)
+    onSortChange({ prop: 'enabled', order: 'ascending' })
+    expect(sorted.value.map((r) => r.enabled)).toEqual([false, false, true, true])
+  })
+
+  it('数字字符串列按数值比较（"10" 排在 "9" 之后）', () => {
+    const strRows = ref([
+      { id: 1, code: '10' },
+      { id: 2, code: '9' },
+      { id: 3, code: '100' },
+    ])
+    const { onSortChange, sorted } = useTablePaging(strRows)
+    onSortChange({ prop: 'code', order: 'ascending' })
+    expect(sorted.value.map((r) => r.code)).toEqual(['9', '10', '100'])
+  })
+
+  it('派生列（getter）升序排序：按计算值而非原始字段', () => {
+    const derived = ref([
+      { id: 1, tags: ['b'] },
+      { id: 2, tags: ['a', 'c'] },
+      { id: 3, tags: [] },
+    ])
+    const { onSortChange, sorted } = useTablePaging(
+      derived,
+      20,
+      { tag_count: (r) => r.tags.length },
+    )
+    onSortChange({ prop: 'tag_count', order: 'ascending' })
+    expect(sorted.value.map((r) => r.id)).toEqual([3, 1, 2])
+  })
+
+  it('派生列（getter）降序排序', () => {
+    const derived = ref([
+      { id: 1, tags: ['b'] },
+      { id: 2, tags: ['a', 'c'] },
+      { id: 3, tags: [] },
+    ])
+    const { onSortChange, sorted } = useTablePaging(
+      derived,
+      20,
+      { tag_count: (r) => r.tags.length },
+    )
+    onSortChange({ prop: 'tag_count', order: 'descending' })
+    expect(sorted.value.map((r) => r.id)).toEqual([2, 1, 3])
+  })
+
   it('onSortChange 传 null 清除排序', () => {
     const { onSortChange, sorted } = useTablePaging(rows)
     onSortChange({ prop: 'id', order: 'descending' })

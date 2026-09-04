@@ -309,6 +309,7 @@ import { useI18n } from 'vue-i18n'
 import { currentLocale, setLocale, type SupportedLocale } from '@/i18n/locale'
 import { authApi, backupApi, systemApi } from '@/api'
 import { useAuthStore } from '@/stores/auth'
+import { updateSessionUser } from '@/utils/session'
 
 const router = useRouter()
 const auth = useAuthStore()
@@ -398,7 +399,7 @@ const disableCode = ref('')
 const disabling = ref(false)
 
 // 从 /auth/me 拉取最新资料（显示名/邮箱/角色/2FA 状态），并同步回
-// auth store 与 localStorage（localStorage 中的 user 可能过期或资料已更新）。
+// auth store 与会话存储（会话存储中的 user 可能过期或资料已更新）。
 async function refresh2FA() {
   try {
     const me = await authApi.me()
@@ -409,7 +410,7 @@ async function refresh2FA() {
       auth.user.email = me.email
       auth.user.role = me.role
       auth.user.totp_enabled = !!me.totp_enabled
-      localStorage.setItem('user', JSON.stringify(auth.user))
+      updateSessionUser(auth.user)
     }
   } catch {
     /* 忽略：会话过期由拦截器处理 */

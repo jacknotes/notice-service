@@ -2,6 +2,7 @@ package repository
 
 import (
 	"database/sql"
+	"strings"
 	"time"
 )
 
@@ -64,9 +65,21 @@ type AuditFilter struct {
 	From, To time.Time
 	Page     int
 	PageSize int
+	SortBy   string // 排序字段白名单（id/username/ip/action/module/created_at）
+	SortOrder string // asc / desc，默认 desc
 }
 
-// Query 按过滤条件分页查询审计日志，返回总数与当前页数据（按时间倒序）。
+// auditSortCols 审计日志排序字段白名单：仅接受固定列名，防止任意 ORDER BY 注入。
+var auditSortCols = map[string]string{
+	"id":         "id",
+	"username":   "username",
+	"ip":         "ip",
+	"action":     "action",
+	"module":     "module",
+	"created_at": "created_at",
+}
+
+// Query 按过滤条件分页查询审计日志，返回总数与当前页数据（默认按时间倒序）。
 func (r *AuditRepo) Query(f AuditFilter) (total int, logs []*AuditLog, err error) {
 	where := "WHERE 1=1"
 	args := []interface{}{}
@@ -102,9 +115,17 @@ func (r *AuditRepo) Query(f AuditFilter) (total int, logs []*AuditLog, err error
 	if offset < 0 {
 		offset = 0
 	}
+	orderCol, ok := auditSortCols[f.SortBy]
+	if !ok {
+		orderCol = "id" // 非法/空排序字段回退 id
+	}
+	order := strings.ToLower(f.SortOrder)
+	if order != "asc" {
+		order = "desc"
+	}
 	queryArgs := append(append([]interface{}{}, args...), limit, offset)
 	rows, err := r.db.Query(
-		"SELECT id, user_id, username, ip, action, module, detail, created_at FROM audit_logs "+where+" ORDER BY id DESC LIMIT ? OFFSET ?",
+		"SELECT id, user_id, username, ip, action, module, detail, created_at FROM audit_logs "+where+" ORDER BY "+orderCol+" "+order+" LIMIT ? OFFSET ?",
 		queryArgs...)
 	if err != nil {
 		return 0, nil, err

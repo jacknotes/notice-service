@@ -210,6 +210,14 @@ paths:
         in: query
         name: page_size
         type: integer
+      - description: 排序字段（id/username/ip/action/module/created_at）
+        in: query
+        name: sort_by
+        type: string
+      - description: 排序方向 asc/desc
+        in: query
+        name: sort_order
+        type: string
       responses:
         "200":
           description: OK

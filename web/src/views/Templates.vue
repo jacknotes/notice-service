@@ -74,7 +74,7 @@
           </template>
         </el-table-column>
 
-        <el-table-column :label="t('templates.category')" width="130">
+        <el-table-column :label="t('templates.category')" width="130" sortable="custom" prop="category">
           <template #default="{ row }">
             <el-tag effect="plain" size="small" class="category-tag">{{ row.category || 'default' }}</el-tag>
           </template>
@@ -86,7 +86,7 @@
           </template>
         </el-table-column>
 
-        <el-table-column :label="t('templates.variables')" width="140" align="center">
+        <el-table-column :label="t('templates.variables')" width="140" align="center" sortable="custom" prop="variables_count">
           <template #default="{ row }">
             <span v-if="(row.variables || []).length" class="mono var-count">{{ t('templates.varCount', { n: row.variables.length }) }}</span>
             <span v-else class="text-muted">—</span>
@@ -357,8 +357,12 @@ const filteredTemplates = computed<TemplateRow[]>(() => {
   })
 })
 
-// 客户端排序 + 分页（整表数据在前端）
-const { page, size, onSortChange, paged, total, onPageSizeChange } = useTablePaging<TemplateRow>(filteredTemplates)
+// 客户端排序 + 分页（整表数据在前端）。变量列按变量个数排序。
+const { page, size, onSortChange, paged, total, onPageSizeChange } = useTablePaging<TemplateRow>(
+  filteredTemplates,
+  20,
+  { variables_count: (t) => (t.variables || []).length },
+)
 
 const dialogVisible = ref(false)
 const saving = ref(false)

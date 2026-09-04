@@ -29,6 +29,8 @@ func NewAuditHandler(db *sql.DB) *AuditHandler {
 // @Param to query string false "结束日期 YYYY-MM-DD"
 // @Param page query int false "页码"
 // @Param page_size query int false "每页数量"
+// @Param sort_by query string false "排序字段（id/username/ip/action/module/created_at）"
+// @Param sort_order query string false "排序方向 asc/desc"
 // @Success 200 {object} map[string]interface{}
 // @Router /api/audit [get]
 func (h *AuditHandler) List(c *gin.Context) {
@@ -65,6 +67,13 @@ func (h *AuditHandler) List(c *gin.Context) {
 		if n, err := strconv.Atoi(v); err == nil && n > 0 {
 			f.PageSize = n
 		}
+	}
+	// 排序字段/方向（白名单在仓储层校验，非法值回退 id desc）
+	if v := c.Query("sort_by"); v != "" {
+		f.SortBy = v
+	}
+	if v := c.Query("sort_order"); v == "asc" || v == "desc" {
+		f.SortOrder = v
 	}
 	total, logs, err := h.repo.Query(f)
 	if err != nil {

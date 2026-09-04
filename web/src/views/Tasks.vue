@@ -77,13 +77,19 @@
           </template>
         </el-table-column>
 
+        <el-table-column :label="t('tasks.category')" width="120" sortable="custom" prop="category">
+          <template #default="{ row }">
+            <el-tag effect="plain" size="small" class="category-tag">{{ row.category || 'default' }}</el-tag>
+          </template>
+        </el-table-column>
+
         <el-table-column prop="name" :label="t('common.name')" min-width="130" sortable="custom" show-overflow-tooltip>
           <template #default="{ row }">
             <span class="task-name">{{ row.name }}</span>
           </template>
         </el-table-column>
 
-        <el-table-column :label="t('tasks.trigger')" min-width="160" show-overflow-tooltip>
+        <el-table-column :label="t('tasks.trigger')" min-width="160" show-overflow-tooltip sortable="custom" prop="trigger_sort">
           <template #default="{ row }">
             <el-tag
               v-if="row.trigger_type === 'api'"
@@ -99,19 +105,19 @@
           </template>
         </el-table-column>
 
-        <el-table-column :label="t('tasks.channels')" min-width="130" show-overflow-tooltip>
+        <el-table-column :label="t('tasks.channels')" min-width="130" show-overflow-tooltip sortable="custom" prop="channels_sort">
           <template #default="{ row }">
             <span class="channels-cell">{{ channelNames(row) || '—' }}</span>
           </template>
         </el-table-column>
 
-        <el-table-column :label="t('tasks.category')" width="130">
+        <el-table-column :label="t('tasks.template')" min-width="140" show-overflow-tooltip sortable="custom" prop="template_sort">
           <template #default="{ row }">
-            <el-tag effect="plain" size="small" class="category-tag">{{ row.category || 'default' }}</el-tag>
+            <span class="template-cell">{{ templateName(row.template_id) || '—' }}</span>
           </template>
         </el-table-column>
 
-        <el-table-column :label="t('tasks.receivers')" min-width="140" show-overflow-tooltip>
+        <el-table-column :label="t('tasks.receivers')" min-width="140" show-overflow-tooltip sortable="custom" prop="receivers_sort">
           <template #default="{ row }">
             <span class="mono receivers-cell">{{ (row.receivers || []).join(', ') || '—' }}</span>
           </template>
@@ -585,8 +591,18 @@ const filteredTasks = computed<TaskRow[]>(() => {
   })
 })
 
-// 客户端排序 + 分页（整表数据在前端）
-const { page, size, onSortChange, paged, total, onPageSizeChange } = useTablePaging<TaskRow>(filteredTasks)
+// 客户端排序 + 分页（整表数据在前端）。
+// 派生列排序键：触发/渠道/模板/接收地址由取值函数计算（templateName 定义在下方）。
+const { page, size, onSortChange, paged, total, onPageSizeChange } = useTablePaging<TaskRow>(
+  filteredTasks,
+  20,
+  {
+    trigger_sort: (t) => (t.trigger_type === 'api' ? `api_${t.cron_expr || ''}` : `cron_${t.cron_expr || ''}`),
+    channels_sort: (t) => channelNames(t),
+    template_sort: (t) => templateName(t.template_id),
+    receivers_sort: (t) => (t.receivers || []).join(', '),
+  },
+)
 
 const dialogVisible = ref(false)
 const saving = ref(false)
@@ -718,6 +734,12 @@ function channelNames(row: TaskRow): string {
     .map((id) => channels.value.find((c) => c.id === id)?.name || '')
     .filter(Boolean)
     .join(t('tasks.listJoin'))
+}
+
+// 任务绑定的模板名（模板不存在/已删除时回退占位）
+function templateName(templateId: number): string {
+  if (!templateId) return ''
+  return templates.value.find((p) => p.id === templateId)?.name || ''
 }
 
 /* ── API Key dialog ────────────────────────────────────────────────── */
@@ -1298,6 +1320,11 @@ async function doBatchReceivers() {
 }
 .channels-cell {
   color: var(--sky-400);
+  font-size: var(--text-xs);
+  font-weight: 500;
+}
+.template-cell {
+  color: var(--violet-400);
   font-size: var(--text-xs);
   font-weight: 500;
 }
