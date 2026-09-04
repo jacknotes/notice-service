@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import { useAuthStore } from './auth'
-import { getSessionId } from '@/utils/session'
+import { hasSessionCookie } from '@/utils/session'
 
 // 整模块 mock：不拉真实 api（api/index 会 import axios）
 vi.mock('@/api', () => ({
@@ -23,7 +23,11 @@ describe('auth store', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     localStorage.clear()
-    sessionStorage.clear()
+    // 清空所有 cookie（jsdom 用 document.cookie 读写）
+    document.cookie.split(';').forEach((c) => {
+      const name = c.split('=')[0].trim()
+      document.cookie = `${name}=; Path=/; Max-Age=0`
+    })
     vi.resetAllMocks()
   })
 
@@ -43,19 +47,18 @@ describe('auth store', () => {
     expect(out).toEqual(resp)
   })
 
-  it('completeLogin 写入 state、localStorage 凭据与窗口会话 ID', () => {
+  it('completeLogin 写入 state、localStorage 凭据与会话 Cookie', () => {
     const s = useAuthStore()
     s.completeLogin({ token: 'tk', user: mockUser })
     expect(s.token).toBe('tk')
     expect(s.user).toEqual(mockUser)
     expect(localStorage.getItem('token')).toBe('tk')
     expect(JSON.parse(localStorage.getItem('user')!)).toEqual(mockUser)
-    // localStorage 记录当前窗口会话 ID，sessionStorage 中也存在同一 ID
-    expect(localStorage.getItem('session_id')).toBe(getSessionId())
-    expect(sessionStorage.getItem('session_id')).toBe(getSessionId())
+    // 会话 Cookie 已种下，标记浏览器进程存活
+    expect(hasSessionCookie()).toBe(true)
   })
 
-  it('logout 清空 state、localStorage 凭据与会话 ID', () => {
+  it('logout 清空 state、localStorage 凭据与会话 Cookie', () => {
     const s = useAuthStore()
     s.completeLogin({ token: 'tk', user: mockUser })
     s.logout()
@@ -63,38 +66,38 @@ describe('auth store', () => {
     expect(s.user).toBeNull()
     expect(localStorage.getItem('token')).toBeNull()
     expect(localStorage.getItem('user')).toBeNull()
-    expect(localStorage.getItem('session_id')).toBeNull()
-    expect(sessionStorage.getItem('session_id')).toBeNull()
+    expect(hasSessionCookie()).toBe(false)
   })
 
   it('会话存储中是坏 JSON 时 user 为 null（容错）', async () => {
-    // 先建立有效会话（写入会话 ID 与正常 user），再把 user 写成坏 JSON
+    // 先建立有效会话，再把 user 写成坏 JSON；模拟重载页面重新读取会话
     const s = useAuthStore()
     s.completeLogin({ token: 'tk', user: mockUser })
     localStorage.setItem('user', '{broken')
-    // 模拟重载页面重新读取会话
     vi.resetModules()
     const { useAuthStore: freshStore } = await import('./auth')
     setActivePinia(createPinia())
     const s2 = freshStore()
+    expect(s2.token).toBe('tk')
     expect(s2.user).toBeNull()
   })
 
-  it('同窗口新标签页（继承 sessionStorage）保持登录态', () => {
-    // 首次登录：写 token/user/session_id 到 localStorage 与 sessionStorage
+  it('关闭所有标签页后重新打开网址（浏览器进程仍在）保持登录', () => {
     const s = useAuthStore()
     s.completeLogin({ token: 'tk', user: mockUser })
-    // 同窗口新标签页：sessionStorage 被复制，localStorage 共享 → 仍登录
+    // 模拟关闭所有标签页再重开：localStorage 与 cookie 都保留（浏览器进程未关）
+    // —— jsdom 中无需操作，直接重新读取 store 即可验证
     const s2 = useAuthStore()
     expect(s2.token).toBe('tk')
     expect(s2.isLoggedIn).toBe(true)
   })
 
-  it('关闭整个窗口后重开（sessionStorage 清空）需重新登录', async () => {
+  it('关闭整个浏览器后重开（会话 Cookie 消失）需重新登录', async () => {
     const s = useAuthStore()
     s.completeLogin({ token: 'tk', user: mockUser })
-    // 模拟关闭窗口：sessionStorage 销毁，localStorage 残留旧凭据
-    sessionStorage.clear()
+    // 模拟关闭浏览器：会话 Cookie 被清除，localStorage 残留旧凭据
+    document.cookie = 'notice_session=; Path=/; Max-Age=0'
+    expect(hasSessionCookie()).toBe(false)
     // 模拟重新打开页面：清空模块缓存，重新加载 store 模块（触发 initSession）
     vi.resetModules()
     const { useAuthStore: freshStore } = await import('./auth')
@@ -104,7 +107,6 @@ describe('auth store', () => {
     expect(s2.isLoggedIn).toBe(false)
     expect(localStorage.getItem('token')).toBeNull()
     expect(localStorage.getItem('user')).toBeNull()
-    expect(localStorage.getItem('session_id')).toBeNull()
   })
 
   it('login 失败时错误透传', async () => {

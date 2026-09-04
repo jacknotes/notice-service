@@ -14,8 +14,6 @@ const { mockCreate, mockClient } = vi.hoisted(() => {
 
 vi.mock('axios', () => ({ default: { create: mockCreate } }))
 
-// 依赖 axios mock 的 client 模块会先 import 真实 axios（未 mock 前），
-// 但 @/utils/session 无外部依赖，可安全加载。
 import client from './client'
 
 function getRequestInterceptor() {
@@ -28,10 +26,18 @@ function getResponseErrorHandler() {
   return mockClient.interceptors.response.use.mock.calls[0][1] as (err: any) => Promise<any>
 }
 
+// 清空 jsdom 中的所有 cookie
+function clearCookies() {
+  document.cookie.split(';').forEach((c) => {
+    const name = c.split('=')[0].trim()
+    document.cookie = `${name}=; Path=/; Max-Age=0`
+  })
+}
+
 describe('api/client 拦截器', () => {
   beforeEach(() => {
     localStorage.clear()
-    sessionStorage.clear()
+    clearCookies()
     // 注意：不能用 vi.clearAllMocks() —— 拦截器注册与 create() 调用发生在模块加载期，
     // 清空会抹掉 get*Interceptor/mockCreate 依赖的调用记录（用例全崩）。
     // 本文件用例只直接调用捕获到的拦截器函数，不新增 mock 调用，故无需清理。
@@ -49,11 +55,9 @@ describe('api/client 拦截器', () => {
     expect(client).toBe(mockClient)
   })
 
-  it('有有效会话 token 时请求注入 Authorization: Bearer', () => {
-    // 建立有效会话：token 入 localStorage，且会话 ID 与 sessionStorage 一致
-    const sid = 'w1'
-    sessionStorage.setItem('session_id', sid)
-    localStorage.setItem('session_id', sid)
+  it('有有效会话（token + 会话 Cookie）时请求注入 Authorization: Bearer', () => {
+    // 建立有效会话：token 入 localStorage，会话 Cookie 标记浏览器进程存活
+    document.cookie = 'notice_session=1; Path=/'
     localStorage.setItem('token', 'tk1')
     const interceptor = getRequestInterceptor()
     const cfg = interceptor({ headers: {} })
@@ -66,28 +70,23 @@ describe('api/client 拦截器', () => {
     expect(cfg.headers.Authorization).toBeUndefined()
   })
 
-  it('会话 ID 不匹配（窗口已关闭后重开）时不注入 Authorization', () => {
-    // localStorage 残留旧凭据，但当前 sessionStorage 是新会话
-    localStorage.setItem('session_id', 'old-window')
+  it('会话 Cookie 缺失（浏览器已关闭重开）时不注入 Authorization', () => {
+    // localStorage 残留旧凭据，但会话 Cookie 已被浏览器关闭清除
     localStorage.setItem('token', 'stale')
-    sessionStorage.setItem('session_id', 'new-window')
     const interceptor = getRequestInterceptor()
     const cfg = interceptor({ headers: {} })
     expect(cfg.headers.Authorization).toBeUndefined()
   })
 
-  it('响应 401 时清 token/user/会话 ID', async () => {
-    const sid = 'w1'
-    sessionStorage.setItem('session_id', sid)
-    localStorage.setItem('session_id', sid)
+  it('响应 401 时清 token/user/会话 Cookie', async () => {
+    document.cookie = 'notice_session=1; Path=/'
     localStorage.setItem('token', 'tk')
     localStorage.setItem('user', 'u')
     const handler = getResponseErrorHandler()
     await expect(handler({ response: { status: 401 } })).rejects.toBeTruthy()
     expect(localStorage.getItem('token')).toBeNull()
     expect(localStorage.getItem('user')).toBeNull()
-    expect(localStorage.getItem('session_id')).toBeNull()
-    expect(sessionStorage.getItem('session_id')).toBeNull()
+    expect(document.cookie).not.toContain('notice_session=')
   })
 
   it('响应 401 且不在登录页时跳转 /login', async () => {
@@ -107,9 +106,7 @@ describe('api/client 拦截器', () => {
   })
 
   it('非 401 错误原样 reject，不清会话', async () => {
-    const sid = 'w1'
-    sessionStorage.setItem('session_id', sid)
-    localStorage.setItem('session_id', sid)
+    document.cookie = 'notice_session=1; Path=/'
     localStorage.setItem('token', 'keep')
     const handler = getResponseErrorHandler()
     await expect(handler({ response: { status: 500 } })).rejects.toEqual({ response: { status: 500 } })
@@ -117,9 +114,7 @@ describe('api/client 拦截器', () => {
   })
 
   it('网络错误（无 response）不误清会话也不跳转', async () => {
-    const sid = 'w1'
-    sessionStorage.setItem('session_id', sid)
-    localStorage.setItem('session_id', sid)
+    document.cookie = 'notice_session=1; Path=/'
     localStorage.setItem('token', 'keep')
     const handler = getResponseErrorHandler()
     await expect(handler(new Error('Network Error'))).rejects.toBeTruthy()
