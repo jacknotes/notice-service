@@ -19,15 +19,19 @@ const mockUser = {
   totp_enabled: false,
 }
 
+// 清空 jsdom 中的所有 cookie
+function clearCookies() {
+  document.cookie.split(';').forEach((c) => {
+    const name = c.split('=')[0].trim()
+    document.cookie = `${name}=; Path=/; Max-Age=0`
+  })
+}
+
 describe('auth store', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     localStorage.clear()
-    // 清空所有 cookie（jsdom 用 document.cookie 读写）
-    document.cookie.split(';').forEach((c) => {
-      const name = c.split('=')[0].trim()
-      document.cookie = `${name}=; Path=/; Max-Age=0`
-    })
+    clearCookies()
     vi.resetAllMocks()
   })
 
@@ -92,21 +96,21 @@ describe('auth store', () => {
     expect(s2.isLoggedIn).toBe(true)
   })
 
-  it('关闭整个浏览器后重开（会话 Cookie 消失）需重新登录', async () => {
+  it('Cookie 缺失但 localStorage 有 token（复制标签页竞态）不清除会话', async () => {
+    // 建立会话后模拟 cookie 未同步（竞态窗口）
     const s = useAuthStore()
     s.completeLogin({ token: 'tk', user: mockUser })
-    // 模拟关闭浏览器：会话 Cookie 被清除，localStorage 残留旧凭据
-    document.cookie = 'notice_session=; Path=/; Max-Age=0'
+    clearCookies()
     expect(hasSessionCookie()).toBe(false)
-    // 模拟重新打开页面：清空模块缓存，重新加载 store 模块（触发 initSession）
+    // 重新加载模块触发 initSession：应补种 cookie、保留 token，而不是清除
     vi.resetModules()
     const { useAuthStore: freshStore } = await import('./auth')
     setActivePinia(createPinia())
     const s2 = freshStore()
-    expect(s2.token).toBe('')
-    expect(s2.isLoggedIn).toBe(false)
-    expect(localStorage.getItem('token')).toBeNull()
-    expect(localStorage.getItem('user')).toBeNull()
+    expect(s2.token).toBe('tk')
+    expect(s2.isLoggedIn).toBe(true)
+    expect(hasSessionCookie()).toBe(true) // 已补种
+    expect(localStorage.getItem('token')).toBe('tk')
   })
 
   it('login 失败时错误透传', async () => {

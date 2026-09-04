@@ -55,27 +55,27 @@ describe('api/client 拦截器', () => {
     expect(client).toBe(mockClient)
   })
 
-  it('有有效会话（token + 会话 Cookie）时请求注入 Authorization: Bearer', () => {
-    // 建立有效会话：token 入 localStorage，会话 Cookie 标记浏览器进程存活
-    document.cookie = 'notice_session=1; Path=/'
+  it('有 token 时请求注入 Authorization: Bearer', () => {
+    // 凭据存 localStorage，token 存在即注入（cookie 是否存在不影响注入，
+    // 无效 token 由后端 401 响应兜底清除）
     localStorage.setItem('token', 'tk1')
     const interceptor = getRequestInterceptor()
     const cfg = interceptor({ headers: {} })
     expect(cfg.headers.Authorization).toBe('Bearer tk1')
   })
 
-  it('无有效会话（无 token）时不注入 Authorization', () => {
+  it('无 token 时不注入 Authorization', () => {
     const interceptor = getRequestInterceptor()
     const cfg = interceptor({ headers: {} })
     expect(cfg.headers.Authorization).toBeUndefined()
   })
 
-  it('会话 Cookie 缺失（浏览器已关闭重开）时不注入 Authorization', () => {
-    // localStorage 残留旧凭据，但会话 Cookie 已被浏览器关闭清除
+  it('仅 token 存在（cookie 缺失=复制标签页竞态）也注入 Authorization', () => {
+    // 模拟复制标签页瞬间 cookie 未同步：token 在 localStorage，cookie 缺失
     localStorage.setItem('token', 'stale')
     const interceptor = getRequestInterceptor()
     const cfg = interceptor({ headers: {} })
-    expect(cfg.headers.Authorization).toBeUndefined()
+    expect(cfg.headers.Authorization).toBe('Bearer stale')
   })
 
   it('响应 401 时清 token/user/会话 Cookie', async () => {
