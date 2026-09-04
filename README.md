@@ -16,6 +16,19 @@
 - **前端**：Vue3 + Element Plus 深色主题（"Signal Relay" 设计），PC/移动端响应式；侧边栏可收缩/展开（状态记忆）；列表支持排序与分页，渠道/模板/任务支持「复制」，模板/任务编辑实时预览，用户管理支持显示名/邮箱、角色调整、禁用/启用与管理员强制 2FA；界面中英文双语可切换（vue-i18n，顶栏 + 个人设置双入口，默认中文）；界面展示构建版本号（侧边栏底部 / 节点状态弹窗 / 个人设置页），升级对比一目了然
 - **部署**：Docker 多阶段构建，单实例镜像约 30-50MB；已发布至 Docker Hub（`jacknotes/notice-service`），单镜像 + MySQL 一键启动
 
+## 部署形态速览
+
+本服务后端（Go）与前端（Vue3 静态产物）默认合一，也可拆开部署：
+
+| 形态 | 前端托管 | 后端 | 适合场景 | 详见 |
+|------|----------|------|----------|------|
+| **单体部署**（默认） | 后端托管 `web/dist` | 后端 + API | 中小流量、内部系统、零额外配置 | [部署形态·单体](#部署形态四种) |
+| **前后端分离** | Nginx/CDN | 只出 API | 前端独立发布、CDN 加速、多前端复用 | [部署形态·分离](#部署形态四种) |
+| **仅后端部署** | 无 | 纯 API | 移动端/脚本/纯 API 集成 | [部署形态·仅后端](#部署形态四种) |
+| **仅前端部署** | 静态站 | 远程 API | 前端独立生命周期、后端在别处 | [部署形态·仅前端](#部署形态四种) |
+
+> 架构本质：前端是纯静态文件（`web/dist`），后端是无状态 API + 可选静态托管（`STATIC_DIR` 无文件时仅 API 照常）。拆开部署不改后端，只是把静态文件挪走。
+
 ## 技术栈
 
 | 组件 | 方案 |
@@ -194,6 +207,117 @@ Webhook 的 IP 白名单依赖 `X-Real-IP` / `X-Forwarded-For` 头，但这些�
   Docker 网桥网关（如 `172.18.0.1`）而非 `127.0.0.1`，默认的 `172.16.0.0/12` 覆盖所有默认网桥网段。
 - Nginx 在其它节点：把 `TRUSTED_PROXIES` 设为反代所在网段，如 `10.0.0.0/8`。
 - 不要直接把服务暴露公网却不设反向代理——此时任何人可伪造 `X-Forwarded-For` 绕过 IP 白名单。
+
+## 部署形态（四种）
+
+本服务的后端（Go）与前端（Vue3 静态产物）**默认合一**：后端直接托管 `web/dist`，一个进程一个端口即可运行。但你也可以**拆开部署**，按需选择下面四种形态之一。
+
+> 架构要点：前端是纯静态文件（`web/dist`），可交给任何静态服务器/Nginx/CDN；后端是无状态的 API + 静态托管（`STATIC_DIR` 指向的目录找不到时**仅 API 照常可用**）。因此"分离"只是把静态文件挪出去，后端 API 本身不变。
+
+### 形态一：单体部署（后端托管前端，默认推荐）
+
+后端在启动时托管 `web/dist`（`STATIC_DIR`，默认 `./web/dist`），一个进程同时提供 API 与页面。**零额外配置，本仓库默认形态**。
+
+```bash
+# 方案 A：编译 + 生产模式运行（:8080）
+make prod-backend          # = go build + GIN_MODE=release
+
+# 方案 B：Docker 单体（单镜像 + MySQL，见上文「一键部署」）
+docker compose -f docker-compose.quickstart.yml up -d
+
+# 方案 C：多实例高可用（源码构建 2 实例，见「Docker 部署」）
+docker compose up -d
+```
+
+- 优点：部署最简单，一个进程搞定；适合中小流量、内部系统。
+- 前端产物与后端同镜像/同目录，升级同步、无跨域。
+- 访问 `http://<host>:8080` 即打开管理界面。
+
+### 形态二：前后端分离部署（前端交 Nginx/CDN，后端只出 API）
+
+前端静态产物由独立的 Nginx/CDN/对象存储托管，后端**只提供 API**（可关掉静态托管，或保留也无妨）。适合前端要独立发布、多前端复用同一后端、或前端用 CDN 加速的场景。
+
+```bash
+# 1. 构建前端产物
+cd web && npm ci && npm run build        # 产出 web/dist/
+
+# 2. 后端只跑 API（可指定一个空/不存在目录作为 STATIC_DIR，或直接不管）
+#    实际上后端找不到 dist 时本就只出 API，无需额外配置
+export STATIC_DIR=/nonexistent
+make prod-backend                          # 或 docker compose 跑后端
+
+# 3. 把 web/dist 部署到 Nginx（示例）
+#    server {
+#        listen 80;
+#        root /var/www/notice/dist;          # web/dist 拷贝到此
+#        location / { try_files $uri $uri/ /index.html; }   # SPA fallback
+#        location /api/ {
+#            proxy_pass http://127.0.0.1:8080;               # 后端 API
+#            proxy_set_header Host $host;
+#            proxy_set_header X-Real-IP $remote_addr;
+#            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+#            proxy_set_header X-Forwarded-Proto $scheme;
+#        }
+#    }
+```
+
+- **静态资源缓存**：`web/dist` 下文件名带内容 hash 的 `/assets/*` 建议配 `Cache-Control: public, max-age=31536000, immutable`；`index.html` 配 `no-cache`（详见下方「缓存策略」）。
+- **后端只出 API 时**：后端自身对 `/` 的静态托管若 `STATIC_DIR` 无文件会跳过，API 不受影响；若保留 dist，则后端同时也能直接访问页面（可作兜底）。
+
+### 形态三：仅后端部署（纯 API 服务，无前端页面）
+
+你的场景只有 API（移动端/脚本/其它前端消费），完全不需要管理界面。后端天然支持——`STATIC_DIR` 指向的目录为空或不存在时，只暴露 `/api/*`，`/` 返回 404 而非页面。
+
+```bash
+# 构建并运行（纯 API，:8080）
+make prod-backend
+# 或指定一个空目录，明确关闭静态托管
+export STATIC_DIR=/tmp/empty-dir
+make prod-backend
+
+# Docker 方式：复用现有镜像，挂空静态目录即可（tag 用最新发布版，见 Docker Hub）
+docker run -d --name notice-api -p 8080:8080 \
+  -e DB_HOST=... -e DB_PORT=3306 -e DB_USER=notice -e DB_PASSWORD=... \
+  -e DB_NAME=notice_service -e JWT_SECRET=... -e ENCRYPT_KEY=... \
+  -e ADMIN_USER=admin -e ADMIN_PASS=... \
+  -e STATIC_DIR=/tmp/empty-dir \
+  jacknotes/notice-service:latest
+```
+
+- 所有写操作仍走管理员鉴权（`/api/auth/login` 拿 token）；无页面不影响任何 API 能力。
+- 适合：纯 API 集成、给其它前端/脚本复用、网关只暴露 API 网关路由。
+
+### 形态四：仅前端部署（静态站 + 远程 API）
+
+前端单独发布为静态站，API 指向**另一个节点上的后端**（跨域或同域均可）。与形态二的区别：这里强调的是"前端独立生命周期"，后端可能在别的机器。
+
+```bash
+# 1. 构建前端（API 地址需与部署环境匹配）
+cd web && npm ci && npm run build
+
+# 2. 若 API 与前端不同域，需在后端开启 CORS（后端需支持）或经反代同域转发。
+#    最简单：Nginx 把 /api/ 反代到远程后端（同域，无 CORS 问题）
+#    server {
+#        listen 80;
+#        root /var/www/notice/dist;
+#        location / { try_files $uri $uri/ /index.html; }
+#        location /api/ { proxy_pass http://<backend-host>:8080; ... }
+#    }
+
+# 3. 后端在远程节点独立运行（形态一/二/三均可），TRUSTED_PROXIES 加上本机/反代网段
+```
+
+- 注意：`web/src/api/client.ts` 的 `baseURL` 是 `/api`（同源）。跨域部署务必走反向代理同域转发 `/api`，避免 CORS 与 cookie 作用域问题。
+- 会话 Cookie（`notice_session`）按域名隔离：前端与 API 同域时登录态才能跨标签页共享（浏览器不关闭时保持登录，关闭浏览器后需重新登录）。
+
+### 静态资源缓存策略（分离部署必读）
+
+后端合一形态已内置正确缓存头（`/assets` → immutable、`index.html` → no-cache）。**分离部署把静态交给 Nginx 时，请手动补上**，否则部署新版后用户会一直加载旧 bundle：
+
+```nginx
+location /assets/ { add_header Cache-Control "public, max-age=31536000, immutable"; }
+location = /index.html { add_header Cache-Control "no-cache"; }
+```
 
 ## 环境变量
 
