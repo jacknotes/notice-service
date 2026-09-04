@@ -408,17 +408,21 @@
           {{ t('common.copy') }}
         </el-button>
       </div>
-      <div class="api-key-box">
+      <div v-if="apiKeyRequireSig" class="api-key-box">
         <code class="mono api-key-value">{{ hmacValue || '—' }}</code>
         <el-button size="small" type="primary" :icon="CopyDocument" @click="copyCredential(hmacValue, 'common.copied')">
           {{ t('tasks.copySignatureBtn') }}
         </el-button>
       </div>
-      <p class="api-key-desc">{{ t('tasks.signatureSecretHint') }}</p>
+      <p v-if="apiKeyRequireSig" class="api-key-desc">{{ t('tasks.signatureSecretHint') }}</p>
       <p class="api-key-endpoint mono">POST /api/webhook/{{ apiKeyValue || '&lt;api_key&gt;' }}</p>
-      <pre class="api-key-curl mono">curl -X POST https://your-host/api/webhook/{{ apiKeyValue || '&lt;api_key&gt;' }} \
-  -H 'Content-Type: application/json' \
-  -d '{"variables":{"name":"张三"}}'</pre>
+      <div class="api-key-box">
+        <pre class="api-key-curl mono">{{ apiKeyCurl }}</pre>
+        <el-button size="small" type="primary" :icon="CopyDocument" @click="copyCredential(apiKeyCurl, 'tasks.curlCopied')">
+          {{ t('common.copy') }}
+        </el-button>
+      </div>
+      <p class="api-key-desc">{{ t('tasks.curlBodyHint') }}</p>
       <template #footer>
         <el-button @click="apiKeyVisible = false">{{ t('common.close') }}</el-button>
       </template>
@@ -747,13 +751,24 @@ const apiKeyVisible = ref(false)
 const apiKeyValue = ref('')
 const hmacValue = ref('')
 const apiKeyTaskId = ref<number | null>(null)
+// 签名密钥仅在任务开启「需要 HMAC 签名」时展示，避免用户误判
+const apiKeyRequireSig = ref(false)
 
 function showApiKey(row: TaskRow) {
   apiKeyTaskId.value = row.id
   apiKeyValue.value = row.api_key || ''
-  hmacValue.value = row.hmac_secret || ''
+  apiKeyRequireSig.value = !!row.require_signature
+  hmacValue.value = apiKeyRequireSig.value ? row.hmac_secret || '' : ''
   apiKeyVisible.value = true
 }
+
+// curl 示例中的 host 自适应为当前访问域名，无需用户手工替换
+const apiKeyCurlHost = computed(() => window.location.host || 'your-host')
+const apiKeyCurl = computed(() => {
+  const key = apiKeyValue.value || '<api_key>'
+  const body = '{"variables":{"name":"张三"}}'
+  return `curl -X POST https://${apiKeyCurlHost.value}/api/webhook/${key} \\\n  -H 'Content-Type: application/json' \\\n  -d '${body}'`
+})
 
 async function copyCredential(value: string, okMsgKey: string) {
   if (!value) return
@@ -1011,7 +1026,8 @@ async function saveTask() {
       const fresh = tasks.value.find((t) => t.id === savedId)
       if (fresh?.api_key) {
         apiKeyValue.value = fresh.api_key
-        hmacValue.value = fresh.hmac_secret || ''
+        apiKeyRequireSig.value = !!fresh.require_signature
+        hmacValue.value = apiKeyRequireSig.value ? fresh.hmac_secret || '' : ''
         apiKeyTaskId.value = fresh.id
         apiKeyVisible.value = true
       }
@@ -1502,7 +1518,9 @@ async function doBatchReceivers() {
   letter-spacing: 0.02em;
 }
 .api-key-curl {
-  margin-top: var(--space-2);
+  flex: 1;
+  min-width: 0;
+  margin: 0;
   padding: var(--space-3);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);

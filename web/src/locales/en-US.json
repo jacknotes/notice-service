@@ -402,6 +402,8 @@
     "deleteConfirmMsg": "Delete task \"{name}\"? This cannot be undone.",
     "batchDeletedOk": "Deleted {n} tasks",
     "apiKeyCopied": "API Key copied",
+    "curlCopied": "curl command copied",
+    "curlBodyHint": "Note: the variables in the curl command are placeholders — update the body to match your template variables, otherwise sending may fail.",
     "lunarQuick": "Lunar",
     "lunarFirst": "1st 09:00",
     "lunarFifteen": "15th 09:00",

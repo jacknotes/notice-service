@@ -402,6 +402,8 @@
     "deleteConfirmMsg": "确定删除任务「{name}」吗？删除后不可恢复。",
     "batchDeletedOk": "已删除 {n} 个任务",
     "apiKeyCopied": "API Key 已复制",
+    "curlCopied": "curl 命令已复制",
+    "curlBodyHint": "注意：curl 命令中的 variables 为示例变量，请按实际模板变量自定义更新 body 内容，否则发送可能失败。",
     "lunarQuick": "农历快捷",
     "lunarFirst": "每月初一 9点",
     "lunarFifteen": "每月十五 9点",
