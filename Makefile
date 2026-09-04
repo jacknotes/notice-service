@@ -66,6 +66,9 @@ frontend-dev: ## 启动前端 dev server（:5173，热更新）
 docker-build: ## 构建 Docker 镜像
 	docker build --build-arg BUILD_VERSION=$(VERSION) -t notice-service .
 
+publish: ## 发布到 Docker Hub（构建 + 版本tag/latest 双tag 推送；FORCE=1 允许 dirty 工作区）
+	./deploy/publish.sh $(if $(filter 1,$(FORCE)),--force)
+
 docker-up: ## 启动多实例高可用部署（2 实例 + MySQL 5.7）
 	docker compose up -d
 
