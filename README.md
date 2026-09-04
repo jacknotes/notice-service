@@ -246,6 +246,34 @@ Webhook 的 IP 白名单依赖 `X-Real-IP` / `X-Forwarded-For` 头，但这些�
 
 - 不要直接把服务暴露公网却不设反向代理——此时任何人可伪造 `X-Forwarded-For` 绕过 IP 白名单。
 
+### 发布到 Docker Hub
+
+镜像发布到 `jacknotes/notice-service`，除版本 tag 外**同时维护 `latest`**：每次发布后
+`latest` 始终指向最新构建（`README` 的分离部署示例即用 `jacknotes/notice-service:latest` 拉取最新版）。
+
+```bash
+make publish            # 等价：./deploy/publish.sh
+```
+
+发布流程（`deploy/publish.sh`）：
+1. 版本号取 `git describe --tags --always --dirty`（与 `make version` 一致，注入二进制 `buildVersion`）。
+2. `docker build` 构建镜像，同时打 `jacknotes/notice-service:<版本号>` 与 `jacknotes/notice-service:latest` 两个 tag。
+3. 依次推送两个 tag 到 Docker Hub，保证 `latest` 始终是最新构建。
+
+要点：
+
+- **dirty 保护**：工作区存在未提交改动时默认拒绝发布（避免 `latest` 指向与仓库不一致的构建）。确认要发可加 `--force`。
+- **服务器注意**：若在 `/opt/notice-service` 发布，`docker-compose.quickstart.yml` 常因手动维护 tag 有未提交改动，
+  发布前需 `git stash` 或使用 `make publish FORCE=1`。
+- **国内网络加速**（可选环境变量，与 Dockerfile ARG 对应）：
+  ```bash
+  IMAGE_PREFIX=docker.m.daocloud.io/library/ make publish
+  # NPM_REGISTRY / GOPROXY 默认已指向 npmmirror / goproxy.cn，通常无需改
+  ```
+- **前置**：已 `docker login`（目标仓库需登录态）。
+- **验证**：`docker images jacknotes/notice-service` 查看 latest 与版本 tag 指向同一镜像 ID；
+  生产升级见「一键部署」——改 `docker-compose.quickstart.yml` 的 `image:` 后 `up -d`。
+
 ## 部署形态（四种）
 
 本服务的后端（Go）与前端（Vue3 静态产物）**默认合一**：后端直接托管 `web/dist`，一个进程一个端口即可运行。但你也可以**拆开部署**，按需选择下面四种形态之一。
