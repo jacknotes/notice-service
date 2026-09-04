@@ -23,6 +23,13 @@
 set -euo pipefail
 
 REGISTRY="${REGISTRY:-jacknotes/notice-service}"
+
+# 自动读取仓库根 .env 中的 IMAGE_PREFIX（国内镜像源），未显式设置环境变量时生效；
+# 未配置则走官方 Docker Hub（海外网络/本地机器）。
+if [ -z "${IMAGE_PREFIX:-}" ] && [ -f ".env" ]; then
+  ENV_IMAGE_PREFIX="$(grep -E '^IMAGE_PREFIX=' .env | tail -1 | cut -d= -f2-)"
+  [ -n "$ENV_IMAGE_PREFIX" ] && IMAGE_PREFIX="$ENV_IMAGE_PREFIX"
+fi
 IMAGE_PREFIX_ARG=""
 [ -n "${IMAGE_PREFIX:-}" ] && IMAGE_PREFIX_ARG="--build-arg IMAGE_PREFIX=${IMAGE_PREFIX}"
 
