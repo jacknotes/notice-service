@@ -404,3 +404,61 @@ func TestCleanerPurgesRateLimits(t *testing.T) {
 		t.Fatalf("cleanup should purge stale rate_limits rows, got %d", n)
 	}
 }
+
+// TestRetryCountWrittenToLogs 验证队列重试时日志 retry_count 随尝试次数递增：
+// flakyChan 前 2 次失败、第 3 次成功，job 最终 done，task_logs 里应存在
+// retry_count = 0、1、2 各一条（首次尝试 + 两次重试）。
+func TestRetryCountWrittenToLogs(t *testing.T) {
+	db := testDB(t)
+	ns := NewNotificationService(db, nil)
+	flaky := &flakyChan{failTimes: 2}
+	ns.Instancer = func(c *model.Channel) (channel.Channel, error) { return flaky, nil }
+	q := NewQueueService(db, ns, queueCfg(), "test-inst")
+	uid := seedServiceUser(t, db)
+	chID := seedServiceChannel(t, db, uid)
+	tplID := seedServiceTemplate(t, db, uid)
+	tkID := seedServiceTask(t, db, uid, chID, tplID)
+	q.Start()
+	defer q.Stop()
+
+	jobID, err := q.Enqueue(tkID, nil, "", Trigger{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		if got := jobStatus(t, q, jobID); got == "done" {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("job should eventually succeed, status=%s", jobStatus(t, q, jobID))
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	// 每次尝试写入一条日志（2 次失败 + 1 次成功），retry_count 应分别为 0、1、2。
+	var counts []int
+	rows, err := db.Query("SELECT retry_count FROM task_logs WHERE task_id=? ORDER BY id", tkID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var c int
+		if err := rows.Scan(&c); err != nil {
+			t.Fatal(err)
+		}
+		counts = append(counts, c)
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
+	}
+	if len(counts) != 3 {
+		t.Fatalf("expected 3 task_logs (2 failed + 1 success), got %d: %v", len(counts), counts)
+	}
+	for i, want := range []int{0, 1, 2} {
+		if counts[i] != want {
+			t.Errorf("task_logs[%d].retry_count=%d want %d", i, counts[i], want)
+		}
+	}
+}

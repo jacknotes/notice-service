@@ -18,6 +18,8 @@ import (
 var errTaskDisabled = errors.New("任务已禁用")
 
 // Trigger 描述一次发送的触发来源（写入发送日志：谁触发 / 从哪个 IP / 触发方式）。
+// Attempt 为本次尝试的序号（0=首次，1=第一次重试，…），由队列从 send_jobs.attempts 传入，
+// 写入日志 retry_count，反映该发送实际重试了几次。
 type Trigger struct {
 	// Type 触发方式：cron（定时）/ webhook（API）/ manual（立即发送）/ retry（日志重试）。
 	Type string
@@ -25,6 +27,8 @@ type Trigger struct {
 	By string
 	// IP 触发来源 IP（cron 无来源为空）。
 	IP string
+	// Attempt 本次尝试序号（0=首次尝试，无重试）。
+	Attempt int
 }
 
 // QueueConfig 发送队列的运行时参数（来自 config 或测试直接构造）。
@@ -205,7 +209,9 @@ func (q *QueueService) process(j *model.SendJob) {
 	}
 	var vars map[string]string
 	_ = json.Unmarshal([]byte(j.VarsJSON), &vars)
-	tr := Trigger{Type: j.TriggerType, By: j.TriggerBy, IP: j.TriggerIP}
+	// Attempt 为本次尝试序号（j.Attempts 是已失败次数：首次=0，重试1次后=1，…），
+	// 供 SendTask 写入日志 retry_count。
+	tr := Trigger{Type: j.TriggerType, By: j.TriggerBy, IP: j.TriggerIP, Attempt: j.Attempts}
 	if err := q.ns.SendTask(j.TaskID, vars, tr); err != nil {
 		_ = q.jobRepo.MarkFailed(j.ID, err.Error(), q.cfg.MaxAttempts, q.cfg.RetryBackoff)
 		return

@@ -98,7 +98,7 @@ func (s *NotificationService) SendTask(taskID int64, vars map[string]string, tr 
 			_ = s.logRepo.Create(&model.TaskLog{
 				TaskID: task.ID, ChannelID: ch.ID, Subject: subject, Content: content,
 				Status: "failed", Request: "{}", ErrorMsg: fmt.Sprintf("渠道「%s」已停用", ch.Name),
-				TriggerType: tr.Type, TriggerBy: tr.By, TriggerIP: tr.IP,
+				TriggerType: tr.Type, TriggerBy: tr.By, TriggerIP: tr.IP, RetryCount: tr.Attempt,
 			})
 			continue
 		}
@@ -139,7 +139,7 @@ func (s *NotificationService) sendOnce(inst channel.Channel, msg *channel.Messag
 		_ = s.logRepo.Create(&model.TaskLog{
 			TaskID: task.ID, ChannelID: ch.ID, Subject: msg.Subject, Content: msg.Content,
 			Status: "failed", Request: string(reqBody), ErrorMsg: err.Error(),
-			TriggerType: tr.Type, TriggerBy: tr.By, TriggerIP: tr.IP,
+			TriggerType: tr.Type, TriggerBy: tr.By, TriggerIP: tr.IP, RetryCount: tr.Attempt,
 		})
 		return err
 	}
@@ -148,7 +148,7 @@ func (s *NotificationService) sendOnce(inst channel.Channel, msg *channel.Messag
 	_ = s.logRepo.Create(&model.TaskLog{
 		TaskID: task.ID, ChannelID: ch.ID, Subject: msg.Subject, Content: msg.Content,
 		Status: "success", Request: string(reqBody), Response: "ok",
-		TriggerType: tr.Type, TriggerBy: tr.By, TriggerIP: tr.IP,
+		TriggerType: tr.Type, TriggerBy: tr.By, TriggerIP: tr.IP, RetryCount: tr.Attempt,
 	})
 	return nil
 }
