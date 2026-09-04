@@ -1,24 +1,23 @@
 // 会话存储：凭据（token/user）存 localStorage 以便同一浏览器的多标签页共享，
-// 并用「会话 Cookie」（不设过期时间）标记浏览器进程存活。
+// 并用「会话 Cookie」+「sessionStorage 窗口标记」双重判定浏览器进程存活。
 //
-// 浏览器行为对照：
-// - 会话 Cookie 属于浏览器进程：关闭单个/所有标签页都不会清除，关闭整个浏览器
-//   进程或重启电脑才清除。
-// - 同一浏览器内所有标签页共享同域 Cookie，天然支持多标签页协作。
+// 关键浏览器行为：
+// - 会话 Cookie（不设 Max-Age/Expires）：随浏览器进程存活，关闭单个/全部标签页
+//   不消失，关闭整个浏览器进程或重启电脑才消失。
+// - sessionStorage 窗口标记：复制标签页（duplicate tab）/ 同源 window.open 时会被
+//   浏览器复制到新标签页；直接新开标签页或浏览器关闭后新开的标签页则为空。
 //
-// 登录状态的生命周期与「浏览器进程」绑定：
-//   只要浏览器不关闭，即使相关标签页全部关闭，重新打开网址仍保持登录；
-//   关闭整个浏览器或重启电脑后，会话 Cookie 消失 → 判定为新会话 → 重新登录。
-//
-// 注意：复制标签页/新开标签页瞬间，浏览器同步 Cookie 与执行页面 JS 存在微小
-// 竞态窗口。因此「Cookie 缺失但 localStorage 有 token」时不能立即清除凭据——
-// 那会把正常会话误杀（所有标签页共享的 token 被清，API 随即 401 跳登录）。
-// 正确做法是乐观恢复：补种 Cookie 继续使用，真正的无效 token 由 API 401
-// 拦截器（client.ts）统一清除。
+// 三场景判定：
+//   1) Cookie 存在 → 浏览器进程存活，无论标签页如何打开都保持登录。
+//   2) Cookie 缺失 + sessionStorage 有窗口标记 → 复制标签页的同步竞态窗口
+//      （Cookie 尚未同步过来），保持登录并补种 Cookie。
+//   3) Cookie 缺失 + sessionStorage 无窗口标记 → 浏览器刚关闭重开（localStorage
+//      残留了持久凭据），清除凭据要求重新登录。
 
 const TOKEN_KEY = 'token'
 const USER_KEY = 'user'
 const SESSION_COOKIE = 'notice_session'
+const WINDOW_MARK_KEY = 'notice_window_mark'
 
 // 写入会话 Cookie：不设 Max-Age / Expires，浏览器进程关闭即失效。
 function setSessionCookie(): void {
@@ -36,23 +35,41 @@ function clearSessionCookie(): void {
   document.cookie = `${SESSION_COOKIE}=; Path=/; SameSite=Lax; Max-Age=0`
 }
 
-// 会话初始化：应用启动时调用一次。
-// - 浏览器进程存活（Cookie 在）→ 直接放行。
-// - 无任何会话痕迹 → 种下 Cookie 标记浏览器进程。
-// - Cookie 缺失但 localStorage 残留 token → 可能是「复制标签页竞态」或
-//   「浏览器重启后 token 未过期」。不清除，补种 Cookie 乐观恢复；
-//   若 token 已失效，API 401 拦截器会负责清除并跳登录。
+// 窗口/标签页组标记：存 sessionStorage。复制标签页时被复制，浏览器关闭后为空。
+function getWindowMark(): boolean {
+  return sessionStorage.getItem(WINDOW_MARK_KEY) === '1'
+}
+
+function setWindowMark(): void {
+  sessionStorage.setItem(WINDOW_MARK_KEY, '1')
+}
+
+// 会话初始化：应用启动时调用一次，决定当前标签页是否保持登录。
 export function initSession(): void {
-  if (hasSessionCookie()) return
-  if (localStorage.getItem(TOKEN_KEY)) {
+  if (hasSessionCookie()) {
+    // 浏览器进程存活：保持登录，并确保本窗口组有标记（便于后续复制标签页识别）
+    setWindowMark()
+    return
+  }
+  if (!localStorage.getItem(TOKEN_KEY)) {
+    // 无任何凭据：首次访问（登录页），种下 Cookie 与窗口标记
+    setSessionCookie()
+    setWindowMark()
+    return
+  }
+  // Cookie 缺失但 localStorage 残留 token：
+  if (getWindowMark()) {
+    // 窗口标记来自复制标签页（原标签页复制过来的 sessionStorage）→ 复制竞态，
+    // 保持登录并补种 Cookie；真正无效的 token 由 API 401 拦截器兜底清除。
     setSessionCookie()
     return
   }
-  setSessionCookie()
+  // 无窗口标记 → 浏览器刚关闭重开（新标签页 sessionStorage 为空），
+  // localStorage 里的持久凭据应作废，要求重新登录。
+  clearSession()
 }
 
-// 读取凭据不做 cookie 硬门槛：cookie 可能是复制标签页瞬间尚未同步（竞态），
-// 此时 token 若在 localStorage 里应照常返回，由 API 请求实际验证有效性。
+// 读取凭据只读 localStorage：initSession 已保证仅有效会话会保留 token。
 export function getToken(): string {
   return localStorage.getItem(TOKEN_KEY) || ''
 }
@@ -68,6 +85,7 @@ export function getUser(): unknown {
 
 export function saveSession(token: string, user: unknown): void {
   setSessionCookie()
+  setWindowMark()
   localStorage.setItem(TOKEN_KEY, token)
   localStorage.setItem(USER_KEY, JSON.stringify(user))
 }
@@ -80,6 +98,7 @@ export function updateSessionUser(user: unknown): void {
 
 export function clearSession(): void {
   clearSessionCookie()
+  sessionStorage.removeItem(WINDOW_MARK_KEY)
   localStorage.removeItem(TOKEN_KEY)
   localStorage.removeItem(USER_KEY)
 }

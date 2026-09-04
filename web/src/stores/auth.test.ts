@@ -96,13 +96,13 @@ describe('auth store', () => {
     expect(s2.isLoggedIn).toBe(true)
   })
 
-  it('Cookie 缺失但 localStorage 有 token（复制标签页竞态）不清除会话', async () => {
-    // 建立会话后模拟 cookie 未同步（竞态窗口）
+  it('Cookie 缺失但 sessionStorage 有窗口标记（复制标签页竞态）保持登录', async () => {
+    // 建立会话后模拟复制标签页竞态：cookie 未同步，但窗口标记随复制保留
     const s = useAuthStore()
     s.completeLogin({ token: 'tk', user: mockUser })
     clearCookies()
-    expect(hasSessionCookie()).toBe(false)
-    // 重新加载模块触发 initSession：应补种 cookie、保留 token，而不是清除
+    // sessionStorage 窗口标记仍在（复制标签页继承）
+    expect(sessionStorage.getItem('notice_window_mark')).toBe('1')
     vi.resetModules()
     const { useAuthStore: freshStore } = await import('./auth')
     setActivePinia(createPinia())
@@ -111,6 +111,22 @@ describe('auth store', () => {
     expect(s2.isLoggedIn).toBe(true)
     expect(hasSessionCookie()).toBe(true) // 已补种
     expect(localStorage.getItem('token')).toBe('tk')
+  })
+
+  it('Cookie 缺失且无窗口标记（浏览器关闭重开）需重新登录', async () => {
+    const s = useAuthStore()
+    s.completeLogin({ token: 'tk', user: mockUser })
+    // 模拟浏览器关闭重开：cookie 与 sessionStorage 都清空，localStorage 残留旧凭据
+    clearCookies()
+    sessionStorage.clear()
+    vi.resetModules()
+    const { useAuthStore: freshStore } = await import('./auth')
+    setActivePinia(createPinia())
+    const s2 = freshStore()
+    expect(s2.token).toBe('')
+    expect(s2.isLoggedIn).toBe(false)
+    expect(localStorage.getItem('token')).toBeNull()
+    expect(localStorage.getItem('user')).toBeNull()
   })
 
   it('login 失败时错误透传', async () => {
