@@ -248,10 +248,13 @@ func main() {
 		// index.html 必须每次回源验证（no-cache）：它引用的 JS/CSS 文件名随
 		// 构建变化，若被浏览器启发式缓存，部署新版后用户会一直加载旧 bundle，
 		// 导致线上行为与代码不一致（如会话逻辑修复不生效）。
-		engine.GET("/", func(c *gin.Context) {
+		// 同时注册 GET 与 HEAD：健康/监控探测常用 HEAD，避免 404 误报。
+		indexFile := func(c *gin.Context) {
 			c.Header("Cache-Control", "no-cache")
 			c.File(filepath.Join(staticDir, "index.html"))
-		})
+		}
+		engine.GET("/", indexFile)
+		engine.HEAD("/", indexFile)
 	} else {
 		log.Printf("[警告] 未找到静态资源目录（STATIC_DIR=%s，./web/dist，可执行文件同目录均不存在），SPA 页面不可用，API 照常。", cfg.StaticDir)
 	}
