@@ -2,42 +2,62 @@
 
 自托管通知发送服务：按你配置的规则，把提醒消息准时发给指定的人。支持邮箱、企业微信、钉钉、飞书、个人微信（PushPlus）等多种渠道，提供深色主题的 Web 管理界面，可多实例高可用部署。
 
+## 界面预览
+
+![仪表盘（中文）](/images/notice-service01.png)
+
+![渠道管理（中文）](/images/notice-service02.png)
+
+![仪表盘（English）](/images/notice-service03.png)
+
+![渠道管理（English）](/images/notice-service04.png)
+
 ## 功能特性
 
 - **多渠道通知**：邮箱 (SMTP)、企业微信、钉钉（支持加签）、飞书、个人微信 (PushPlus)，统一适配器接口，易扩展
+
 - **模板 + 变量**：Markdown 模板，`{{变量}}` 占位符，实时预览
-- **任务触发**：Cron 定时触发 或 Webhook API 触发（唯一 api_key，可选 IP 白名单）
+
+- **任务触发**：Cron 定时触发 或 Webhook API 触发（唯一 api\_key，可选 IP 白名单）
+
 - **分布式高可用**：多实例部署时基于 MySQL 租约锁保证 Cron 任务不重复执行，单实例宕机自动接管
+
 - **可靠性**：异步持久化发送队列（Webhook 立即返回 202），失败自动重试 3 次（5s→30s→60s），多副本原子认领不重复 + 崩溃自动接管，完整发送日志与保留期自动清理
-- **安全**：JWT 无状态认证（改密/登出即时吊销旧会话）、bcrypt 密码、渠道敏感配置 AES-256-GCM 加密、**双因子认证（TOTP + 一次性备用码，验证失败限流防爆破）**、登录失败按「用户名+IP」限流（防账号锁定 DoS）、Webhook HMAC 签名密钥与 api_key 独立
+
+- **安全**：JWT 无状态认证（改密/登出即时吊销旧会话）、bcrypt 密码、渠道敏感配置 AES-256-GCM 加密、**双因子认证（TOTP + 一次性备用码，验证失败限流防爆破）**、登录失败按「用户名+IP」限流（防账号锁定 DoS）、Webhook HMAC 签名密钥与 api\_key 独立
+
 - **操作审计**：管理员操作审计日志（含来源 IP、模块分类与操作对象名称），Web 端「操作审计」页可按模块/操作/关键词/日期筛选 + 分页查看（关键词可匹配用户名 / 来源 IP / 详情；详情形如 `删除用户 test1 (id=2)`，对象删除后仍可识别）
+
 - **仪表盘**：今日发送量、成功率、近 7/30 天发送趋势；发送日志含触发方式 / 触发人 / 触发 IP
+
 - **多实例可观测**：各后端实例心跳上报，「信号在线」侧边栏显示健康节点数，点击可查看各节点状态（地址/版本/启动时间/最后心跳）
+
 - **前端**：Vue3 + Element Plus 深色主题（"Signal Relay" 设计），PC/移动端响应式；侧边栏可收缩/展开（状态记忆）；列表支持排序与分页，渠道/模板/任务支持「复制」，模板/任务编辑实时预览，用户管理支持显示名/邮箱、角色调整、禁用/启用与管理员强制 2FA；界面中英文双语可切换（vue-i18n，顶栏 + 个人设置双入口，默认中文）；界面展示构建版本号（侧边栏底部 / 节点状态弹窗 / 个人设置页），升级对比一目了然
+
 - **部署**：Docker 多阶段构建，单实例镜像约 30-50MB；已发布至 Docker Hub（`jacknotes/notice-service`），单镜像 + MySQL 一键启动
 
 ## 部署形态速览
 
 本服务后端（Go）与前端（Vue3 静态产物）默认合一，也可拆开部署：
 
-| 形态 | 前端托管 | 后端 | 适合场景 | 详见 |
-|------|----------|------|----------|------|
-| **单体部署**（默认） | 后端托管 `web/dist` | 后端 + API | 中小流量、内部系统、零额外配置 | [部署形态·单体](#部署形态四种) |
-| **前后端分离** | Nginx/CDN | 只出 API | 前端独立发布、CDN 加速、多前端复用 | [部署形态·分离](#部署形态四种) |
-| **仅后端部署** | 无 | 纯 API | 移动端/脚本/纯 API 集成 | [部署形态·仅后端](#部署形态四种) |
-| **仅前端部署** | 静态站 | 远程 API | 前端独立生命周期、后端在别处 | [部署形态·仅前端](#部署形态四种) |
+| 形态           | 前端托管            | 后端       | 适合场景                | 详见                  |
+| ------------ | --------------- | -------- | ------------------- | ------------------- |
+| **单体部署**（默认） | 后端托管 `web/dist` | 后端 + API | 中小流量、内部系统、零额外配置     | [部署形态·单体](#部署形态四种)  |
+| **前后端分离**    | Nginx/CDN       | 只出 API   | 前端独立发布、CDN 加速、多前端复用 | [部署形态·分离](#部署形态四种)  |
+| **仅后端部署**    | 无               | 纯 API    | 移动端/脚本/纯 API 集成     | [部署形态·仅后端](#部署形态四种) |
+| **仅前端部署**    | 静态站             | 远程 API   | 前端独立生命周期、后端在别处      | [部署形态·仅前端](#部署形态四种) |
 
 > 架构本质：前端是纯静态文件（`web/dist`），后端是无状态 API + 可选静态托管（`STATIC_DIR` 无文件时仅 API 照常）。拆开部署不改后端，只是把静态文件挪走。
 
 ## 技术栈
 
-| 组件 | 方案 |
-|------|------|
-| 后端 | Go + Gin + database/sql + MySQL |
-| Cron 调度 | robfig/cron + MySQL 租约锁 |
-| 前端 | Vue3 + Element Plus + Vite + ECharts |
-| 认证 | JWT (golang-jwt) + bcrypt |
-| 部署 | Docker 多阶段 + docker-compose |
+| 组件      | 方案                                   |
+| ------- | ------------------------------------ |
+| 后端      | Go + Gin + database/sql + MySQL      |
+| Cron 调度 | robfig/cron + MySQL 租约锁              |
+| 前端      | Vue3 + Element Plus + Vite + ECharts |
+| 认证      | JWT (golang-jwt) + bcrypt            |
+| 部署      | Docker 多阶段 + docker-compose          |
 
 ## 一键部署（Docker Hub 镜像，推荐）
 
@@ -67,7 +87,7 @@ cp .env.example .env && vi .env          # 同上，必改密码与密钥
 docker compose -f docker-compose.quickstart.yml up -d
 ```
 
-启动完成后访问 **http://<主机IP>:8080**，默认管理员 `admin` / 你在 `.env` 里设置的 `ADMIN_PASS`。
+启动完成后访问 **http\://<主机IP>:8080**，默认管理员 `admin` / 你在 `.env` 里设置的 `ADMIN_PASS`。
 
 常用命令：
 
@@ -79,12 +99,19 @@ docker compose -f docker-compose.quickstart.yml pull \
 ```
 
 > - 镜像版本固定在 compose 文件中的 `image: jacknotes/notice-service:v1`；升级到新版本时先 `pull` 拉新镜像，再把 tag 改为新版本号后 `up -d`。登录后可在「个人设置」或侧边栏底部查看当前运行版本。
+>
 > - 国内网络拉取 Docker Hub 镜像慢/失败时，在 `.env` 设置 `MYSQL_IMAGE=docker.m.daocloud.io/library/mysql:5.7`，应用镜像同理可换成镜像源前缀形式。
+>
 > - **MySQL 版本兼容性**：默认 `mysql:5.7`（amd64），已实测兼容 `mysql:8.0`（含 `caching_sha2_password` 认证与 `utf8mb4_0900_ai_ci` 排序规则），理论兼容 8.4+。注意两点：
+>
 >   - **ARM64 主机**（Apple Silicon / ARM 服务器）：`mysql:5.7` 无 arm64 构建，需在 `.env` 设置 `MYSQL_IMAGE=mysql:8.0`（5.7 全系仅 amd64）；
+>
 >   - **老 Docker 引擎**（低于 20.10.5）：新版 `mysql:8.0` 镜像因 seccomp 策略无法启动（初始化报 `Can't create thread (errno: 1)`），此类环境请继续使用默认的 `mysql:5.7`。
+>
 > - 首启自动建表并创建管理员，数据（渠道配置、模板、任务、日志）持久化在 MySQL 卷中，重启不丢。
+>
 > - 生产环境建议置于 Nginx 反向代理之后（参考下文「Docker 部署」的反代说明），不要将 8080 直接暴露公网。
+>
 > - 需要多实例高可用（双实例 + 负载均衡、源码构建）时，见下文「Docker 部署（多实例高可用）」。
 
 ## 快速开始（本地开发）
@@ -114,18 +141,22 @@ cd web && npm install && npm run dev
 所有命令见 `make help`。按场景：
 
 ### 首次准备
+
 ```bash
 make deps    # 一键安装：npm install（前端）+ go mod download（后端）
 ```
 
 ### 本地开发（推荐日常用）
+
 ```bash
 make dev     # 一条命令：启动本地 MySQL（未运行则自动拉起）→ 编译后端 :8080 + 前端 Vite :5173
 ```
-访问 **http://localhost:5173**。`make dev` 会先执行 `db-start`（MySQL 已在跑则跳过），
-前提仅剩 :8080 未被占用（有旧进程先 `kill <pid>`）。
+
+访问 \*\*<http://localhost:5173**。`make> dev`会先执行`db-start`（MySQL 已在跑则跳过），
+前提仅剩 :8080 未被占用（有旧进程先 `  kill <pid>\`）。
 
 ### 只跑后端 / 只跑前端
+
 ```bash
 make run             # 编译并启动后端 :8080（默认 release）
 make dev-backend     # 后端 :8080，GIN_MODE=debug（多请求日志，便于排查）
@@ -136,6 +167,7 @@ make frontend-install# 仅安装前端依赖
 ```
 
 ### 构建与检查
+
 ```bash
 make build    # 先生成 Swagger 文档，再静态编译后端到 .dev/notice-service（CGO_ENABLED=0）
 make swagger  # 只重新生成 Swagger 文档（改过 handler 注解后执行）
@@ -146,6 +178,7 @@ cd web && npm run test   # 前端 Vitest 测试
 ```
 
 ### Docker（前后端合一镜像）
+
 ```bash
 make docker-build   # docker build -t notice-service .（多阶段：前端→后端→运行时，镜像内含前端与 Swagger）
 make docker-up      # docker compose up -d（2 实例 + MySQL 5.7 高可用）
@@ -154,15 +187,18 @@ make docker-logs    # 跟随日志
 ```
 
 ### 本地 MySQL（.dev 裸 MariaDB）
+
 ```bash
 make db-start     # 启动本地 MySQL（已在运行则跳过；首次会自动初始化数据目录）
 make db-stop      # 优雅停止本地 MySQL
 make db-status    # 查看运行状态（端口/socket/Uptime）
 ```
+
 本地开发用的 MySQL 不是 Docker 或系统服务，而是 `.dev` 目录下的独立 MariaDB 实例
 （数据 `.dev/mysql-data` / socket `.dev/mysql-run/mysqld.sock` / 日志 `.dev/mysql-run/mariadb.log`）。
 
 ### 运维 / 清理
+
 ```bash
 make db-clean FORCE=1   # 危险：清空 notice_service 与 notice_service_test 全部数据
 make clean              # 删除 .dev/notice-service、web/dist、web/node_modules、docs/swagger
@@ -205,7 +241,9 @@ Webhook 的 IP 白名单依赖 `X-Real-IP` / `X-Forwarded-For` 头，但这些�
 
 - 典型部署「宿主 Nginx → docker-compose 容器」：保持默认即可。容器形态下应用看到的连接源是
   Docker 网桥网关（如 `172.18.0.1`）而非 `127.0.0.1`，默认的 `172.16.0.0/12` 覆盖所有默认网桥网段。
+
 - Nginx 在其它节点：把 `TRUSTED_PROXIES` 设为反代所在网段，如 `10.0.0.0/8`。
+
 - 不要直接把服务暴露公网却不设反向代理——此时任何人可伪造 `X-Forwarded-For` 绕过 IP 白名单。
 
 ## 部署形态（四种）
@@ -230,7 +268,9 @@ docker compose up -d
 ```
 
 - 优点：部署最简单，一个进程搞定；适合中小流量、内部系统。
+
 - 前端产物与后端同镜像/同目录，升级同步、无跨域。
+
 - 访问 `http://<host>:8080` 即打开管理界面。
 
 ### 形态二：前后端分离部署（前端交 Nginx/CDN，后端只出 API）
@@ -262,6 +302,7 @@ make prod-backend                          # 或 docker compose 跑后端
 ```
 
 - **静态资源缓存**：`web/dist` 下文件名带内容 hash 的 `/assets/*` 建议配 `Cache-Control: public, max-age=31536000, immutable`；`index.html` 配 `no-cache`（详见下方「缓存策略」）。
+
 - **后端只出 API 时**：后端自身对 `/` 的静态托管若 `STATIC_DIR` 无文件会跳过，API 不受影响；若保留 dist，则后端同时也能直接访问页面（可作兜底）。
 
 ### 形态三：仅后端部署（纯 API 服务，无前端页面）
@@ -285,6 +326,7 @@ docker run -d --name notice-api -p 8080:8080 \
 ```
 
 - 所有写操作仍走管理员鉴权（`/api/auth/login` 拿 token）；无页面不影响任何 API 能力。
+
 - 适合：纯 API 集成、给其它前端/脚本复用、网关只暴露 API 网关路由。
 
 ### 形态四：仅前端部署（静态站 + 远程 API）
@@ -308,6 +350,7 @@ cd web && npm ci && npm run build
 ```
 
 - 注意：`web/src/api/client.ts` 的 `baseURL` 是 `/api`（同源）。跨域部署务必走反向代理同域转发 `/api`，避免 CORS 与 cookie 作用域问题。
+
 - 会话 Cookie（`notice_session`）按域名隔离：前端与 API 同域时登录态才能跨标签页共享（浏览器不关闭时保持登录，关闭浏览器后需重新登录）。
 
 ### 静态资源缓存策略（分离部署必读）
@@ -323,28 +366,28 @@ location = /index.html { add_header Cache-Control "no-cache"; }
 
 > 除环境变量外，也支持 `config.yml` 配置文件（参考 `config.example.yml`）。优先级：环境变量 > config.yml > 默认值。启动时可用 `--config <path>` 或 `CONFIG_FILE` 环境变量指定配置文件路径（默认 `./config.yml`）。
 
-| 变量 | 默认 | 说明 |
-|------|------|------|
-| `DB_HOST` / `DB_PORT` / `DB_USER` / `DB_PASSWORD` / `DB_NAME` | 127.0.0.1 / 3306 / notice / notice123 / notice_service | 数据库连接 |
-| `JWT_SECRET` | change-me | JWT 签名密钥（多实例必须一致） |
-| `ENCRYPT_KEY` | 随机生成 | 渠道配置 AES 密钥（多实例必须一致） |
-| `PORT` | 8080 | HTTP 端口 |
-| `INSTANCE_ID` | 自动 UUID | 实例标识（租约锁所有权） |
-| `ADMIN_USER` / `ADMIN_PASS` | admin / admin123 | 默认管理员（首启创建） |
-| `QUEUE_WORKERS` | 4 | 每实例发送 worker 数 |
-| `QUEUE_POLL_MS` | 1000 | 队列认领轮询间隔（毫秒） |
-| `QUEUE_MAX_ATTEMPTS` | 3 | 队列级最大尝试次数（含首次） |
-| `QUEUE_RETRY_BACKOFF` | 5s,30s,60s | 重试间隔（逗号分隔） |
-| `QUEUE_CLAIM_TTL` | 120 | 认领后多久算陈旧（秒），超时由其它实例接管 |
-| `LOG_RETENTION_DAYS` | 90 | 发送日志保留天数 |
-| `QUEUE_JOB_RETENTION_DAYS` | 30 | 已完成 job 保留天数 |
-| `AUDIT_RETENTION_DAYS` | 180 | 审计日志保留天数（超出自动清理） |
-| `TRUSTED_PROXIES` | 127.0.0.1,::1,172.16.0.0/12 | 可信反向代理 CIDR（逗号分隔），控制 X-Forwarded-For / X-Real-IP 是否可信 |
-| `METRICS_ENABLED` | false | 是否暴露 /metrics Prometheus 指标端点（建议仅内网开启，并配合 METRICS_USER/METRICS_PASSWORD） |
-| `METRICS_USER` / `METRICS_PASSWORD` | 空 | 同时设置时 /metrics 启用 Basic Auth（建议再用反代/内网保护） |
-| `ENCRYPT_KEY_FILE` | .notice-encrypt.key | 渠道加密密钥文件路径（未设 ENCRYPT_KEY 时读取/生成；重启前请确保持久化，否则历史渠道配置无法解密） |
-| `STATIC_DIR` | ./web/dist | 前端静态资源目录（SPA 产物；非固定工作目录启动时请指定） |
-| `SWAGGER_ENABLED` | false | 是否暴露 `/swagger` API 文档（默认关闭：文档枚举全部接口；本地开发可 `SWAGGER_ENABLED=true make run` 开启） |
+| 变量                                                            | 默认                                                      | 说明                                                                             |
+| ------------------------------------------------------------- | ------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| `DB_HOST` / `DB_PORT` / `DB_USER` / `DB_PASSWORD` / `DB_NAME` | 127.0.0.1 / 3306 / notice / notice123 / notice\_service | 数据库连接                                                                          |
+| `JWT_SECRET`                                                  | change-me                                               | JWT 签名密钥（多实例必须一致）                                                              |
+| `ENCRYPT_KEY`                                                 | 随机生成                                                    | 渠道配置 AES 密钥（多实例必须一致）                                                           |
+| `PORT`                                                        | 8080                                                    | HTTP 端口                                                                        |
+| `INSTANCE_ID`                                                 | 自动 UUID                                                 | 实例标识（租约锁所有权）                                                                   |
+| `ADMIN_USER` / `ADMIN_PASS`                                   | admin / admin123                                        | 默认管理员（首启创建）                                                                    |
+| `QUEUE_WORKERS`                                               | 4                                                       | 每实例发送 worker 数                                                                 |
+| `QUEUE_POLL_MS`                                               | 1000                                                    | 队列认领轮询间隔（毫秒）                                                                   |
+| `QUEUE_MAX_ATTEMPTS`                                          | 3                                                       | 队列级最大尝试次数（含首次）                                                                 |
+| `QUEUE_RETRY_BACKOFF`                                         | 5s,30s,60s                                              | 重试间隔（逗号分隔）                                                                     |
+| `QUEUE_CLAIM_TTL`                                             | 120                                                     | 认领后多久算陈旧（秒），超时由其它实例接管                                                          |
+| `LOG_RETENTION_DAYS`                                          | 90                                                      | 发送日志保留天数                                                                       |
+| `QUEUE_JOB_RETENTION_DAYS`                                    | 30                                                      | 已完成 job 保留天数                                                                   |
+| `AUDIT_RETENTION_DAYS`                                        | 180                                                     | 审计日志保留天数（超出自动清理）                                                               |
+| `TRUSTED_PROXIES`                                             | 127.0.0.1,::1,172.16.0.0/12                             | 可信反向代理 CIDR（逗号分隔），控制 X-Forwarded-For / X-Real-IP 是否可信                          |
+| `METRICS_ENABLED`                                             | false                                                   | 是否暴露 /metrics Prometheus 指标端点（建议仅内网开启，并配合 METRICS\_USER/METRICS\_PASSWORD）     |
+| `METRICS_USER` / `METRICS_PASSWORD`                           | 空                                                       | 同时设置时 /metrics 启用 Basic Auth（建议再用反代/内网保护）                                      |
+| `ENCRYPT_KEY_FILE`                                            | .notice-encrypt.key                                     | 渠道加密密钥文件路径（未设 ENCRYPT\_KEY 时读取/生成；重启前请确保持久化，否则历史渠道配置无法解密）                      |
+| `STATIC_DIR`                                                  | ./web/dist                                              | 前端静态资源目录（SPA 产物；非固定工作目录启动时请指定）                                                 |
+| `SWAGGER_ENABLED`                                             | false                                                   | 是否暴露 `/swagger` API 文档（默认关闭：文档枚举全部接口；本地开发可 `SWAGGER_ENABLED=true make run` 开启） |
 
 ## 用户与角色管理
 
@@ -352,13 +395,20 @@ location = /index.html { add_header Cache-Control "no-cache"; }
 
 - **角色**：管理员 / 普通用户，可随时调整——普通用户可提升为管理员，管理员也可降级回普通用户
   （但至少保留 1 个管理员，防止系统锁死）。
+
 - **内置 admin 账号**（username=`admin`，首启自动创建）：**角色不可修改、密码不可由管理员重置**
   （包括「重置密码」令牌接口），也不可被禁用或删除；其密码仅能通过离线 `reset-password` CLI 恢复（见「密码重置」）。
+
 - **删除 / 禁用 / 启用**：
+
   - 内置 `admin` 账号可删除、禁用、启用其它管理员与普通用户；
+
   - 普通管理员只能删除、禁用、启用**普通用户**，不能操作任何管理员账号；
+
   - 禁用后该用户登录与已签发令牌立即失效，数据保留，可随时重新启用；
+
   - 任何人不能删除/禁用当前登录账号。
+
 - **其它限制**：不能编辑当前登录账号（个人密码请走「个人设置 → 修改密码」）。
 
 ## 密码重置
@@ -375,7 +425,9 @@ location = /index.html { add_header Cache-Control "no-cache"; }
    ```
 
    - 不带 `--new-password` 时进入交互式输入，密码不回显、不落 shell 历史，更安全。
+
    - `--username` 默认取 `ADMIN_USER`（默认 `admin`）；也支持重置任意普通用户。
+
    - 使用 `Docker` 部署时：`docker compose exec <service> ./notice-service reset-password --username admin`（交互输入）。
 
 3. **日常改密**：登录后在「个人设置 → 修改密码」（需原密码）。
@@ -453,7 +505,9 @@ Dockerfile  docker-compose.yml  docker-compose.quickstart.yml  .env.example
 ## 文档
 
 - **服务器部署指南**：`docs/deployment.md`（从空服务器 clone 代码 → 构建 → 运行 → Nginx 反代 → 升级 → 排错，含国内镜像与常见坑）
+
 - 设计文档：`docs/superpowers/specs/2026-07-17-notification-service-design.md`
+
 - 实现计划：`docs/superpowers/plans/2026-08-18-notice-service-implementation.md`
 
 ## 许可证
@@ -462,3 +516,4 @@ Dockerfile  docker-compose.yml  docker-compose.quickstart.yml  .env.example
 
 > 你可以自由使用、修改、分发与商用本项目，仅需在副本中保留版权声明与许可声明。
 > 本项目按「现状」提供，不附带任何明示或默示担保（详见 LICENSE 全文）。
+
