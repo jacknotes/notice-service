@@ -270,6 +270,7 @@ func buildFixture(t *testing.T, chType string, cfg map[string]string) *fixture {
 		Subject:   "会议 {{time}}",
 		ContentMD: "## 标题\n\n大家好 **{{name}}**，明天 {{time}} 开会",
 		Variables: []model.TemplateVar{{Name: "name", Default: "张三"}, {Name: "time", Default: "10:00"}},
+		Enabled:   true,
 	}
 	if err := tplSvc.Create(uid, tpl); err != nil {
 		t.Fatal(err)

@@ -245,6 +245,46 @@ func TestNotificationServiceSkipsDisabledChannel(t *testing.T) {
 	}
 }
 
+func TestNotificationServiceSkipsDisabledTemplate(t *testing.T) {
+	db := testDB(t)
+	ns := NewNotificationService(db, nil)
+
+	uid := seedServiceUser(t, db)
+	chID := seedServiceChannelType(t, db, uid, "wechat")
+	tplID := seedServiceTemplate(t, db, uid)
+	tkID := seedServiceTaskWithReceivers(t, db, uid, chID, tplID, `["a@x.com"]`)
+	// 停用模板：enabled=0
+	if _, err := db.Exec("UPDATE templates SET enabled=0 WHERE id=?", tplID); err != nil {
+		t.Fatal(err)
+	}
+
+	cc := &countingChan{}
+	ns.Instancer = func(c *model.Channel) (channel.Channel, error) { return cc, nil }
+
+	if err := ns.SendTask(tkID, map[string]string{}, Trigger{}); err != nil {
+		t.Fatalf("disabled template should not error the whole task, got %v", err)
+	}
+	if cc.sends != 0 {
+		t.Fatalf("disabled template must not send, got %d sends", cc.sends)
+	}
+
+	// 应落一条失败日志便于追踪，原因标注「已停用」
+	var n int
+	if err := db.QueryRow("SELECT COUNT(*) FROM task_logs WHERE task_id=? AND channel_id=? AND status='failed'", tkID, chID).Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	if n != 1 {
+		t.Fatalf("expected 1 failed log for disabled template, got %d", n)
+	}
+	var msg string
+	if err := db.QueryRow("SELECT error_msg FROM task_logs WHERE task_id=? AND channel_id=? AND status='failed' LIMIT 1", tkID, chID).Scan(&msg); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(msg, "已停用") {
+		t.Errorf("failed log should mention disabled template, got %q", msg)
+	}
+}
+
 func TestNotificationServiceMultiChannelFanOut(t *testing.T) {
 	db := testDB(t)
 	ns := NewNotificationService(db, nil)

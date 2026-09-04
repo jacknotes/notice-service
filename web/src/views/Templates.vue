@@ -180,6 +180,13 @@
             />
           </el-form-item>
 
+          <el-form-item :label="t('common.status')">
+            <el-switch v-model="form.enabled" :aria-label="t('common.status')" />
+            <span class="field-hint" style="margin-left: var(--space-2)">
+              {{ form.enabled ? t('common.enabled') : t('common.disabled') }}
+            </span>
+          </el-form-item>
+
           <el-form-item :label="t('templates.variables')">
             <div class="var-editor">
               <div
@@ -376,6 +383,7 @@ const form = reactive<{
   subject: string
   content_md: string
   variables: TemplateVar[]
+  enabled: boolean
 }>({
   id: 0,
   name: '',
@@ -383,6 +391,7 @@ const form = reactive<{
   subject: '',
   content_md: '',
   variables: [],
+  enabled: true,
 })
 
 // 校验消息随语言切换（与 Login 的 computed 规则同一约定）
@@ -443,6 +452,7 @@ function openCreate() {
   form.subject = ''
   form.content_md = ''
   form.variables = []
+  form.enabled = true
   serverPreview.value = null
   dialogVisible.value = true
 }
@@ -454,6 +464,7 @@ function openEdit(row: TemplateRow) {
   form.subject = row.subject
   form.content_md = row.content_md
   form.variables = (row.variables || []).map((v) => ({ name: v.name, default: v.default ?? '' }))
+  form.enabled = row.enabled ?? true
   serverPreview.value = null
   dialogVisible.value = true
 }
@@ -466,6 +477,7 @@ function duplicateTemplate(row: TemplateRow) {
   form.subject = row.subject
   form.content_md = row.content_md
   form.variables = (row.variables || []).map((v) => ({ name: v.name, default: v.default ?? '' }))
+  form.enabled = row.enabled ?? true
   serverPreview.value = null
   dialogVisible.value = true
 }
@@ -492,7 +504,7 @@ async function saveTemplate() {
     const vars = form.variables
       .filter((v) => v.name.trim())
       .map((v) => ({ name: v.name.trim(), type: 'string', description: '', default: v.default }))
-    const payload = { name: form.name, category: form.category || 'default', subject: form.subject, content_md: form.content_md, variables: vars }
+    const payload = { name: form.name, category: form.category || 'default', subject: form.subject, content_md: form.content_md, variables: vars, enabled: form.enabled }
 
     if (form.id) {
       await templateApi.update(form.id, payload)

@@ -64,6 +64,20 @@ func (s *NotificationService) SendTask(taskID int64, vars map[string]string, tr 
 	if err != nil {
 		return err
 	}
+	if !tpl.Enabled {
+		// 模板已停用：任务无内容可发（与渠道停用一致），对每个绑定渠道各落一条
+		// 失败日志便于追踪；不返回错误，避免对停用模板做无意义重试。
+		for _, cid := range channelIDs {
+			if ch, cerr := s.channelRepo.GetByID(cid); cerr == nil {
+				_ = s.logRepo.Create(&model.TaskLog{
+					TaskID: task.ID, ChannelID: ch.ID, Subject: "", Content: "",
+					Status: "failed", Request: "{}", ErrorMsg: fmt.Sprintf("模板「%s」已停用", tpl.Name),
+					TriggerType: tr.Type, TriggerBy: tr.By, TriggerIP: tr.IP, RetryCount: tr.Attempt,
+				})
+			}
+		}
+		return nil
+	}
 
 	var receivers []string
 	_ = json.Unmarshal([]byte(task.ReceiversJSON), &receivers)
