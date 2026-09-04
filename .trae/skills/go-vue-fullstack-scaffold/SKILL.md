@@ -25,6 +25,37 @@ description: "Scaffold a production-grade full-stack web app: Go+Gin layered bac
 
 ---
 
+## 1.1 如何把这套规范套用到新项目（落地三步）
+
+> 本 SKILL 是**规范 + 纪律**，不是自动生成器。拿到后按下面三步把模板落到你的新项目，而不是整份照抄 notice-service 的业务代码。
+
+**第 0 步：确认定位**——你的项目是「前后端合一」还是「仅后端 API」？
+- 仅后端：`web/` 目录、Dockerfile 前端阶段、`STATIC_DIR` 都可砍掉，后端无前端也能独立跑（`STATIC_DIR` 找不到时"SPA 页面不可用，API 照常"）。
+- 前后端分离：前端静态产物交给 Nginx/CDN，后端只出 API（见 README「部署形态」）。
+- 单体合一：保持本模板默认形态即可。
+
+**第 1 步：改名换壳**（半小时内完成）
+1. `go.mod` 的 `module` 改为你的包名（如 `module myapp`），全文替换 import 路径。
+2. 前端 `package.json` `name`、`index.html` `<title>`、`web/src/i18n` 文案、`manifest` 换成你的应用名。
+3. Docker 镜像名、compose 的 `image:` / 容器名、README 标题统一替换。
+4. 保留 Makefile / Dockerfile / config 三通道 / 分层骨架**原样**，它们与业务无关、直接复用。
+
+**第 2 步：建你的表 + 剪业务**
+1. 用幂等 DDL 建你的初始表（第 4 节）；**不要**复制 notice-service 的渠道/模板/任务表。
+2. `internal/repository/` 每实体一个 `*_repo.go`；`service`/`handler` 分层对应。
+3. 路由分组（公开/登录/管理员）和中间件复用，把 notice 的 webhook/通知/scheduler 等**你不需要的模块删掉**。
+4. 共享词表（第 9 节）：你的项目若也有"分类/枚举"就独立建表托管，若没有则删掉该约定。
+
+**第 3 步：跑通基线**
+1. `make dev` 起本地后端+前端，确认默认 admin 能登录、能建一条你的实体数据。
+2. `make test` / `make vet` / `make fmt` + 前端 `npm run test` 全绿。
+3. 用无头浏览器（第 13 节）验证会话三场景 + 登录 CRUD 走一遍。
+4. 按第 12.2 节部署到服务器，确认 `/api/health` 与 `Cache-Control` 头正确。
+
+> 判断「是否该用本模板」：你的项目有**登录认证 + 列表 CRUD + 管理界面 + MySQL 持久化**这四件套就适合；纯展示页/纯 CLI 不需要。
+
+---
+
 ## 2. 技术栈（推荐组合）
 
 | 层 | 选型 | 说明 |
@@ -134,6 +165,7 @@ func loadFromPath(path string) *Config {
 - **可信代理白名单**：`TRUSTED_PROXIES` CIDR——只有可信代理的 `X-Forwarded-For`/`X-Real-IP` 才被采用（IP 白名单与审计来源 IP 依赖它；非可信代理头一律忽略）。
 - **日志脱敏**：访问日志里 `/api/webhook/<api_key>` 路径打码；指标 label 用路由模板（`c.FullPath()`）避免 api_key 泄漏与基数爆炸。
 - **XSS**：前端渲染第三方 Markdown 前经 DOMPurify 消毒；导出 CSV 防 Excel 公式注入（`+ - = @` 前缀转义）。
+- **会话凭据生命周期**：不要把所有会话状态塞进 `localStorage`（它是持久的，浏览器关闭不清除，会导致"关浏览器仍保持登录"）。会话存活判定见 §10「前端会话生命周期」，原则是**凭据可跨标签页共享 + 浏览器进程关闭即失效**。
 
 ---
 
@@ -180,7 +212,37 @@ func loadFromPath(path string) *Config {
 - **i18n 全覆盖**：`locales/zh-CN.json` + `en-US.json`，组件文案全部走 `t()`；i18n 定义与使用有 key 一致性测试；默认中文，顶栏/设置双入口切换。
 - **主题**：CSS 变量（`tokens.css` → `light.css`/`index.css`）支持暗色/亮色切换，`useTheme` composable 记忆偏好（本地存储）。
 - **API 层**：`api/client.ts` 统一 axios 实例（`/api` 前缀、JWT 头、401 跳登录）；`api/index.ts` 聚合各资源方法。
-- **列表分页/排序**：抽 `useTablePaging` composable 复用；排序条件由后端下推（`sort_by/sort_order`）。
+- **列表分页/排序**：抽 `useTablePaging` composable 复用；排序条件由后端下推（`sort_by/sort_order`）。客户端排序统一走 `compareValues`（布尔按 0/1——避免 `String(false)` 排在 `String(true)` 前；数字/数字字符串按数值；其余中文 localeCompare）。**派生列排序**（如渠道名/模板名/变量数/使用情况等不在行对象上的值）：`useTablePaging(rows, pageSize, { sortKey: (row) => 派生值 })` 传取值函数，避免为排序预计算字段。
+
+#### 10.1 前端会话生命周期（关键约定）
+
+**需求**：登录状态与「浏览器进程」绑定——只要浏览器不关闭，标签页全关/复制/重开网址都保持登录；关闭整个浏览器或重启电脑后才需重新登录。
+
+**各存储生命周期对照**（决定凭据放哪）：
+
+| 存储 | 生命周期 | 复制标签页 | 关全部标签页 | 关浏览器/重启 |
+|------|----------|-----------|-------------|--------------|
+| `localStorage` | 持久 | 保留 | 保留 | **保留**（不会随浏览器关闭消失）|
+| `sessionStorage` | 随**标签页** | 复制 | 消失 | 消失 |
+| 会话 Cookie（无 Max-Age） | 随**浏览器进程** | 保留 | 保留 | 消失* |
+
+\* 例外：Edge/Chrome 开启「会话恢复」时可能保留会话 Cookie，纯前端无法可靠感知"浏览器进程关闭"。
+
+**判据设计（双标记，缺一不可）**：
+- **凭据（token/user）存 `localStorage`**：同一浏览器多标签页共享。
+- **会话 Cookie（`notice_session`，不设过期时间）**：标记浏览器进程存活，多标签页共享。
+- **sessionStorage 窗口标记（`notice_window_mark`）**：标记"本标签页组来自浏览器内复制"（复制标签页/同源 `window.open` 会继承 sessionStorage）。
+
+三场景判定（`initSession()` 在应用启动时执行）：
+1. **Cookie 在** → 浏览器进程存活，无条件保持登录（覆盖"关标签页重开"）。
+2. **Cookie 缺失 + 窗口标记在** → 复制标签页的同步竞态（Cookie 尚未同步），**保持登录并补种 Cookie**。
+3. **Cookie 缺失 + 无窗口标记** → 浏览器刚关闭重开（sessionStorage 为空），**清除凭据要求重新登录**。
+
+> **血泪教训——"复制标签页竞态"**：复制标签页瞬间，浏览器同步 Cookie 与执行页面 JS 存在微小竞态窗口，新标签页可能先执行 JS 而 Cookie 未同步。若此时写 `if (无 cookie) clearSession()`，会**误杀所有标签页共享的 localStorage token** → 其他标签页 API 立刻 401 → 全部跳登录。所以场景 2 必须乐观恢复，**真正无效的 token 由 API 401 拦截器兜底清除**（后端验证 token 有效性才是唯一可靠判据），不要在前端凭"cookie 缺失"就主动清凭据。
+>
+> 同样不能为了区分"复制标签页"与"浏览器重开"而依赖单一判据：`sessionStorage` 无法区分"关标签页重开（浏览器活）"与"关浏览器重开"（两者都为空）；纯 Cookie 判据又会在复制标签页竞态误杀。**Cookie + 窗口标记双判据**才能同时满足三个诉求。
+
+**失效兜底**：`api/client.ts` 的 401 拦截器调用 `clearSession()`（清 Cookie + localStorage 凭据 + 窗口标记）并跳 `/login`；登出同理。`getToken/getUser` 只读 localStorage 不做 Cookie 门槛（竞态时仍能读到 token，交给 API 验证）。
 - **列表/详情即时生效**：编辑、触发类操作后刷新列表或即时反馈；「复制」能力（渠道/模板/任务）。
 - **实时预览**：模板/任务编辑页 Markdown 实时预览（输出先 DOMPurify）。
 - **构建版本显示**：侧边栏/节点弹窗/设置页展示后端注入的构建版本号（`/api/system/version`），升级对比直观。
@@ -220,6 +282,7 @@ clean:     # 清构建产物（BIN / web/dist / node_modules / docs/swagger）
 ## 12. Docker 部署（多阶段 + 合一镜像）
 
 三阶段 `Dockerfile`：
+> 基础镜像版本（`node:20-alpine` / `golang:1.25-alpine` / `alpine:3.21`）与 `swag@v1.16.6` 是**当时锁定**的版本，新项目按你的 Go/Node 版本替换即可；`IMAGE_PREFIX` 为国内镜像源前缀参数（默认空 = Docker Hub）。
 1. **前端**：`node:20-alpine`，`COPY package*.json . && npm ci && npm run build`。
 2. **后端**：`golang:1.25-alpine`，先 `COPY go.mod go.sum && go mod download` 再 `COPY . .`，`COPY --from=web /app/dist ./web/dist`，`swag init`，静态编译 `-ldflags "-s -w -X main.buildVersion=..."`。**依赖/工具分层缓存**：swag 装在 `COPY . .` 之前，避免改源码就重装。
 3. **运行**：`alpine`，装 `ca-certificates tzdata`，`copy` 后端二进制 + 前端 `dist`，`HEALTHCHECK` 打 `/api/health`。
@@ -228,6 +291,57 @@ clean:     # 清构建产物（BIN / web/dist / node_modules / docs/swagger）
 - **国内网络**：`IMAGE_PREFIX`/`MYSQL_IMAGE` 可换镜像源（如 `docker.m.daocloud.io/library/`）；`GOPROXY`/`NPM_REGISTRY`/apk 源同理。
 - 生产必须经 `TRUSTED_PROXIES` 认可的反代；不用 `gin.Default()`（避免信任全部代理头）。
 
+#### 12.1 静态资源缓存策略（SPA 部署必配）
+
+**问题**：Gin 的 `engine.Static` 默认**不设 Cache-Control**。浏览器对 `index.html` 做启发式缓存（基于 `Last-Modified`），导致**部署新版后用户仍加载旧 bundle（旧 JS hash）**——前端修复在生产"不生效"，线上行为与代码不一致。
+
+**方案**（见 `cmd/server/main.go`）：
+- `/assets/*`（Vite 产物文件名带内容 hash）→ `Cache-Control: public, max-age=31536000, immutable`（内容变则文件名变，浏览器自然加载新文件）。
+- `index.html` → `Cache-Control: no-cache`（每次回源验证，保证拿到最新引用）。
+- 同时注册 `GET` 与 `HEAD`（监控/健康探测常用 HEAD，避免 404 误报）。
+
+```go
+// Gin 的 Use 中间件只对「注册之后」的路由生效，必须先于 Static 注册！
+engine.Use(func(c *gin.Context) {
+    if strings.HasPrefix(c.Request.URL.Path, "/assets/") {
+        c.Header("Cache-Control", "public, max-age=31536000, immutable")
+    }
+    c.Next()
+})
+engine.Static("/assets", filepath.Join(staticDir, "assets"))
+indexFile := func(c *gin.Context) {
+    c.Header("Cache-Control", "no-cache")
+    c.File(filepath.Join(staticDir, "index.html"))
+}
+engine.GET("/", indexFile)
+engine.HEAD("/", indexFile)
+```
+
+> **Gin 中间件时序坑**：`engine.Use()` 添加的中间件只对**之后注册**的路由生效。要拦截 `/assets` 必须在 `engine.Static("/assets", ...)` **之前** `Use`，否则 Cache-Control 不生效。
+
+#### 12.2 远程迭代部署（服务器本地构建 + 保留数据）
+
+quickstart 默认拉 Docker Hub 官方镜像；**自改代码后**要"构建自己的镜像并在服务器部署"时，按此流程（每轮镜像 tag 递增 vNN）：
+
+1. **本地提交并推送**代码到远端 `main`（`git push origin main`）。
+2. **服务器拉取**：`cd /opt/notice-service && git pull --ff-only origin main`；确认 `git describe --tags --always` 拿到注入版本号。
+3. **服务器本地构建**（后台跑，复用构建缓存很快）：
+   ```bash
+   docker build --build-arg IMAGE_PREFIX='docker.m.daocloud.io/library/' \
+     --build-arg BUILD_VERSION="$(git describe --tags --always)" \
+     --build-arg GOPROXY='https://goproxy.cn,direct' -t jacknotes/notice-service:vNN .
+   ```
+4. **更新 quickstart tag 并部署**（先备份旧文件）：
+   ```bash
+   cp docker-compose.quickstart.yml docker-compose.quickstart.yml.bak-v{N-1}
+   sed -i 's#image: jacknotes/notice-service:v{N-1}#image: jacknotes/notice-service:vNN#' docker-compose.quickstart.yml
+   docker compose -f docker-compose.quickstart.yml up -d   # 只重建应用容器
+   ```
+5. **保留 `.env` 与数据卷**：`up -d` 只 Recreate 应用容器，MySQL 容器与 `mysql_data` 卷不动（`.env` 的 DB/JWT/ENCRYPT 密钥不换，避免历史密文无法解密）。
+6. **验证**：`/api/health` 返回 ok；`docker exec <容器> /app/notice-service --version` 与 `git describe` 一致；`curl -sI https://<域名>/` 确认 `Cache-Control: no-cache`（新部署立即生效的前提）。
+
+> **教训**：只"更新代码 + 重启容器"而不处理静态缓存头，用户浏览器会一直加载旧 bundle，线上仍表现为旧行为（如会话 bug 未修）。部署后务必确认首页返回 `no-cache`、assets 返回 `immutable`。
+
 ---
 
 ## 13. 测试与验证纪律
@@ -235,6 +349,7 @@ clean:     # 清构建产物（BIN / web/dist / node_modules / docs/swagger）
 - 后端：`handler`/`service`/`repository` 分层单元测试；集成测试用真实临时库/真实外部可选项（可标记跳过）。
 - 关键安全/边界都测：改密吊销会话、登录限流复合桶、批量删除完整性、软删除、CSV 公式注入、2FA 流程、密码哈希与 token 往返。
 - 前端：Vitest 对 composable（分页/主题）、i18n key 一致性、MarkdownPreview 消毒输出做组件测试。
+- **会话/浏览器行为用无头浏览器（Playwright）验证，而不是只靠单测**：单测无法覆盖"复制标签页竞态""关浏览器重开"这类真实浏览器时序。用 `launchPersistentContext(profileDir)` 持久化 profile 精确模拟三场景（登录注入会话 → 复制标签页保持 / 关标签页重开保持 / **关浏览器重开需重新登录**），同一 profile 关闭再重开即等价"关闭浏览器进程"。注意 Playwright `context.newPage()` **不复制 sessionStorage**（与真实复制标签页不同），需手动注入窗口标记模拟继承。
 - 提交/交付前必须：`make test` + `make vet` + `make fmt` 通过，前端 `npm run test` 通过；**用实际命令输出做证据，不凭感觉宣布通过**。
 
 ---
@@ -254,6 +369,8 @@ clean:     # 清构建产物（BIN / web/dist / node_modules / docs/swagger）
 - [ ] 配置三通道 + `config.example.yml`/`.env.example` + 弱密钥告警 + 密钥持久化
 - [ ] JWT/bcrypt 认证、角色权限中间件、三层路由分组（公开/登录用户/管理员）
 - [ ] 默认安全头 + CSS 变量主题 + 前后端 i18n 双语
-- [ ] Makefile 全套生命周期；Docker 三阶段 Dockerfile + compose；版本号注入链路打通
+- [ ] **前端会话生命周期**：Cookie + sessionStorage 窗口标记双判据，三场景（复制/关标签重开保持登录，关浏览器重开需重新登录）行为正确，用无头浏览器持久化 profile 验证
+- [ ] **静态资源缓存**：`index.html` no-cache、`/assets` immutable；Gin 中间件先于 Static 注册
+- [ ] Makefile 全套生命周期；Docker 三阶段 Dockerfile + compose；版本号注入链路打通；远程迭代部署流程（tag 递增 + 保留数据卷）
 - [ ] 共享词表独立托管，任何模块只引用不新建
 - [ ] `make test`/`make vet`/`make fmt`、前端 `npm run test` 全部通过，有命令输出佐证
