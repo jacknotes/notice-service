@@ -235,8 +235,23 @@ func main() {
 	})
 	staticDir, staticOK := resolveStaticDir(cfg.StaticDir)
 	if staticOK {
+		// 静态资源：/assets 下文件名带内容 hash（Vite 构建），可永久缓存——
+		// 内容变更时文件名变化，浏览器自然加载新文件，无需协商缓存。
+		// 注意：Gin 的 Use 中间件只对注册之后的路由生效，必须先于 Static 注册。
+		engine.Use(func(c *gin.Context) {
+			if strings.HasPrefix(c.Request.URL.Path, "/assets/") {
+				c.Header("Cache-Control", "public, max-age=31536000, immutable")
+			}
+			c.Next()
+		})
 		engine.Static("/assets", filepath.Join(staticDir, "assets"))
-		engine.StaticFile("/", filepath.Join(staticDir, "index.html"))
+		// index.html 必须每次回源验证（no-cache）：它引用的 JS/CSS 文件名随
+		// 构建变化，若被浏览器启发式缓存，部署新版后用户会一直加载旧 bundle，
+		// 导致线上行为与代码不一致（如会话逻辑修复不生效）。
+		engine.GET("/", func(c *gin.Context) {
+			c.Header("Cache-Control", "no-cache")
+			c.File(filepath.Join(staticDir, "index.html"))
+		})
 	} else {
 		log.Printf("[警告] 未找到静态资源目录（STATIC_DIR=%s，./web/dist，可执行文件同目录均不存在），SPA 页面不可用，API 照常。", cfg.StaticDir)
 	}
@@ -246,6 +261,7 @@ func main() {
 			return
 		}
 		if staticOK && c.Request.Method == "GET" {
+			c.Header("Cache-Control", "no-cache")
 			c.File(filepath.Join(staticDir, "index.html"))
 			return
 		}
