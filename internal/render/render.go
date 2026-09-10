@@ -25,7 +25,70 @@ func ToHTML(md string) string {
 	ext := parser.CommonExtensions | parser.AutoHeadingIDs
 	p := parser.NewWithExtensions(ext)
 	renderer := html.NewRenderer(html.RendererOptions{Flags: html.CommonFlags})
-	return string(markdown.ToHTML([]byte(md), p, renderer))
+	return string(markdown.ToHTML([]byte(normalizeListBreaks(md)), p, renderer))
+}
+
+// listItemRe 匹配列表项行：*/+/- 或 有序数字编号，标记后必须有空白或到行尾
+// （`**加粗**` 的行首 `*` 后跟非空白，不会误判为列表）。
+var listItemRe = regexp.MustCompile(`^\s*(?:[*+-]|\d{1,9}[.)])(?:\s|$)`)
+
+// atxHeadingRe 匹配 ATX 标题行（# ~ ######）。
+var atxHeadingRe = regexp.MustCompile(`^\s*#{1,6}\s`)
+
+// thematicBreakRe 匹配分隔线行（--- / *** / ___）。
+var thematicBreakRe = regexp.MustCompile(`^\s*(?:-{3,}|\*{3,}|_{3,})\s*$`)
+
+// normalizeListBreaks 在列表项紧贴上一段文字时补插空行。
+// CommonMark 允许列表打断段落，但 gomarkdown 不允许——模板往往按
+// PushPlus 等宽松渲染器的书写习惯，在 **加粗行** 的下一行直接写 * 列表，
+// 邮件端会把整段吞进段落：`*` 原样输出、链接挤成一行，`---` 还会被
+// 误判成 setext 标题。解析前按 CommonMark 语义补空行，使邮件渲染与
+// PushPlus 一致。标题前的空行同理：gomarkdown 会把紧贴列表的标题
+// 吸收进列表项，CommonMark 则会先闭合列表。围栏代码块内原样保留。
+func normalizeListBreaks(md string) string {
+	lines := strings.Split(md, "\n")
+	out := make([]string, 0, len(lines)+4)
+	inFence := false
+	fenceMark := ""
+	for i, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if inFence {
+			if strings.HasPrefix(trimmed, fenceMark) {
+				inFence = false
+			}
+			out = append(out, line)
+			continue
+		}
+		if mark := fenceMarker(trimmed); mark != "" {
+			inFence = true
+			fenceMark = mark
+			out = append(out, line)
+			continue
+		}
+		if i > 0 && strings.TrimSpace(lines[i-1]) != "" {
+			isItem := listItemRe.MatchString(line)
+			prevIsItem := listItemRe.MatchString(lines[i-1])
+			// 分隔线紧贴列表项时 gomarkdown 输出裸 `---` 文本，需先闭合列表。
+			if (isItem && !prevIsItem) ||
+				(!isItem && atxHeadingRe.MatchString(line)) ||
+				(!isItem && prevIsItem && thematicBreakRe.MatchString(line)) {
+				out = append(out, "")
+			}
+		}
+		out = append(out, line)
+	}
+	return strings.Join(out, "\n")
+}
+
+// fenceMarker 返回行首围栏标记（``` 或 ~~~），非围栏行返回空。
+func fenceMarker(s string) string {
+	switch {
+	case strings.HasPrefix(s, "```"):
+		return "```"
+	case strings.HasPrefix(s, "~~~"):
+		return "~~~"
+	}
+	return ""
 }
 
 // contentToken ToHTMLEmail 中标记待替换正文的位置。
