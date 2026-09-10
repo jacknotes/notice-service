@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"io"
 	"net/url"
+
+	"notice-service/internal/render"
 )
 
 type WechatChannel struct {
@@ -65,8 +67,10 @@ func (w *WechatChannel) Send(message *Message, receiver *Receiver) error {
 	if message == nil || receiver == nil {
 		return errors.New("message/receiver 不能为空")
 	}
-	// PushPlus 支持 markdown 模板，保留 Markdown 原文以获得列表/加粗等效果
-	return sendPushPlus(w.config, message.Subject, message.Content, "markdown")
+	// PushPlus 的 markdown 模板走其自有渲染器，对「列表紧贴段落」等宽松写法
+	// 兼容差（标题不渲染、列表丢圆点），与其它渠道排版不统一；改用 html
+	// 模板 + 本地渲染管线（与邮件同一套 ToHTMLEmail），五个渠道排版一致。
+	return sendPushPlus(w.config, message.Subject, render.ToHTMLEmail(message.Content), "html")
 }
 
 func NewWechatChannel(config map[string]string) *WechatChannel {

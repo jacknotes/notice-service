@@ -451,6 +451,13 @@ func TestIntegrationPushPlus(t *testing.T) {
 	if form.Get("title") != fx.subject {
 		t.Errorf("pushplus title = %q want %q", form.Get("title"), fx.subject)
 	}
+	// html 模板：正文应为渲染后的 HTML（与邮件同一管线），而非 Markdown 原文
+	if form.Get("template") != "html" {
+		t.Errorf("pushplus template = %q want html", form.Get("template"))
+	}
+	if !strings.Contains(form.Get("content"), "<h2") {
+		t.Errorf("pushplus content should be rendered HTML, got %q", form.Get("content"))
+	}
 }
 
 // TestIntegrationWebhookErrorDetection 验证厂商返回业务错误时渠道识别为失败。
