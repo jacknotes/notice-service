@@ -347,7 +347,9 @@ func TestIntegrationWecom(t *testing.T) {
 	if body.MsgType != "markdown" {
 		t.Errorf("wecom msgtype = %q, want markdown", body.MsgType)
 	}
-	if !strings.Contains(body.Markdown.Content, fx.subject) || !strings.Contains(body.Markdown.Content, fx.content) {
+	// 企微 markdown 不支持标题语法：## 标题 会被降级为 **标题** 加粗行；
+	// 正文逐行加引用符（空行除外）。
+	if !strings.Contains(body.Markdown.Content, "**标题**") || !strings.Contains(body.Markdown.Content, "大家好 **张三**，明天 10:00 开会") {
 		t.Errorf("wecom content = %q", body.Markdown.Content)
 	}
 }
@@ -399,15 +401,35 @@ func TestIntegrationFeishu(t *testing.T) {
 	}
 	var body struct {
 		MsgType string `json:"msg_type"`
-		Content struct {
-			Text string `json:"text"`
-		} `json:"content"`
+		Card    struct {
+			Header struct {
+				Title struct {
+					Content string `json:"content"`
+				} `json:"title"`
+			} `json:"header"`
+			Body struct {
+				Elements []struct {
+					Tag     string `json:"tag"`
+					Content string `json:"content"`
+				} `json:"elements"`
+			} `json:"body"`
+		} `json:"card"`
 	}
 	if err := json.Unmarshal([]byte(sink.lastBody()), &body); err != nil {
 		t.Fatal(err)
 	}
-	if body.MsgType != "text" || !strings.Contains(body.Content.Text, fx.subject) {
-		t.Errorf("feishu body = %+v", body)
+	// 卡片投递：标题进 header，正文走 markdown 元素并保持原文（含 ## 标题语法）。
+	if body.MsgType != "interactive" {
+		t.Fatalf("feishu msg_type = %q, want interactive", body.MsgType)
+	}
+	if body.Card.Header.Title.Content != fx.subject {
+		t.Errorf("feishu card title = %q, want %q", body.Card.Header.Title.Content, fx.subject)
+	}
+	if len(body.Card.Body.Elements) != 1 || body.Card.Body.Elements[0].Tag != "markdown" {
+		t.Fatalf("feishu card elements = %+v", body.Card.Body.Elements)
+	}
+	if !strings.Contains(body.Card.Body.Elements[0].Content, "## 标题") {
+		t.Errorf("feishu markdown content = %q", body.Card.Body.Elements[0].Content)
 	}
 }
 
