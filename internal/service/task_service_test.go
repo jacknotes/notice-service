@@ -308,10 +308,11 @@ func TestTaskServiceMultipleCronTasksCoexist(t *testing.T) {
 	}
 }
 
-// TestTaskValidateCronExprRejectsYearField 回归：cron 第 5 段填年份（如
-// "0 9-17 15 9 2026"，2026 落在星期字段、上限 6）曾保存成功但调度器注册
-// 失败，任务静默不触发且 next_run_at 残留旧值。保存时必须报错拦下。
-func TestTaskValidateCronExprRejectsYearField(t *testing.T) {
+// TestTaskValidateCronExpr 保存时校验 cron 表达式：
+//   - 语法错误（字段越界、段数不对、农历语法错）→ 拒绝；
+//   - 带年份（年份调度器支持）→ 通过；
+//   - 合法但无未来触发点（如年份已过）→ 仍允许保存，仅 next_run_at 为空。
+func TestTaskValidateCronExpr(t *testing.T) {
 	db := testDB(t)
 	svc := NewTaskService(db, &fakeScheduler{})
 	uid := seedServiceUser(t, db)
@@ -325,13 +326,21 @@ func TestTaskValidateCronExprRejectsYearField(t *testing.T) {
 		}
 	}
 
-	// 年份字段 → 拒绝
-	if err := svc.validate(base("0 9-17 15 9 2026")); err == nil {
-		t.Fatal("cron expr with year field should be rejected")
-	}
 	// 字段值超范围 → 拒绝
 	if err := svc.validate(base("0 25 * * *")); err == nil {
 		t.Fatal("cron expr with hour 25 should be rejected")
+	}
+	// 年份非 4 位/超范围 → 拒绝
+	if err := svc.validate(base("0 9 * * * 26")); err == nil {
+		t.Fatal("2-digit year should be rejected")
+	}
+	// 带年份（未来年份）→ 通过
+	if err := svc.validate(base("0 9-17 15 9 2026")); err != nil {
+		t.Fatalf("year-field expr should pass: %v", err)
+	}
+	// 带年份（年份已过，解析成功但无未来触发点）→ 允许保存
+	if err := svc.validate(base("0 9-17 15 12 * 2025")); err != nil {
+		t.Fatalf("expired-year expr should be savable: %v", err)
 	}
 	// 合法表达式 → 通过
 	if err := svc.validate(base("0 9-17 15 9 *")); err != nil {
