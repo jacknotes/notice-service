@@ -122,8 +122,11 @@ func (s *TaskService) Create(userID int64, in *model.Task) error {
 		s.sched.RegisterTask(in.ID, in.CronExpr)
 	}
 	if in.TriggerType == "cron" && in.Enabled && s.refresher != nil {
-		in.NextRunAt = nil
 		s.refresher.RefreshNextRun(in) // 创建后立即写 next_run_at，不等首次触发
+		fresh, err := s.repo.GetByID(in.ID)
+		if err == nil {
+			in.NextRunAt = fresh.NextRunAt // 同步内存对象：Create 响应体带最新值
+		}
 	}
 	return nil
 }
@@ -165,6 +168,14 @@ func (s *TaskService) Update(userID, id int64, in *model.Task) error {
 	}
 	normalizeChannels(in)
 	s.toJSON(in)
+	// next_run_at 归属：仅「启用的 cron 任务」有意义。切到 api（或停用）时清空，
+	// 否则残留旧 cron 时间、列表看起来"api 任务也会定时触发"。
+	if in.TriggerType != "cron" || !in.Enabled {
+		in.NextRunAt = nil
+		s.repo.SetNextRun(in.ID, nil)
+	} else {
+		in.NextRunAt = nil
+	}
 	if err := s.repo.Update(in); err != nil {
 		return err
 	}
@@ -172,8 +183,11 @@ func (s *TaskService) Update(userID, id int64, in *model.Task) error {
 		s.sched.RegisterTask(id, in.CronExpr)
 	}
 	if in.TriggerType == "cron" && in.Enabled && s.refresher != nil {
-		in.NextRunAt = nil
-		s.refresher.RefreshNextRun(in) // 表达式可能已改：立即重算，避免列表显示旧值
+		s.refresher.RefreshNextRun(in) // 表达式可能已改：立即重算，不等首次触发
+		fresh, err := s.repo.GetByID(id)
+		if err == nil {
+			in.NextRunAt = fresh.NextRunAt // 同步内存对象：Update 响应体带最新值
+		}
 	}
 	return nil
 }
@@ -321,6 +335,9 @@ func (s *TaskService) Toggle(userID, id int64, enabled bool) error {
 	if ex.TriggerType == "cron" && enabled && s.refresher != nil {
 		ex.NextRunAt = nil
 		s.refresher.RefreshNextRun(ex) // 重新启用：清掉停用期间的过期值
+	}
+	if ex.TriggerType == "cron" && !enabled {
+		s.repo.SetNextRun(id, nil) // 停用：清掉残留的 next_run_at，列表不再显示旧触发点
 	}
 	return nil
 }

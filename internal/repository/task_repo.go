@@ -210,6 +210,14 @@ func (r *TaskRepo) UpdateSchedule(taskID int64, lastRun, nextRun *time.Time) err
 	return err
 }
 
+// SetNextRun 只更新 next_run_at（触发方式切到 api / 停用时清空残留值用）。
+func (r *TaskRepo) SetNextRun(taskID int64, nextRun *time.Time) error {
+	_, err := r.db.Exec(
+		"UPDATE tasks SET next_run_at = ? WHERE id = ?",
+		nullableTime(nextRun), taskID)
+	return err
+}
+
 // SetAPIKey 覆盖任务 api_key（导入备份用）。
 func (r *TaskRepo) SetAPIKey(taskID int64, key string) error {
 	_, err := r.db.Exec("UPDATE tasks SET api_key=? WHERE id=?", nullableKey(key), taskID)

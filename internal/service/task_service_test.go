@@ -2,8 +2,11 @@ package service
 
 import (
 	"testing"
+	"time"
 
 	"notice-service/internal/model"
+	"notice-service/internal/repository"
+	"notice-service/internal/scheduler"
 )
 
 type fakeScheduler struct{ added, removed int64 }
@@ -341,5 +344,75 @@ func TestTaskValidateCronExprRejectsYearField(t *testing.T) {
 	// 农历非法表达式 → 拒绝
 	if err := svc.validate(base("@lunar yearly 13 1 07:00")); err == nil {
 		t.Fatal("invalid lunar expr should be rejected")
+	}
+}
+
+// nextRunRefresherStub 用真实的 repo 写入路径模拟 QueueService.RefreshNextRun，
+// 使不依赖 queue 的单测也能覆盖「刷新 + 同步内存对象」的完整行为。
+type nextRunRefresherStub struct{ repo *repository.TaskRepo }
+
+func (f nextRunRefresherStub) RefreshNextRun(t *model.Task) {
+	next := scheduler.NextRun(t.CronExpr, time.Now(), nil)
+	if next.IsZero() {
+		_ = f.repo.UpdateSchedule(t.ID, nil, nil)
+		return
+	}
+	_ = f.repo.UpdateSchedule(t.ID, nil, &next)
+}
+
+// TestUpdateTriggerSwitchNextRunLifecycle 回归三段：
+//  1. api→cron：next_run_at 立即重算（此前等首次入队，列表一直显示 "-"）；
+//  2. cron→api：残留值必须清空（api 任务不按 cron 触发，旧值是垃圾数据）；
+//  3. Update 后内存对象的 NextRunAt 与库一致（响应体不能是 null）。
+func TestUpdateTriggerSwitchNextRunLifecycle(t *testing.T) {
+	db := testDB(t)
+	svc := NewTaskService(db, &fakeScheduler{})
+	svc.SetNextRunRefresher(nextRunRefresherStub{repo: svc.repo})
+	uid := seedServiceUser(t, db)
+	chID := seedServiceChannel(t, db, uid)
+	tplID := seedServiceTemplate(t, db, uid)
+
+	tk := &model.Task{UserID: uid, Name: "t", ChannelID: chID, TemplateID: tplID,
+		TriggerType: "api", Receivers: []string{"a@x.com"}, Enabled: true}
+	if err := svc.Create(uid, tk); err != nil {
+		t.Fatal(err)
+	}
+
+	// 1) api → cron：立即重算 + 响应体同步
+	tk.TriggerType = "cron"
+	tk.CronExpr = "0 9-17 15 12 *"
+	tk.Receivers = nil
+	if err := svc.Update(uid, tk.ID, tk); err != nil {
+		t.Fatal(err)
+	}
+	if tk.NextRunAt == nil {
+		t.Fatal("api->cron: in-memory NextRunAt should be synced (response body)")
+	}
+	fresh, err := svc.repo.GetByID(tk.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fresh.NextRunAt == nil {
+		t.Fatal("api->cron: DB next_run_at should be refreshed immediately")
+	}
+	if !fresh.NextRunAt.Equal(*tk.NextRunAt) {
+		t.Fatalf("api->cron: response %v != DB %v", tk.NextRunAt, fresh.NextRunAt)
+	}
+
+	// 2) cron → api：清空残留值
+	tk.TriggerType = "api"
+	tk.Receivers = []string{"a@x.com"}
+	if err := svc.Update(uid, tk.ID, tk); err != nil {
+		t.Fatal(err)
+	}
+	fresh, err = svc.repo.GetByID(tk.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fresh.NextRunAt != nil {
+		t.Fatalf("cron->api: stale next_run_at should be cleared, got %v", fresh.NextRunAt)
+	}
+	if tk.NextRunAt != nil {
+		t.Fatal("cron->api: in-memory NextRunAt should be cleared")
 	}
 }
