@@ -57,6 +57,7 @@
         ref="tableRef"
         :data="paged"
         style="width: 100%"
+        :row-class-name="rowClassName"
         :empty-text="t('templates.emptyTable')"
         @selection-change="onSelectionChange"
         @sort-change="onSortChange"
@@ -304,7 +305,8 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { FormInstance, FormRules, TableInstance } from 'element-plus'
 import { Plus, Delete, View, Search, ArrowDown, CircleCheck, CircleClose, CollectionTag } from '@element-plus/icons-vue'
@@ -330,6 +332,8 @@ interface TemplateRow {
 }
 
 // 含 {{ 的占位/提示文案改存 locale（templates.subjectPlaceholder 等），经 vue-i18n 转义后输出。
+
+const route = useRoute()
 
 const auth = useAuthStore()
 const isAdmin = computed(() => auth.user?.role === 'admin')
@@ -676,10 +680,57 @@ async function doBatchCategory() {
   }
 }
 
+/* ── 外部跳转闪烁定位（任务管理 → 模板管理 → ?edit=<id>） ─────────────
+   目标行短暂闪烁两次后恢复默认样式，不常驻高亮。 */
+const highlightId = ref<number | null>(null)
+const flashRowId = ref<number | null>(null)
+
+// 行 class：目标行在闪烁期间附加 flash 样式（动画结束后由下方定时器清除）
+function rowClassName({ row }: { row: TemplateRow }) {
+  return flashRowId.value === row.id ? 'flash-row' : ''
+}
+
+function highlightById(id: number) {
+  const row = templates.value.find((t) => t.id === id)
+  if (!row) return
+  // 行可能跨页：切到含该行的页再 setCurrentRow 滚动定位
+  const idx = templates.value.findIndex((t) => t.id === id)
+  const targetPage = Math.floor(idx / size.value) + 1
+  if (targetPage !== page.value) page.value = targetPage
+  nextTick(() => {
+    tableRef.value?.setCurrentRow(row)
+    flashRowId.value = id
+    // 滚动到可视区中间：行很多时目标行可能在页面底部/顶部，居中才可见
+    nextTick(() => {
+      const el = document.querySelector('.el-table .flash-row')
+      el?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+    })
+    // 动画约 0.9s（闪烁两次），结束后清除 class 恢复正常显示
+    window.setTimeout(() => {
+      flashRowId.value = null
+    }, 1000)
+  })
+}
+
 onMounted(() => {
   load()
   loadCategories()
+  const id = Number(route.query.edit)
+  if (Number.isInteger(id) && id > 0) highlightId.value = id
 })
+
+// 模板数据就绪后执行闪烁（数据可能晚于 onMounted 返回）
+watch(
+  () => templates.value,
+  (list) => {
+    if (highlightId.value && list.length) {
+      highlightById(highlightId.value)
+      highlightId.value = null
+    }
+  },
+  { immediate: true }
+)
+
 </script>
 
 <style scoped>
@@ -719,6 +770,15 @@ onMounted(() => {
 .table-card {
   padding: 8px 14px 14px;
   overflow: hidden;
+}
+
+/* 外部跳转定位闪烁：目标行闪烁两次后恢复默认（约 0.9s） */
+:deep(.flash-row > td.el-table__cell) {
+  animation: flash-target 0.45s ease-in-out 2;
+}
+@keyframes flash-target {
+  0%, 100% { background-color: transparent; }
+  50% { background-color: rgba(129, 140, 248, 0.28); }
 }
 
 .id-cell {

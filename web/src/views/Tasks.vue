@@ -44,7 +44,7 @@
     </div>
 
     <div class="filter-row">
-      <el-select v-model="triggerFilter" class="filter-select" :placeholder="t('tasks.allTriggers')">
+      <el-select v-model="triggerFilter" class="filter-select" clearable :placeholder="t('tasks.allTriggers')">
         <el-option :label="t('tasks.allTriggers')" value="" />
         <el-option :label="t('tasks.filterCron')" value="cron" />
         <el-option :label="t('tasks.filterLunar')" value="lunar" />
@@ -58,6 +58,31 @@
       >
         <el-option v-for="cg in categories" :key="cg.name" :label="cg.name" :value="cg.name" />
       </el-select>
+      <div class="date-filter">
+        <div class="date-quick">
+          <el-button
+            v-for="p in datePresets"
+            :key="p.key"
+            size="small"
+            :type="datePreset === p.key ? 'primary' : 'default'"
+            plain
+            @click="applyDatePreset(p)"
+          >
+            {{ t(p.labelKey) }}
+          </el-button>
+        </div>
+        <el-date-picker
+          v-model="dateRange"
+          type="daterange"
+          :range-separator="t('common.to')"
+          :start-placeholder="t('common.startDate')"
+          :end-placeholder="t('common.endDate')"
+          value-format="YYYY-MM-DD"
+          :clearable="true"
+          style="width: 240px"
+          @change="onDateRangeChange"
+        />
+      </div>
     </div>
 
     <div v-loading="loading" class="card table-card">
@@ -105,6 +130,12 @@
           </template>
         </el-table-column>
 
+        <el-table-column :label="t('tasks.nextRun')" min-width="150" show-overflow-tooltip sortable="custom" prop="next_run_sort">
+          <template #default="{ row }">
+            <span class="mono time-cell">{{ fmtTime(row.next_run_at) }}</span>
+          </template>
+        </el-table-column>
+
         <el-table-column :label="t('tasks.channels')" min-width="130" show-overflow-tooltip sortable="custom" prop="channels_sort">
           <template #default="{ row }">
             <span class="channels-cell">{{ channelNames(row) || '—' }}</span>
@@ -113,7 +144,15 @@
 
         <el-table-column :label="t('tasks.template')" min-width="140" show-overflow-tooltip sortable="custom" prop="template_sort">
           <template #default="{ row }">
-            <span class="template-cell">{{ templateName(row.template_id) || '—' }}</span>
+            <el-link
+              v-if="templateName(row.template_id)"
+              class="template-link el-link"
+              :underline="false"
+              @click="goTemplate(row)"
+            >
+              {{ templateName(row.template_id) }}
+            </el-link>
+            <span v-else class="template-cell">—</span>
           </template>
         </el-table-column>
 
@@ -534,6 +573,8 @@ interface TaskRow {
   require_signature?: boolean
   variables?: Record<string, string>
   enabled: boolean
+  last_run_at?: string
+  next_run_at?: string
   created_at?: string
   updated_at?: string
 }
@@ -570,10 +611,64 @@ const keyword = ref('')
 const triggerFilter = ref<string>('')
 const categoryFilter = ref<string>('')
 
+/* ── 触发时间筛选（客户端，按 next_run_at） ────────────────────────
+   快捷区间从今天 00:00 起、结束日期排他（今天=全天，最近3天=今天起3个自然日）；
+   「已过期」= 下次触发时间早于当前时刻（停用/错过调度的任务）；
+   自定义区间结束日期含当天。 */
+interface DatePreset { key: string; labelKey: string; days?: number }
+const datePresets: DatePreset[] = [
+  { key: 'today', labelKey: 'common.today', days: 1 },
+  { key: 'd3', labelKey: 'tasks.range3Days', days: 3 },
+  { key: 'd7', labelKey: 'tasks.range7Days', days: 7 },
+  { key: 'month', labelKey: 'tasks.range1Month', days: 30 },
+  { key: 'expired', labelKey: 'tasks.expired' },
+]
+const datePreset = ref('')
+const dateRange = ref<[string, string] | null>(null)
+
+function fmtDate(d: Date) {
+  const p = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
+}
+
+function applyDatePreset(p: DatePreset) {
+  datePreset.value = p.key
+  if (!p.days) {
+    dateRange.value = null // 已过期：无具体区间
+    return
+  }
+  const now = new Date()
+  const start = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  const end = new Date(start.getTime() + p.days * 86400000)
+  dateRange.value = [fmtDate(start), fmtDate(end)]
+}
+
+function onDateRangeChange() {
+  // 手动清空选择框 → 取消日期筛选；自定义区间 → 取消快捷按钮高亮
+  datePreset.value = ''
+}
+
+// 任务的下次触发时间是否命中当前日期筛选（无筛选时恒真）
+function nextRunInRange(t: TaskRow): boolean {
+  if (datePreset.value === 'expired') {
+    if (!t.next_run_at) return false
+    const ts = new Date(t.next_run_at).getTime()
+    return !isNaN(ts) && ts < Date.now()
+  }
+  if (!dateRange.value) return true
+  if (!t.next_run_at) return false
+  const ts = new Date(t.next_run_at).getTime()
+  if (isNaN(ts)) return false
+  const [s, e] = dateRange.value
+  const start = new Date(`${s}T00:00:00`).getTime()
+  const end = new Date(`${e}T00:00:00`).getTime() + 86400000
+  return ts >= start && ts < end
+}
+
 // 共享分类池（渠道/模板/任务统一引用）：只在「分类管理」一处创建
 const categories = ref<{ id: number; name: string }[]>([])
 
-// 按任务名称、或绑定的渠道 / 模板名称 / 触发方式 / 分类 / cron 表达式做客户端过滤
+// 按任务名称、或绑定的渠道 / 模板名称 / 触发方式 / 分类 / cron 表达式 / 触发时间做客户端过滤
 const filteredTasks = computed<TaskRow[]>(() => {
   const kw = keyword.value.trim().toLowerCase()
   return tasks.value.filter((t) => {
@@ -582,6 +677,7 @@ const filteredTasks = computed<TaskRow[]>(() => {
     if (triggerFilter.value === 'cron' && isLunar) return false
     if (triggerFilter.value === 'api' && t.trigger_type !== 'api') return false
     if (categoryFilter.value && (t.category || 'default') !== categoryFilter.value) return false
+    if (!nextRunInRange(t)) return false
     if (!kw) return true
     const ids = t.channel_ids?.length ? t.channel_ids : [t.channel_id]
     const chName = ids.map((id) => channels.value.find((c) => c.id === id)?.name || '').join(' ')
@@ -605,6 +701,7 @@ const { page, size, onSortChange, paged, total, onPageSizeChange } = useTablePag
     channels_sort: (t) => channelNames(t),
     template_sort: (t) => templateName(t.template_id),
     receivers_sort: (t) => (t.receivers || []).join(', '),
+    next_run_sort: (t) => t.next_run_at || '',
   },
 )
 
@@ -744,6 +841,15 @@ function channelNames(row: TaskRow): string {
 function templateName(templateId: number): string {
   if (!templateId) return ''
   return templates.value.find((p) => p.id === templateId)?.name || ''
+}
+
+// 把 ISO 时间格式化为本地 "YYYY-MM-DD HH:mm:ss"；零值/非法显示 "—"
+function fmtTime(iso?: string) {
+  if (!iso) return '—'
+  const d = new Date(iso)
+  if (isNaN(d.getTime()) || d.getFullYear() <= 1) return '—'
+  const p = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`
 }
 
 /* ── API Key dialog ────────────────────────────────────────────────── */
@@ -1044,6 +1150,11 @@ function goLogs(row: TaskRow) {
   router.push({ path: '/logs', query: { task: row.id } })
 }
 
+// 跳转到模板管理并定位该模板（与发送日志点击任务/渠道跳转的联动一致）
+function goTemplate(row: TaskRow) {
+  router.push({ path: '/templates', query: { edit: String(row.template_id) } })
+}
+
 async function removeTask(row: TaskRow) {
   try {
     await ElMessageBox.confirm(
@@ -1228,6 +1339,27 @@ async function doBatchReceivers() {
 }
 .filter-select { width: 200px; }
 
+/* ── 触发时间日期筛选（快捷按钮 + 自定义区间） ───────────────────── */
+.date-filter {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  row-gap: var(--space-2);
+}
+.date-quick {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.date-quick .el-button {
+  margin: 0;
+}
+.time-cell {
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+}
+
 .category-tag {
   color: var(--indigo-400) !important;
   border-color: rgba(129, 140, 248, 0.4) !important;
@@ -1343,6 +1475,15 @@ async function doBatchReceivers() {
   color: var(--violet-400);
   font-size: var(--text-xs);
   font-weight: 500;
+}
+/* 模板列可点击跳转：沿用模板名的紫色主题（双类名压过 el-link 默认色） */
+.template-link.el-link {
+  color: var(--violet-400);
+  font-size: var(--text-xs);
+  font-weight: 500;
+}
+.template-link.el-link:hover {
+  color: var(--violet-500);
 }
 
 /* ── Dialog ────────────────────────────────────────────────────────── */

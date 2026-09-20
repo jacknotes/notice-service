@@ -411,7 +411,12 @@
     "lunarQingming": "Qingming 09:00",
     "lunarMidAutumn": "Mid-Autumn 09:00",
     "lunarHint": "Lunar cron: {'@'}lunar monthly <day> <HH:MM>, {'@'}lunar yearly <month> <day> <HH:MM>, {'@'}lunar term <jieqi> <HH:MM>",
-    "filterLunar": "Lunar"
+    "filterLunar": "Lunar",
+    "nextRun": "Next run",
+    "range3Days": "Next 3 days",
+    "range7Days": "Next 7 days",
+    "range1Month": "Next month",
+    "expired": "Expired"
   },
   "audit": {
     "subtitle": "Track admin operations: who did what and when (retained for {days} days)",
