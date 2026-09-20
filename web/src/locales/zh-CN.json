@@ -38,6 +38,7 @@
     "switchToDay": "切换到白天模式",
     "switchToNight": "切换到夜晚模式",
     "date": "日期",
+    "clear": "清除",
     "readOnlyMode": "只读模式",
     "batchDeleteConfirmMsg": "确认删除选中的 {n} 项？",
     "copySuffix": "（副本）",
@@ -413,7 +414,6 @@
     "lunarHint": "支持农历 cron：{'@'}lunar monthly <日> <HH:MM>（每月）、{'@'}lunar yearly <月> <日> <HH:MM>（每年）、{'@'}lunar term <节气> <HH:MM>（节气）",
     "filterLunar": "农历",
     "nextRun": "下次触发时间",
-    "range3Days": "最近3天",
     "range7Days": "最近7天",
     "range1Month": "最近1个月",
     "expired": "已过期"

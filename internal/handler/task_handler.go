@@ -23,7 +23,10 @@ type TaskHandler struct {
 }
 
 func NewTaskHandler(db *sql.DB, sched service.Scheduler, queue *service.QueueService) *TaskHandler {
-	return &TaskHandler{svc: service.NewTaskService(db, sched), queue: queue, db: db}
+	svc := service.NewTaskService(db, sched)
+	// 任务写操作后由队列层立即重算 next_run_at（含农历表达式），不等首次入队。
+	svc.SetNextRunRefresher(queue)
+	return &TaskHandler{svc: svc, queue: queue, db: db}
 }
 
 // List 任务列表

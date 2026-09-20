@@ -181,7 +181,12 @@ func main() {
 	if err != nil {
 		log.Fatalf("load cron tasks: %v", err)
 	}
+	// 启动自愈：next_run_at 为空（历史脏数据/农历表达式解析不了）或已过期（停用后
+	// 重新启用、长期未入队的远期任务）的任务重算补齐，避免任务列表显示 "-" 或旧值。
 	for _, t := range tasks {
+		if t.NextRunAt == nil || t.NextRunAt.Before(time.Now()) {
+			queue.RefreshNextRun(t)
+		}
 		sched.RegisterTask(t.ID, t.CronExpr)
 	}
 

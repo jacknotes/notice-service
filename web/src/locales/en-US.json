@@ -38,6 +38,7 @@
     "switchToDay": "Switch to light mode",
     "switchToNight": "Switch to dark mode",
     "date": "Date",
+    "clear": "Clear",
     "readOnlyMode": "Read-only",
     "batchDeleteConfirmMsg": "Delete {n} selected item(s)?",
     "copySuffix": " (copy)",
@@ -413,7 +414,6 @@
     "lunarHint": "Lunar cron: {'@'}lunar monthly <day> <HH:MM>, {'@'}lunar yearly <month> <day> <HH:MM>, {'@'}lunar term <jieqi> <HH:MM>",
     "filterLunar": "Lunar",
     "nextRun": "Next run",
-    "range3Days": "Next 3 days",
     "range7Days": "Next 7 days",
     "range1Month": "Next month",
     "expired": "Expired"

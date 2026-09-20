@@ -59,18 +59,6 @@
         <el-option v-for="cg in categories" :key="cg.name" :label="cg.name" :value="cg.name" />
       </el-select>
       <div class="date-filter">
-        <div class="date-quick">
-          <el-button
-            v-for="p in datePresets"
-            :key="p.key"
-            size="small"
-            :type="datePreset === p.key ? 'primary' : 'default'"
-            plain
-            @click="applyDatePreset(p)"
-          >
-            {{ t(p.labelKey) }}
-          </el-button>
-        </div>
         <el-date-picker
           v-model="dateRange"
           type="daterange"
@@ -79,9 +67,11 @@
           :end-placeholder="t('common.endDate')"
           value-format="YYYY-MM-DD"
           :clearable="true"
+          :shortcuts="pickerShortcuts"
           style="width: 240px"
           @change="onDateRangeChange"
         />
+        <span v-if="expiredOnly" class="expired-tag">{{ t('tasks.expired') }}</span>
       </div>
     </div>
 
@@ -612,45 +602,62 @@ const triggerFilter = ref<string>('')
 const categoryFilter = ref<string>('')
 
 /* ── 触发时间筛选（客户端，按 next_run_at） ────────────────────────
-   快捷区间从今天 00:00 起、结束日期排他（今天=全天，最近3天=今天起3个自然日）；
-   「已过期」= 下次触发时间早于当前时刻（停用/错过调度的任务）；
-   自定义区间结束日期含当天。 */
-interface DatePreset { key: string; labelKey: string; days?: number }
-const datePresets: DatePreset[] = [
-  { key: 'today', labelKey: 'common.today', days: 1 },
-  { key: 'd3', labelKey: 'tasks.range3Days', days: 3 },
-  { key: 'd7', labelKey: 'tasks.range7Days', days: 7 },
-  { key: 'month', labelKey: 'tasks.range1Month', days: 30 },
-  { key: 'expired', labelKey: 'tasks.expired' },
-]
-const datePreset = ref('')
+   快捷项用 el-date-picker 原生 shortcuts（面板左侧栏）：今天/最近7天/最近1个月
+   返回区间；「全部」清空区间恢复无筛选；「已过期」纯状态筛选不改区间
+   （无 next_run_at 的任务不命中）。
+   快捷区间：今天=当天全天，最近N天=今天起含今天共 N 个自然日（结束日=起+N-1）；
+   自定义区间结束日期含当天（过滤时 +1 天做排他上界）。 */
 const dateRange = ref<[string, string] | null>(null)
+const expiredOnly = ref(false)
 
-function fmtDate(d: Date) {
-  const p = (n: number) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
-}
+interface ShortcutItem { text: string; value?: () => [Date, Date]; onClick?: () => void }
+const pickerShortcuts = computed<ShortcutItem[]>(() => [
+  {
+    text: t('common.today'),
+    value: () => presetRange(1),
+  },
+  {
+    text: t('tasks.range7Days'),
+    value: () => presetRange(7),
+  },
+  {
+    text: t('tasks.range1Month'),
+    value: () => presetRange(30),
+  },
+  {
+    text: t('common.all'),
+    onClick: () => {
+      expiredOnly.value = false
+      dateRange.value = null
+    },
+  },
+  {
+    text: t('tasks.expired'),
+    onClick: () => {
+      expiredOnly.value = true
+      dateRange.value = null
+    },
+  },
+])
 
-function applyDatePreset(p: DatePreset) {
-  datePreset.value = p.key
-  if (!p.days) {
-    dateRange.value = null // 已过期：无具体区间
-    return
-  }
+// 今天起含今天共 days 个自然日的 [起, 止]
+function presetRange(days: number): [Date, Date] {
+  expiredOnly.value = false
   const now = new Date()
   const start = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-  const end = new Date(start.getTime() + p.days * 86400000)
-  dateRange.value = [fmtDate(start), fmtDate(end)]
+  const end = new Date(start.getFullYear(), start.getMonth(), start.getDate() + days - 1)
+  return [start, end]
 }
 
-function onDateRangeChange() {
-  // 手动清空选择框 → 取消日期筛选；自定义区间 → 取消快捷按钮高亮
-  datePreset.value = ''
+function onDateRangeChange(val: [string, string] | null) {
+  // 自定义选择/清空 → 退出「已过期」纯状态筛选
+  expiredOnly.value = false
+  void val
 }
 
 // 任务的下次触发时间是否命中当前日期筛选（无筛选时恒真）
 function nextRunInRange(t: TaskRow): boolean {
-  if (datePreset.value === 'expired') {
+  if (expiredOnly.value) {
     if (!t.next_run_at) return false
     const ts = new Date(t.next_run_at).getTime()
     return !isNaN(ts) && ts < Date.now()
@@ -1339,21 +1346,11 @@ async function doBatchReceivers() {
 }
 .filter-select { width: 200px; }
 
-/* ── 触发时间日期筛选（快捷按钮 + 自定义区间） ───────────────────── */
-.date-filter {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  flex-wrap: wrap;
-  row-gap: var(--space-2);
-}
-.date-quick {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-.date-quick .el-button {
-  margin: 0;
+/* ── 触发时间日期筛选（快捷项由 el-date-picker 的 shortcuts 渲染在面板左侧） ── */
+.expired-tag {
+  color: var(--violet-400);
+  font-size: var(--text-xs);
+  font-weight: 500;
 }
 .time-cell {
   color: var(--text-secondary);

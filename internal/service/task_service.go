@@ -22,6 +22,12 @@ type Scheduler interface {
 	UnregisterTask(taskID int64)
 }
 
+// NextRunRefresher 由 QueueService 实现：任务创建/修改后立即重算 next_run_at，
+// 而不是等首次入队才更新（远期任务可能几个月后才第一次入队，期间列显示 "-"）。
+type NextRunRefresher interface {
+	RefreshNextRun(t *model.Task)
+}
+
 type TaskService struct {
 	repo         *repository.TaskRepo
 	logRepo      *repository.TaskLogRepo
@@ -29,6 +35,7 @@ type TaskService struct {
 	templateRepo *repository.TemplateRepo
 	categoryRepo *repository.CategoryRepo
 	sched        Scheduler
+	refresher    NextRunRefresher
 }
 
 func NewTaskService(db *sql.DB, sched Scheduler) *TaskService {
@@ -41,6 +48,10 @@ func NewTaskService(db *sql.DB, sched Scheduler) *TaskService {
 		sched:        sched,
 	}
 }
+
+// SetNextRunRefresher 注入 QueueService（构造期循环依赖：queue 依赖 task repo，
+// task service 又要在写操作后调 queue.RefreshNextRun，故用接口 + setter 解开）。
+func (s *TaskService) SetNextRunRefresher(r NextRunRefresher) { s.refresher = r }
 
 // Name 返回任务 ID 对应的名称（用于审计详情可读性；不存在返回错误）。
 func (s *TaskService) Name(id int64) (string, error) {
@@ -109,6 +120,10 @@ func (s *TaskService) Create(userID int64, in *model.Task) error {
 	if in.TriggerType == "cron" && in.Enabled && s.sched != nil {
 		s.sched.RegisterTask(in.ID, in.CronExpr)
 	}
+	if in.TriggerType == "cron" && in.Enabled && s.refresher != nil {
+		in.NextRunAt = nil
+		s.refresher.RefreshNextRun(in) // 创建后立即写 next_run_at，不等首次触发
+	}
 	return nil
 }
 
@@ -154,6 +169,10 @@ func (s *TaskService) Update(userID, id int64, in *model.Task) error {
 	}
 	if in.TriggerType == "cron" && in.Enabled && s.sched != nil {
 		s.sched.RegisterTask(id, in.CronExpr)
+	}
+	if in.TriggerType == "cron" && in.Enabled && s.refresher != nil {
+		in.NextRunAt = nil
+		s.refresher.RefreshNextRun(in) // 表达式可能已改：立即重算，避免列表显示旧值
 	}
 	return nil
 }
@@ -297,6 +316,10 @@ func (s *TaskService) Toggle(userID, id int64, enabled bool) error {
 		} else {
 			s.sched.UnregisterTask(id)
 		}
+	}
+	if ex.TriggerType == "cron" && enabled && s.refresher != nil {
+		ex.NextRunAt = nil
+		s.refresher.RefreshNextRun(ex) // 重新启用：清掉停用期间的过期值
 	}
 	return nil
 }

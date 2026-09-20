@@ -110,3 +110,47 @@ func TestSchedulerLeasePath(t *testing.T) {
 		time.Sleep(5 * time.Millisecond)
 	}
 }
+
+// TestNextRunExpressions 验证 NextRun 与调度器用同一解析器：
+// 标准表达式给出正确触发点（含列表/区间月日），@lunar 表达式不再返回零值
+// （回归：queue.updateSchedule 曾用 ParseStandard，农历表达式解析失败导致
+// next_run_at 永远为 NULL、任务列表显示 "-"）。
+func TestNextRunExpressions(t *testing.T) {
+	loc, err := time.LoadLocation("Asia/Shanghai")
+	if err != nil {
+		t.Skipf("tzdata unavailable: %v", err)
+	}
+	from := time.Date(2026, 9, 20, 12, 0, 0, 0, loc)
+	cases := []struct {
+		expr string
+		want time.Time
+	}{
+		{"0 9-17 15 12 *", time.Date(2026, 12, 15, 9, 0, 0, 0, loc)},
+		{"0 9 15 5,11 *", time.Date(2026, 11, 15, 9, 0, 0, 0, loc)},
+		{"0 9 1 7 *", time.Date(2027, 7, 1, 9, 0, 0, 0, loc)},
+		{"0 9-17 30 10 *", time.Date(2026, 10, 30, 9, 0, 0, 0, loc)},
+		{"0 11 22 9 *", time.Date(2026, 9, 22, 11, 0, 0, 0, loc)},
+	}
+	for _, c := range cases {
+		got := NextRun(c.expr, from, loc)
+		if got.IsZero() {
+			t.Errorf("%s: NextRun returned zero time", c.expr)
+			continue
+		}
+		if !got.Equal(c.want) {
+			t.Errorf("%s: NextRun = %s, want %s", c.expr, got, c.want)
+		}
+	}
+	// 农历：能算出未来触发点即可（具体日期随农历历表，不做硬编码断言）
+	got := NextRun("@lunar yearly 12 27-28 07:00", from, loc)
+	if got.IsZero() {
+		t.Error("@lunar yearly: NextRun returned zero time")
+	}
+	if !got.After(from) {
+		t.Errorf("@lunar yearly: NextRun %s not after %s", got, from)
+	}
+	// 非法表达式：零值
+	if got := NextRun("invalid", from, loc); !got.IsZero() {
+		t.Errorf("invalid expr: expected zero time, got %s", got)
+	}
+}

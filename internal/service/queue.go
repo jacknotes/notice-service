@@ -9,10 +9,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/robfig/cron/v3"
-
 	"notice-service/internal/model"
 	"notice-service/internal/repository"
+	"notice-service/internal/scheduler"
 )
 
 var errTaskDisabled = errors.New("任务已禁用")
@@ -284,12 +283,21 @@ func (q *QueueService) cleanup() {
 }
 
 // updateSchedule 入队时更新 cron 任务的 last_run_at / next_run_at（修复死字段）。
+// 用农历感知解析器：@lunar 表达式 ParseStandard 解析不了，曾导致 next_run_at 一直为空。
 func (q *QueueService) updateSchedule(task *model.Task) {
-	sch, err := cron.ParseStandard(task.CronExpr)
-	if err != nil {
+	now := time.Now()
+	next := scheduler.NextRun(task.CronExpr, now, nil)
+	if next.IsZero() {
 		return
 	}
-	now := time.Now()
-	next := sch.Next(now)
 	_ = q.taskRepo.UpdateSchedule(task.ID, &now, &next)
+}
+
+// RefreshNextRun 只重算 next_run_at（不动 last_run_at）：任务创建/修改、启动自愈时调用。
+func (q *QueueService) RefreshNextRun(task *model.Task) {
+	next := scheduler.NextRun(task.CronExpr, time.Now(), nil)
+	if next.IsZero() {
+		return
+	}
+	_ = q.taskRepo.UpdateSchedule(task.ID, nil, &next)
 }

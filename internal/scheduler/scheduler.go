@@ -85,3 +85,17 @@ func (s *Scheduler) makeJob(taskID int64) func() {
 		s.exec(taskID, dedupeKey)
 	}
 }
+
+// NextRun 计算表达式在 from 之后的下一次触发时间；解析失败或不存在触发点返回零值。
+// 与 RegisterTask 用同一个农历感知解析器，保证「调度实际触发点 = next_run_at 显示值」；
+// 时区取 loc（部署容器设 TZ，默认服务器本地时区）。
+func NextRun(expr string, from time.Time, loc *time.Location) time.Time {
+	if loc == nil {
+		loc = time.Local
+	}
+	sch, err := NewLunarParser().Parse(expr)
+	if err != nil {
+		return time.Time{}
+	}
+	return sch.Next(from.In(loc))
+}
