@@ -360,6 +360,7 @@
     "triggerCron": "Scheduled (Cron)",
     "cronExpr": "Cron expression",
     "cronExprPlaceholder": "e.g. 0 */30 * * * *",
+    "cronHint": "5 fields: min hour day month dow; append a year for exact-year schedules, e.g. 0 9-17 15 9 2026 (2026-09-15 only), 0 9 1 1 2027,2030, 0 0 1 1 2026-2030",
     "receiversPlaceholder": "One receiver per line, e.g.\nuser{'@'}example.com\nalert{'@'}example.com",
     "receiverVarHint": "Supports {'{{'}variable{'}}'}, e.g. {'{{'}email{'}}'} is replaced when sending",
     "nonEmailPrefix": "Selected channel: ",

@@ -292,6 +292,7 @@
               {{ t(p.labelKey) }}
             </el-button>
           </div>
+          <div class="field-hint mono">{{ t('tasks.cronHint') }}</div>
           <div class="field-hint mono">{{ t('tasks.lunarHint') }}</div>
         </el-form-item>
 

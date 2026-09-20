@@ -360,6 +360,7 @@
     "triggerCron": "定时（Cron）",
     "cronExpr": "Cron 表达式",
     "cronExprPlaceholder": "例如：0 */30 * * * *",
+    "cronHint": "5 段：分 时 日 月 周；末位追加年份可精确年份，如 0 9-17 15 9 2026（仅 2026-09-15）、0 9 1 1 2027,2030、0 0 1 1 2026-2030",
     "receiversPlaceholder": "每行一个接收地址，例如：\nuser{'@'}example.com\nalert{'@'}example.com",
     "receiverVarHint": "支持 {'{{'}变量{'}}'}，例如 {'{{'}email{'}}'} 会在发送时被替换",
     "nonEmailPrefix": "当前渠道为 ",

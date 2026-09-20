@@ -41,11 +41,72 @@ func NewLunarParser() cron.ScheduleParser {
 }
 
 // Parse 解析 cron 表达式；@lunar 前缀走农历，其余走标准 5 字段。
+// 年份支持两种写法（见 parseYearlySpec）：
+//   - 6 段 Quartz 风格：分 时 日 月 周 年（0 9-17 15 9 * 2026）
+//   - 5 段末位年份：分 时 日 月 年（0 9-17 15 9 2026，无 dow 段）
+//     第 5 段越出 dow(0-6) 范围且形如年份（4 位数字/列表/区间）时，
+//     安全推断为年份，而非报错。
 func (p *lunarParser) Parse(spec string) (cron.Schedule, error) {
 	if strings.HasPrefix(spec, "@lunar") {
 		return parseLunarSchedule(spec, time.Local)
 	}
+	fields := strings.Fields(spec)
+	if looksLikeYearSpec(fields) {
+		return parseYearlySpec(spec, time.Local)
+	}
 	return p.standard.Parse(spec)
+}
+
+// looksLikeYearSpec 判断表达式是否为「带年份」形态：
+// 6 段（Quartz：末段为年份），或 5 段且末位越出 dow(0-6) 合法值、
+// 形如年份集合（4 位数字，可带逗号列表/连字符区间）。
+// 注意：5 段时末位是 dow 字段，正常值 0-6（或 *、名称）；单段内出现
+// 4 位数字必然越界，据此与「dow 越界的手误」区分仍不充分，但年份是
+// 唯一有业务语义的越界解释（此前直接报错，用户诉求即年份）。
+func looksLikeYearSpec(fields []string) bool {
+	switch len(fields) {
+	case 6:
+		return true
+	case 5:
+		return yearish(fields[len(fields)-1])
+	}
+	return false
+}
+
+// yearish 判断字段是否形如年份集合：每个逗号项是 4 位数字或
+// 两端均为 4 位数字的区间（如 2026、2027,2030、2026-2030）。
+func yearish(field string) bool {
+	if field == "" {
+		return false
+	}
+	for _, part := range strings.Split(field, ",") {
+		if part == "" {
+			return false
+		}
+		if strings.Contains(part, "-") {
+			seg := strings.SplitN(part, "-", 2)
+			if !allDigitsLen4(seg[0]) || !allDigitsLen4(seg[1]) {
+				return false
+			}
+			continue
+		}
+		if !allDigitsLen4(part) {
+			return false
+		}
+	}
+	return true
+}
+
+func allDigitsLen4(s string) bool {
+	if len(s) != 4 {
+		return false
+	}
+	for _, r := range s {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return true
 }
 
 // parseLunarSchedule 解析 @lunar 表达式为 LunarSchedule。
