@@ -304,3 +304,42 @@ func TestTaskServiceMultipleCronTasksCoexist(t *testing.T) {
 		}
 	}
 }
+
+// TestTaskValidateCronExprRejectsYearField 回归：cron 第 5 段填年份（如
+// "0 9-17 15 9 2026"，2026 落在星期字段、上限 6）曾保存成功但调度器注册
+// 失败，任务静默不触发且 next_run_at 残留旧值。保存时必须报错拦下。
+func TestTaskValidateCronExprRejectsYearField(t *testing.T) {
+	db := testDB(t)
+	svc := NewTaskService(db, &fakeScheduler{})
+	uid := seedServiceUser(t, db)
+	chID := seedServiceChannelType(t, db, uid, "wechat")
+	tplID := seedServiceTemplate(t, db, uid)
+
+	base := func(expr string) *model.Task {
+		return &model.Task{
+			Name: "t", ChannelID: chID, TemplateID: tplID,
+			TriggerType: "cron", CronExpr: expr,
+		}
+	}
+
+	// 年份字段 → 拒绝
+	if err := svc.validate(base("0 9-17 15 9 2026")); err == nil {
+		t.Fatal("cron expr with year field should be rejected")
+	}
+	// 字段值超范围 → 拒绝
+	if err := svc.validate(base("0 25 * * *")); err == nil {
+		t.Fatal("cron expr with hour 25 should be rejected")
+	}
+	// 合法表达式 → 通过
+	if err := svc.validate(base("0 9-17 15 9 *")); err != nil {
+		t.Fatalf("valid cron expr should pass: %v", err)
+	}
+	// 农历合法表达式 → 通过
+	if err := svc.validate(base("@lunar yearly 12 27-28 07:00")); err != nil {
+		t.Fatalf("valid lunar expr should pass: %v", err)
+	}
+	// 农历非法表达式 → 拒绝
+	if err := svc.validate(base("@lunar yearly 13 1 07:00")); err == nil {
+		t.Fatal("invalid lunar expr should be rejected")
+	}
+}

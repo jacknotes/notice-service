@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -390,10 +391,15 @@ func (s *TaskService) validate(t *model.Task) error {
 	if t.TriggerType == "cron" && strings.TrimSpace(t.CronExpr) == "" {
 		return errors.New("cron 任务必须填写 cron 表达式")
 	}
-	if t.TriggerType == "cron" && strings.HasPrefix(strings.TrimSpace(t.CronExpr), "@lunar") {
-		// 农历表达式语法预检：非法表达式在保存时即报错，而非等调度器注册失败
-		if _, err := scheduler.NewLunarParser().Parse(t.CronExpr); err != nil {
-			return errors.New("农历表达式不合法: " + err.Error())
+	if t.TriggerType == "cron" {
+		// 表达式预检（标准 5 段与 @lunar 均覆盖）：非法表达式保存时报错，
+		// 而非入库后调度器注册失败、任务静默不触发（next_run_at 还残留旧值误导排查）。
+		next := scheduler.NextRun(t.CronExpr, time.Now(), nil)
+		if next.IsZero() {
+			if strings.HasPrefix(strings.TrimSpace(t.CronExpr), "@lunar") {
+				return errors.New("农历表达式不合法: " + lunarParseErr(t.CronExpr))
+			}
+			return errors.New("cron 表达式不合法（5 段：分 时 日 月 周，字段值超范围；不支持年份字段）: " + cronParseErr(t.CronExpr))
 		}
 	}
 	// 接收地址只对邮箱渠道有实际意义：webhook/IM 渠道发送到机器人/token 绑定的目标。
@@ -409,6 +415,17 @@ func (s *TaskService) validate(t *model.Task) error {
 	}
 	return nil
 }
+
+// cronParseErr / lunarParseErr 返回表达式解析错误文本（给保存失败的报错拼接用）。
+func cronParseErr(expr string) string {
+	_, err := scheduler.NewLunarParser().Parse(expr)
+	if err != nil {
+		return err.Error()
+	}
+	return "未知错误"
+}
+
+func lunarParseErr(expr string) string { return cronParseErr(expr) }
 
 // normalizeChannels 保证 channel_id（FK/兼容列）与 channel_ids 一致：channel_id = 第一个渠道。
 func normalizeChannels(t *model.Task) {

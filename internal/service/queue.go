@@ -288,15 +288,18 @@ func (q *QueueService) updateSchedule(task *model.Task) {
 	now := time.Now()
 	next := scheduler.NextRun(task.CronExpr, now, nil)
 	if next.IsZero() {
-		return
+		return // 入队路径表达式必然合法（保存时已校验），防御性保留旧值
 	}
 	_ = q.taskRepo.UpdateSchedule(task.ID, &now, &next)
 }
 
 // RefreshNextRun 只重算 next_run_at（不动 last_run_at）：任务创建/修改、启动自愈时调用。
+// 表达式解析失败（含历史脏数据：如 5 段里塞年份）→ 清空 next_run_at，
+// 避免列表残留旧值、看起来"任务会触发"而实际调度器根本没注册。
 func (q *QueueService) RefreshNextRun(task *model.Task) {
 	next := scheduler.NextRun(task.CronExpr, time.Now(), nil)
 	if next.IsZero() {
+		_ = q.taskRepo.UpdateSchedule(task.ID, nil, nil)
 		return
 	}
 	_ = q.taskRepo.UpdateSchedule(task.ID, nil, &next)
