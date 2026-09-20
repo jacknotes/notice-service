@@ -88,3 +88,32 @@ func TestYearlySpecStandardUnaffected(t *testing.T) {
 		t.Error("NextRun should support year field")
 	}
 }
+
+// TestYearlySpecDowCombinations 年份字段加入后，周（dow）支持必须完好：
+// 标准 5 段、6 段带年份的周单值/区间，以及 dom+dow 的 OR 语义。
+func TestYearlySpecDowCombinations(t *testing.T) {
+	loc, _ := time.LoadLocation("Asia/Shanghai")
+	sunday := time.Date(2026, 9, 20, 12, 0, 0, 0, loc) // 2026-09-20 是周日
+	mon := time.Date(2026, 9, 21, 9, 0, 0, 0, loc)     // 下一个周一
+
+	cases := []struct {
+		expr string
+		want time.Time
+	}{
+		{"0 9 * * 1", mon},                      // 标准 5 段：每周一（不受年份路由影响）
+		{"0 9 * * 1 2026", mon},                 // 6 段：2026 年每周一
+		{"0 9 * * 1-5 2026", mon},               // 6 段：2026 年工作日
+		{"0 9 * * 2026", mon},                   // 5 段年份形态：周缺省 *（2026-09-21 是周一，恰好最近触发日）
+		{"0 9 1 * 1 2026", mon},                 // 6 段 dom+dow OR 语义：2026 年每月 1 日或每周一
+	}
+	for _, c := range cases {
+		s, err := NewLunarParser().Parse(c.expr)
+		if err != nil {
+			t.Errorf("%s: parse: %v", c.expr, err)
+			continue
+		}
+		if got := s.Next(sunday); got.IsZero() || !got.Equal(c.want) {
+			t.Errorf("%s: got %s, want %s", c.expr, got, c.want)
+		}
+	}
+}
