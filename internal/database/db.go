@@ -1,6 +1,7 @@
 package database
 
 import (
+	"context"
 	"database/sql"
 	"embed"
 	"fmt"
@@ -35,16 +36,30 @@ func Open(dsn string) (*sql.DB, error) {
 }
 
 // Migrate 按文件名顺序（001_ 在 002_ 之前）执行 embedded migrations/*.sql。
-// 每个文件只应用一次：以 schema_migrations 表记录已应用文件，GET_LOCK 保证
+// 每个文件只应用一次：以 schema_migrations 表记录已应用文件；GET_LOCK 保证
 // 多实例并发启动时串行迁移（防止 ALTER 等非幂等语句在竞态下重复执行）。
+//
+// GET_LOCK 是连接级锁：必须用一条专用连接同时完成 加锁 → 迁移 → 释放，
+// 否则 database/sql 连接池会把迁移语句调度到其它连接（锁根本不生效），
+// 且加锁返回值 0（超时未获得）必须显式判断，否则锁失败照样继续迁移。
 func Migrate(db *sql.DB) error {
-	// 迁移记录表（幂等）；锁保证同一时刻只有一个实例执行迁移
-	if _, err := db.Exec("SELECT GET_LOCK('notice_migrate', 30)"); err != nil {
+	conn, err := db.Conn(context.Background())
+	if err != nil {
+		return fmt.Errorf("migrate conn: %w", err)
+	}
+	defer conn.Close()
+
+	// 阻塞等锁（最长 120s，覆盖慢迁移窗口），拿到才继续。
+	var got int
+	if err := conn.QueryRowContext(context.Background(), "SELECT GET_LOCK('notice_migrate', 120)").Scan(&got); err != nil {
 		return fmt.Errorf("acquire migrate lock: %w", err)
 	}
-	defer func() { _, _ = db.Exec("SELECT RELEASE_LOCK('notice_migrate')") }()
+	if got != 1 {
+		return fmt.Errorf("acquire migrate lock: another instance is migrating (GET_LOCK timeout)")
+	}
+	defer func() { _, _ = conn.ExecContext(context.Background(), "SELECT RELEASE_LOCK('notice_migrate')") }()
 
-	if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS schema_migrations (
+	if _, err := conn.ExecContext(context.Background(), `CREATE TABLE IF NOT EXISTS schema_migrations (
 		name       VARCHAR(255) PRIMARY KEY,
 		applied_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 	) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`); err != nil {
@@ -55,12 +70,13 @@ func Migrate(db *sql.DB) error {
 	if err != nil {
 		return fmt.Errorf("read migrations: %w", err)
 	}
+	ctx := context.Background()
 	for _, e := range entries {
 		if e.IsDir() || !strings.HasSuffix(e.Name(), ".sql") {
 			continue
 		}
 		var applied int
-		if err := db.QueryRow("SELECT COUNT(*) FROM schema_migrations WHERE name=?", e.Name()).Scan(&applied); err != nil {
+		if err := conn.QueryRowContext(ctx, "SELECT COUNT(*) FROM schema_migrations WHERE name=?", e.Name()).Scan(&applied); err != nil {
 			return fmt.Errorf("check migration %s: %w", e.Name(), err)
 		}
 		if applied > 0 {
@@ -75,11 +91,11 @@ func Migrate(db *sql.DB) error {
 			if s == "" {
 				continue
 			}
-			if _, err := db.Exec(s); err != nil {
+			if _, err := conn.ExecContext(ctx, s); err != nil {
 				return fmt.Errorf("migrate %s: %w", e.Name(), err)
 			}
 		}
-		if _, err := db.Exec("INSERT IGNORE INTO schema_migrations (name) VALUES (?)", e.Name()); err != nil {
+		if _, err := conn.ExecContext(ctx, "INSERT IGNORE INTO schema_migrations (name) VALUES (?)", e.Name()); err != nil {
 			return fmt.Errorf("record migration %s: %w", e.Name(), err)
 		}
 	}
