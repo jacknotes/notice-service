@@ -97,7 +97,8 @@ type fileConfig struct {
 }
 
 // WeakSecretWarnings 返回需要告警的弱密钥配置说明（空表示全部健康）。
-// 防止以默认/示例密钥裸跑导致 JWT 可伪造、渠道配置可被解密。
+// 防止以默认/示例密钥裸跑导致 JWT 可伪造、渠道配置可被解密、默认口令
+// admin/admin123 直接可登录。
 func (c *Config) WeakSecretWarnings() []string {
 	var w []string
 	if c.JWTSecret == "" || c.JWTSecret == "change-me" || c.JWTSecret == "change_me" {
@@ -105,6 +106,12 @@ func (c *Config) WeakSecretWarnings() []string {
 	}
 	if c.EncryptKey == "" || c.EncryptKey == "0123456789abcdef0123456789abcdef" {
 		w = append(w, "ENCRYPT_KEY 为示例固定值，渠道配置加密可被破解，请设置随机 32 字节密钥（多实例必须一致）")
+	}
+	if c.AdminPass == "" || c.AdminPass == "admin123" || c.AdminPass == "change-me" {
+		w = append(w, "ADMIN_PASS 为默认/弱值，默认管理员可被直接登录，请设置强密码")
+	}
+	if len(c.JWTSecret) > 0 && len(c.JWTSecret) < 32 {
+		w = append(w, "JWT_SECRET 长度不足 32 字节，建议使用至少 32 字节的随机密钥")
 	}
 	return w
 }

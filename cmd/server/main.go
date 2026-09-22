@@ -108,9 +108,17 @@ func main() {
 		os.Exit(runResetPasswordCmd(cfg))
 	}
 
-	// 弱默认密钥告警：防止以默认/示例密钥裸跑
-	for _, w := range cfg.WeakSecretWarnings() {
-		log.Printf("[警告] %s", w)
+	// 弱默认密钥处理：告警 + STRICT_SECRETS=1 时拒绝启动。默认 JWT/加密密钥
+	// 可直接伪造身份/解密渠道配置，默认 admin 口令等同后门；合规环境应显式
+	// 设置强密钥并开启严格模式，开发环境可忽略告警。
+	if warnings := cfg.WeakSecretWarnings(); len(warnings) > 0 {
+		strict := os.Getenv("STRICT_SECRETS") == "1" || os.Getenv("STRICT_SECRETS") == "true"
+		for _, w := range warnings {
+			log.Printf("[警告] %s", w)
+		}
+		if strict {
+			log.Fatalf("STRICT_SECRETS=1 且检测到弱密钥配置，拒绝启动。请设置强随机 JWT_SECRET / ENCRYPT_KEY / ADMIN_PASS 后重试")
+		}
 	}
 
 	db, err := database.Open(cfg.DSN())
@@ -138,6 +146,7 @@ func main() {
 	}
 
 	authSvc := service.NewAuthService(db, cfg.JWTSecret, cfg.AdminUser, cfg.AdminPass)
+	authSvc.SetCipher(ciph) // TOTP 密钥加密落库（与渠道配置加密同源密钥）
 	if err := authSvc.BootstrapAdmin(); err != nil {
 		log.Fatalf("bootstrap admin: %v", err)
 	}
@@ -288,12 +297,18 @@ func main() {
 
 	// 优雅退出：SIGINT/SIGTERM → 停止接收新连接 → 等待在途请求完成 →
 	// 排空发送队列（defer queue.Stop 会在返回后执行）→ 停调度器 → 关 DB。
+	// 第二次信号 = 强制退出：NotifyContext 的 stop() 在 defer 里才执行，
+	// 关闭期间信号会被继续吞掉，运维无法提前强退；收到首信号后立即 stop()
+	// 恢复默认行为，再来的信号直接终止进程。
+	// HTTP 排空窗口 25s > WriteTimeout 20s：保证在途响应完整写出后再进入
+	// 队列排空；两段合计逼近 compose stop_grace_period 30s，若被 SIGKILL
+	// 截断，未完成的 job 由其它实例经 RecoverStale 接管（不丢失）。
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
 	go func() {
 		<-ctx.Done()
-		log.Printf("收到退出信号，开始优雅关闭（最多 15s）...")
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		stop() // 恢复默认信号处理：后续信号直接强退
+		log.Printf("收到退出信号，开始优雅关闭（最多 25s，再次 Ctrl-C/SIGTERM 强制退出）...")
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
 		defer cancel()
 		if err := srv.Shutdown(shutdownCtx); err != nil {
 			log.Printf("http shutdown: %v", err)

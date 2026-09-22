@@ -42,11 +42,13 @@ type Options struct {
 }
 
 func NewRouter(db *sql.DB, authSvc *service.AuthService, cipher *crypto.Cipher, sched *scheduler.Scheduler, queue *service.QueueService, opts ...Options) *gin.Engine {
+	// 默认值仅用于「调用方未传 Options」的场景（零值 opts 不会覆盖它）：
+	// 测试方便开启 Swagger；生产通过 main 显式传入 cfg.SwaggerEnabled（默认 false）。
 	o := Options{SwaggerEnabled: true, MaxBodyBytes: 1 << 20}
 	if len(opts) > 0 {
-		if opts[0].SwaggerEnabled {
-			o.SwaggerEnabled = true
-		}
+		// 显式赋值而非 if-true 覆盖：false 必须能传进来，
+		// 否则生产关闭 Swagger 的配置永远不生效。
+		o.SwaggerEnabled = opts[0].SwaggerEnabled
 		if opts[0].MaxBodyBytes > 0 {
 			o.MaxBodyBytes = opts[0].MaxBodyBytes
 		}

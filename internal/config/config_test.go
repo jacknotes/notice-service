@@ -102,13 +102,19 @@ func TestLoadQueueFromEnv(t *testing.T) {
 }
 
 func TestWeakSecretWarnings(t *testing.T) {
-	weak := &Config{JWTSecret: "change-me", EncryptKey: "0123456789abcdef0123456789abcdef"}
-	if n := len(weak.WeakSecretWarnings()); n != 2 {
-		t.Errorf("weak secrets should produce 2 warnings, got %d", n)
+	// 弱场景：默认 JWT/加密密钥 + 默认 admin 口令 + JWT 长度不足 → 4 条告警
+	weak := &Config{JWTSecret: "change-me", EncryptKey: "0123456789abcdef0123456789abcdef", AdminPass: "admin123"}
+	if n := len(weak.WeakSecretWarnings()); n != 4 {
+		t.Errorf("weak secrets should produce 4 warnings, got %d: %v", n, weak.WeakSecretWarnings())
 	}
-	strong := &Config{JWTSecret: "random-secret-1234567890", EncryptKey: "abcdef0123456789abcdef0123456789"}
+	strong := &Config{JWTSecret: "random-secret-1234567890-random-secret-long", EncryptKey: "abcdef0123456789abcdef0123456789", AdminPass: "Str0ng!Passphrase#2026"}
 	if n := len(strong.WeakSecretWarnings()); n != 0 {
 		t.Errorf("strong secrets should produce 0 warnings, got %d: %v", n, strong.WeakSecretWarnings())
+	}
+	// AdminPass 缺省（空）也应告警
+	emptyPass := &Config{JWTSecret: "random-secret-1234567890-random-secret-long", EncryptKey: "abcdef0123456789abcdef0123456789"}
+	if n := len(emptyPass.WeakSecretWarnings()); n != 1 {
+		t.Errorf("empty admin pass should produce 1 warning, got %d", n)
 	}
 }
 
