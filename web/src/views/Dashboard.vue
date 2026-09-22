@@ -260,27 +260,35 @@ function channelWidth(c: { total: number; success: number }) {
 }
 
 /* ── 加载 ───────────────────────────────────────────────────────────── */
+// 请求序号竞态保护：快速切换日期范围时旧响应晚到会覆盖新结果。
+let loadSeq = 0
+
 async function load() {
+  const seq = ++loadSeq
   loading.value = true
   error.value = ''
   try {
     const params = dateRange.value ? { from: dateRange.value[0], to: dateRange.value[1] } : {}
-    const [s, t, top, chs] = await Promise.all([
+    // 注意：trend 命名避开 useI18n 的 t，否则遮蔽翻译函数（该作用域内调用 t() 会 TypeError）
+    const [s, trendData, top, chs] = await Promise.all([
       dashboardApi.stats(params),
       dashboardApi.trend(params),
       dashboardApi.topTasks(params),
       dashboardApi.channelStats(params),
     ])
+    if (seq !== loadSeq) return // 已有更新的请求，丢弃过期响应
     Object.assign(stats, s || {})
-    trend.value = Array.isArray(t) ? t : []
+    trend.value = Array.isArray(trendData) ? trendData : []
     topTasks.value = Array.isArray(top) ? top : []
     channelStats.value = Array.isArray(chs) ? chs : []
     renderDonut()
   } catch (e: any) {
-    error.value = e?.response?.data?.error || t('dashboard.loadFailed')
-    ElMessage.error(error.value)
+    if (seq === loadSeq) {
+      error.value = e?.response?.data?.error || t('dashboard.loadFailed')
+      ElMessage.error(error.value)
+    }
   } finally {
-    loading.value = false
+    if (seq === loadSeq) loading.value = false
   }
 }
 
@@ -289,15 +297,16 @@ async function loadOptions() {
     const [ts, chs] = await Promise.all([taskApi.list(), channelApi.list()])
     tasks.value = ts || []
     channels.value = chs || []
-    load()
   } catch {
-    load()
+    // 元数据失败不阻塞统计数据加载
   }
 }
 
 watch(() => stats, renderDonut, { deep: true })
 
 onMounted(() => {
+  // 统计数据已在 setup 阶段由 applyPreset(quickPresets[0]) 触发加载，
+  // 这里只补拉下拉元数据；再调一次 load() 会把每个统计接口打两遍。
   loadOptions()
   window.addEventListener('resize', onResize)
 })

@@ -23,6 +23,8 @@ const router = createRouter({
         { path: 'settings', component: () => import('@/views/Settings.vue'), meta: { titleKey: 'nav.settings' } },
       ],
     },
+    // 404 兜底：无捕获路由时未知路径渲染空白 router-view，无任何提示
+    { path: '/:pathMatch(.*)*', redirect: '/dashboard' },
   ],
 })
 

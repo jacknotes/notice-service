@@ -4,6 +4,11 @@ web/node_modules/
 *.exe
 *.log
 
+# TypeScript 增量构建产物（vue-tsc -b 生成）
+*.tsbuildinfo
+web/vite.config.d.ts
+web/vite.config.js
+
 # Local dev data (MariaDB datadir, Go caches, sockets)
 .dev/
 

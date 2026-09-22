@@ -151,7 +151,7 @@
 
 <script setup lang="ts">
 import { computed, reactive, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import { User, Lock, WarningFilled, Sunny, Moon, Key, Switch } from '@element-plus/icons-vue'
@@ -161,6 +161,13 @@ import { setLocale, type SupportedLocale } from '@/i18n/locale'
 import { authApi } from '@/api'
 
 const router = useRouter()
+const route = useRoute()
+// 401 踢回登录页时带 redirect 参数，登录成功后回到原页面；仅允许站内路径。
+function redirectAfterLogin() {
+  const target = typeof route.query.redirect === 'string' ? route.query.redirect : ''
+  router.push(target.startsWith('/') && !target.startsWith('//') ? target : '/dashboard')
+}
+
 const auth = useAuthStore()
 
 const { t } = useI18n()
@@ -198,7 +205,7 @@ async function onSubmit() {
       formRef.value?.clearValidate()
     } else if (res.token) {
       auth.completeLogin(res as any)
-      router.push('/dashboard')
+      redirectAfterLogin()
     } else {
       error.value = t('login.loginResponseError')
     }
@@ -221,7 +228,7 @@ async function onVerify2FA() {
   try {
     const data = await authApi.verify2FA(pendingToken.value, form.code.trim())
     auth.completeLogin(data)
-    router.push('/dashboard')
+    redirectAfterLogin()
   } catch (e: any) {
     error.value = e?.response?.data?.error || t('login.codeIncorrect')
   } finally {

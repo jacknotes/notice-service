@@ -105,7 +105,8 @@ export const logApi = {
   detail: (id: number): Promise<any> => client.get(`/logs/${id}`).then((r) => r.data),
   // 导出 CSV（仅管理员），筛选条件与列表一致
   export: (params: { task_id?: number; category?: string; status?: string; from?: string; to?: string }): Promise<Blob> =>
-    client.get('/logs/export', { params, responseType: 'blob' }).then((r) => r.data as Blob),
+    // 大库导出可能远超默认 15s 超时：单独放宽到 5 分钟
+    client.get('/logs/export', { params, responseType: 'blob', timeout: 300000 }).then((r) => r.data as Blob),
 }
 
 export const userApi = {
@@ -191,7 +192,8 @@ export interface BackupImportResult {
 
 export const backupApi = {
   export: (): Promise<Blob> =>
-    client.get('/export', { responseType: 'blob' }).then((r) => r.data as Blob),
+    // 全量备份导出可能远超默认 15s 超时：单独放宽到 5 分钟
+    client.get('/export', { responseType: 'blob', timeout: 300000 }).then((r) => r.data as Blob),
   import: (data: any): Promise<BackupImportResult> =>
     client.post('/import', data).then((r) => r.data),
 }

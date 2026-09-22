@@ -416,6 +416,7 @@ async function loadCategories() {
    目标行短暂闪烁两次后恢复默认样式，不常驻高亮。 */
 const highlightId = ref<number | null>(null)
 const flashRowId = ref<number | null>(null)
+let flashTimer: number | undefined
 
 // 行 class：目标行在闪烁期间附加 flash 样式（动画结束后由下方定时器清除）
 function rowClassName({ row }: { row: ChannelRow }) {
@@ -437,8 +438,9 @@ function highlightById(id: number) {
       const el = document.querySelector('.el-table .flash-row')
       el?.scrollIntoView({ block: 'center', behavior: 'smooth' })
     })
-    // 动画约 0.9s（闪烁两次），结束后清除 class 恢复正常显示
-    window.setTimeout(() => {
+    // 动画约 0.9s（闪烁两次），结束后清除 class 恢复正常显示；
+    // 句柄保存到组件级，卸载时清理（组件卸载后写 ref 无意义）
+    flashTimer = window.setTimeout(() => {
       flashRowId.value = null
     }, 1000)
   })

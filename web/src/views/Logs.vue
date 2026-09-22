@@ -535,7 +535,12 @@ async function exportCsv() {
   }
 }
 
+// 请求序号竞态保护：快速切换筛选时旧响应晚到会覆盖新结果（且 total 与
+// 当前筛选永久不一致），只有最新一次请求允许写入列表状态。
+let loadSeq = 0
+
 async function loadLogs() {
+  const seq = ++loadSeq
   loading.value = true
   try {
     const params: {
@@ -545,7 +550,7 @@ async function loadLogs() {
       page: page.value,
       page_size: pageSize.value,
     }
-    if (taskFilter.value !== undefined) params.task_id = taskFilter.value
+    if (taskFilter.value !== undefined && !Number.isNaN(taskFilter.value)) params.task_id = taskFilter.value
     if (categoryFilter.value) params.category = categoryFilter.value
     if (statusFilter.value) params.status = statusFilter.value
     if (dateRange.value) {
@@ -557,13 +562,16 @@ async function loadLogs() {
       params.sort_order = sortOrder.value
     }
     const data = await logApi.query(params)
+    if (seq !== loadSeq) return // 已有更新的请求发出，丢弃本次过期响应
     logs.value = (data?.items || []) as LogRow[]
     total.value = data?.total || 0
   } catch (e: any) {
-    ElMessage.error(errMsg(e, t('logs.loadFailed')))
+    if (seq === loadSeq) ElMessage.error(errMsg(e, t('logs.loadFailed')))
   } finally {
-    loading.value = false
-    tasksLoaded.value = true
+    if (seq === loadSeq) {
+      loading.value = false
+      tasksLoaded.value = true
+    }
   }
 }
 
@@ -596,12 +604,15 @@ watch([taskFilter, statusFilter, categoryFilter, dateRange], () => {
   loadLogs()
 })
 
-// 从「任务管理」跳转过来时按任务预筛选
+// 从「任务管理」跳转过来时按任务预筛选（非法值守卫，防 task_id=NaN 发给后端）
 watch(
   () => route.query.task,
   (val) => {
     if (val !== undefined && val !== null && val !== '') {
-      taskFilter.value = Number(val)
+      const n = Number(val)
+      if (Number.isInteger(n) && n > 0) {
+        taskFilter.value = n
+      }
     }
   },
   { immediate: true }
