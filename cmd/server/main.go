@@ -44,6 +44,12 @@ var buildVersion = "dev"
 // heartbeatInterval 实例心跳上报间隔（「信号在线」多节点健康）。
 const heartbeatInterval = 5 * time.Second
 
+// heartbeatStalePurgeWindow 心跳行陈旧清理窗口：超过该时长未上报的行由每个
+// tick 顺带删除。健康判定窗口（15s）已把这类节点标记为离线，再保留只会
+// 让节点列表永久残留僵尸行（未优雅退出的实例无法自删，见 PurgeStale）；
+// 1 分钟的缓冲让离线节点短暂可见便于感知异常，随后自动消失。
+const heartbeatStalePurgeWindow = time.Minute
+
 // usageText 程序用法说明（--help 时打印）。
 const usageText = `Usage: notice-service [options] [command]
 
@@ -219,6 +225,13 @@ func main() {
 				InstanceID: cfg.InstanceID, Host: host, Port: cfg.Port, Version: buildVersion,
 				StartedAt: startedAt, LastSeenAt: time.Now(),
 			})
+			// 顺带清理陈旧心跳行：未优雅退出的实例（kill -9/重建/缩容）无法自删，
+			// 且重建后容器 ID 变化导致 PurgeSameAddr 匹配不到，只能靠窗口清理。
+			if n, err := hbRepo.PurgeStale(heartbeatStalePurgeWindow); err != nil {
+				log.Printf("heartbeat: purge stale rows: %v", err)
+			} else if n > 0 {
+				log.Printf("heartbeat: purged %d stale instance row(s)", n)
+			}
 		}
 		tick() // 启动立即上报一次
 		ticker := time.NewTicker(heartbeatInterval)

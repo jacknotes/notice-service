@@ -121,3 +121,51 @@ func TestHeartbeatPurgeSameAddr(t *testing.T) {
 		t.Fatalf("instance on different port should be kept: %+v", list)
 	}
 }
+
+func TestHeartbeatPurgeStale(t *testing.T) {
+	db := openTestDB(t)
+	repo := NewHeartbeatRepo(db)
+
+	if _, err := db.Exec("DELETE FROM instance_heartbeats"); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { db.Exec("DELETE FROM instance_heartbeats") })
+
+	// 僵尸行：容器重建后 hostname 变化、未优雅退出的旧实例（last_seen 远超窗口）
+	if err := repo.Upsert(&Instance{
+		InstanceID: "zombie", Host: "deadcontainer", Port: "8080", Version: "v-old",
+		StartedAt: time.Now().Add(-48 * time.Hour), LastSeenAt: time.Now().Add(-time.Hour),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	// 存活实例：刚刚上报
+	if err := repo.Upsert(&Instance{
+		InstanceID: "alive", Host: "livecontainer", Port: "8080", Version: "v-new",
+		StartedAt: time.Now().Add(-time.Hour), LastSeenAt: time.Now(),
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	n, err := repo.PurgeStale(time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n != 1 {
+		t.Fatalf("want purge 1 stale row, got %d", n)
+	}
+	list, _ := repo.List(15 * time.Second)
+	if len(list) != 1 || list[0].InstanceID != "alive" {
+		t.Fatalf("only alive instance should remain, got %+v", list)
+	}
+
+	// 被误删的存活实例下一 tick Upsert 会原样重建（幂等自愈）
+	if err := repo.Upsert(&Instance{
+		InstanceID: "alive", Host: "livecontainer", Port: "8080", Version: "v-new",
+		StartedAt: time.Now().Add(-time.Hour), LastSeenAt: time.Now(),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if list, _ = repo.List(15 * time.Second); len(list) != 1 {
+		t.Fatalf("upsert after purge should recreate row, got %d", len(list))
+	}
+}

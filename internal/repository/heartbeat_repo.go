@@ -79,3 +79,22 @@ func (r *HeartbeatRepo) PurgeSameAddr(host, port, keepID string) error {
 		host, port, keepID)
 	return err
 }
+
+// PurgeStale 删除超过 olderThan 未上报心跳的实例行。容器被 kill -9、重建、
+// 缩容等未走优雅退出的实例不会自删心跳行，且重建后 hostname（容器 ID）变化，
+// PurgeSameAddr 按 host:port 匹配不到它们——僵尸行会让节点列表永远显示离线。
+// 心跳间隔远小于该窗口，存活实例不会被误删；即便误删（如 DB 抖动超窗口），
+// 下一次 tick 的 Upsert 会原样重建本行。
+func (r *HeartbeatRepo) PurgeStale(olderThan time.Duration) (int64, error) {
+	if r.db == nil {
+		return 0, nil
+	}
+	res, err := r.db.Exec(
+		"DELETE FROM instance_heartbeats WHERE last_seen_at < NOW() - INTERVAL ? SECOND",
+		int(olderThan.Seconds()))
+	if err != nil {
+		return 0, err
+	}
+	n, _ := res.RowsAffected()
+	return n, nil
+}
