@@ -21,6 +21,12 @@ func Auth(svc *service.AuthService) gin.HandlerFunc {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "登录已过期"})
 			return
 		}
+		// 2FA 待验证令牌（登录第一步签发）仅限 /auth/2fa/verify 使用：
+		// 直接拿它访问业务 API 视为未通过完整认证，否则 2FA 形同虚设。
+		if claims.TwoFA {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "请先完成双因子验证"})
+			return
+		}
 		// 每次请求回查用户当前状态与角色：被禁用（软删除）的用户其已签发令牌立即失效；
 		// 角色也以 DB 为准——提权/降级在下一个请求即生效，而不是等 JWT 自然过期。
 		u, err := svc.User(claims.UserID)

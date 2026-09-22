@@ -85,7 +85,10 @@ func (r *AuditRepo) Query(f AuditFilter) (total int, logs []*AuditLog, err error
 	args := []interface{}{}
 	if f.Keyword != "" {
 		where += " AND (username LIKE ? OR ip LIKE ? OR detail LIKE ?)"
-		like := "%" + f.Keyword + "%"
+		// 转义 LIKE 通配符：用户输入的 %/_ 按字面匹配（否则搜索语义失真，
+		// 且 "%%%..." 这类模式可造成全表扫描慢查询）。
+		escaped := strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`).Replace(f.Keyword)
+		like := "%" + escaped + "%"
 		args = append(args, like, like, like)
 	}
 	if f.Action != "" {

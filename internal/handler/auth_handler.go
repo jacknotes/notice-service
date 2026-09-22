@@ -5,19 +5,22 @@ import (
 	"log"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 
+	"notice-service/internal/repository"
 	"notice-service/internal/service"
 )
 
 type AuthHandler struct {
-	Svc *service.AuthService
-	db  *sql.DB
+	Svc       *service.AuthService
+	db        *sql.DB
+	rateLimit *repository.RateLimitRepo
 }
 
 func NewAuthHandler(db *sql.DB, authSvc *service.AuthService) *AuthHandler {
-	return &AuthHandler{Svc: authSvc, db: db}
+	return &AuthHandler{Svc: authSvc, db: db, rateLimit: repository.NewRateLimitRepo(db)}
 }
 
 // Login 登录（两步：密码 → 双因子认证）。
@@ -229,6 +232,14 @@ func (h *AuthHandler) ChangePassword(c *gin.Context) {
 // @Success 200 {object} map[string]interface{}
 // @Router /api/auth/forgot-password [post]
 func (h *AuthHandler) ForgotPassword(c *gin.Context) {
+	// 公开接口限流：按 IP 10 次/分钟。该接口的 bcrypt 在令牌校验前执行
+	// （固定工作量抹平时序差），无限流则可被高频调用耗尽 CPU。
+	if ok, err := h.rateLimit.Allow("forgot-pw:"+c.ClientIP(), time.Minute, 10); err != nil {
+		log.Printf("forgot-password: rate limit check failed: %v", err) // DB 故障 fail-open
+	} else if !ok {
+		c.JSON(http.StatusTooManyRequests, gin.H{"error": "请求过于频繁，请稍后再试"})
+		return
+	}
 	var req struct {
 		Username    string `json:"username"`
 		Token       string `json:"token"`
@@ -242,5 +253,6 @@ func (h *AuthHandler) ForgotPassword(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": sanitizeErr(err)})
 		return
 	}
+	auditActor(h.db, 0, req.Username, c.ClientIP(), "password.reset", "通过重置令牌完成密码重置")
 	c.JSON(http.StatusOK, gin.H{"ok": true})
 }

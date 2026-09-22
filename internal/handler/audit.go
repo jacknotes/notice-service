@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/gin-gonic/gin"
 
@@ -40,7 +41,12 @@ func auditCtx(c *gin.Context, db *sql.DB, action, detail string) {
 }
 
 // auditActor 记录指定操作者的操作（登录/登出等无中间件上下文场景），ip 为请求来源。
+// username 来自请求体（如 login.failed），截断到列宽并限制 rune 数，
+// 防止未认证流量用超长用户名刷写审计表。
 func auditActor(db *sql.DB, uid int64, username, ip, action, detail string) {
+	if utf8.RuneCountInString(username) > 100 {
+		username = string([]rune(username)[:100])
+	}
 	_ = repository.NewAuditRepo(db).Create(&repository.AuditLog{
 		UserID: uid, Username: username, IP: ip,
 		Action: action, Module: auditModule(action), Detail: detail,
