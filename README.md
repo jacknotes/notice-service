@@ -74,7 +74,7 @@ curl -o .env https://raw.githubusercontent.com/jacknotes/notice-service/main/.en
 #    JWT_SECRET / ENCRYPT_KEY / ADMIN_PASS；缺任一项启动会直接报错）
 vi .env
 
-# 3. 一键启动（notice-service + MySQL 5.7）
+# 3. 一键启动（notice-service + MySQL 8.0）
 docker compose -f docker-compose.quickstart.yml up -d
 ```
 
@@ -100,13 +100,11 @@ docker compose -f docker-compose.quickstart.yml pull \
 
 > - 镜像版本固定在 compose 文件中的 `image: jacknotes/notice-service:v1`；升级到新版本时先 `pull` 拉新镜像，再把 tag 改为新版本号后 `up -d`。登录后可在「个人设置」或侧边栏底部查看当前运行版本。
 >
-> - 国内网络拉取 Docker Hub 镜像慢/失败时，在 `.env` 设置 `MYSQL_IMAGE=docker.m.daocloud.io/library/mysql:5.7`，应用镜像同理可换成镜像源前缀形式。
+> - 国内网络拉取 Docker Hub 镜像慢/失败时，在 `.env` 设置 `MYSQL_IMAGE=docker.m.daocloud.io/library/mysql:8.0`，应用镜像同理可换成镜像源前缀形式。
 >
-> - **MySQL 版本兼容性**：默认 `mysql:5.7`（amd64），已实测兼容 `mysql:8.0`（含 `caching_sha2_password` 认证与 `utf8mb4_0900_ai_ci` 排序规则），理论兼容 8.4+。注意两点：
+> - **MySQL 版本兼容性**：默认 `mysql:8.0`（5.7 已于 2023-10 EOL）。需要老版本兼容时在 `.env` 设置 `MYSQL_IMAGE=mysql:5.7`（amd64 only）。注意：
 >
->   - **ARM64 主机**（Apple Silicon / ARM 服务器）：`mysql:5.7` 无 arm64 构建，需在 `.env` 设置 `MYSQL_IMAGE=mysql:8.0`（5.7 全系仅 amd64）；
->
->   - **老 Docker 引擎**（低于 20.10.5）：新版 `mysql:8.0` 镜像因 seccomp 策略无法启动（初始化报 `Can't create thread (errno: 1)`），此类环境请继续使用默认的 `mysql:5.7`。
+>   - **老 Docker 引擎**（低于 20.10.5）：`mysql:8.0` 镜像因 seccomp 策略无法启动（初始化报 `Can't create thread (errno: 1)`），此类环境请设置 `MYSQL_IMAGE=mysql:5.7`。
 >
 > - 首启自动建表并创建管理员，数据（渠道配置、模板、任务、日志）持久化在 MySQL 卷中，重启不丢。
 >

@@ -29,10 +29,14 @@ RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w -X main.buildVersion=${BUI
 FROM ${IMAGE_PREFIX}alpine:3.21
 # 替换 apk 源为阿里云镜像（仅 main + community，与官方源结构一致）
 RUN sed -i 's#https://dl-cdn.alpinelinux.org#https://mirrors.aliyun.com#g' /etc/apk/repositories \
-    && apk add --no-cache ca-certificates tzdata
+    && apk add --no-cache ca-certificates tzdata \
+    && addgroup -S app && adduser -S -G app app
 WORKDIR /app
 COPY --from=build /notice-service /app/notice-service
 COPY --from=web /app/dist /app/web/dist
+# 以非 root 运行：监听非特权端口 8080，无需特权；数据均不落容器本地盘。
+RUN chown -R app:app /app
+USER app
 EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
   CMD wget -q -O /dev/null http://127.0.0.1:8080/api/health || exit 1

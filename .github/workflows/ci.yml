@@ -1,5 +1,9 @@
 name: CI
 
+# 最小权限：CI 只需读取代码，不发布任何制品，显式收窄默认 token 权限。
+permissions:
+  contents: read
+
 on:
   push:
     branches: [main]
@@ -53,7 +57,7 @@ jobs:
     runs-on: ubuntu-latest
     services:
       mysql:
-        image: mysql:5.7
+        image: mysql:8.0
         env:
           MYSQL_ROOT_PASSWORD: root
           MYSQL_DATABASE: notice_service

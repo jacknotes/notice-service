@@ -30,8 +30,8 @@ if [ -z "${IMAGE_PREFIX:-}" ] && [ -f ".env" ]; then
   ENV_IMAGE_PREFIX="$(grep -E '^IMAGE_PREFIX=' .env | tail -1 | cut -d= -f2-)"
   [ -n "$ENV_IMAGE_PREFIX" ] && IMAGE_PREFIX="$ENV_IMAGE_PREFIX"
 fi
-IMAGE_PREFIX_ARG=""
-[ -n "${IMAGE_PREFIX:-}" ] && IMAGE_PREFIX_ARG="--build-arg IMAGE_PREFIX=${IMAGE_PREFIX}"
+IMAGE_PREFIX_ARG=()
+[ -n "${IMAGE_PREFIX:-}" ] && IMAGE_PREFIX_ARG=(--build-arg "IMAGE_PREFIX=${IMAGE_PREFIX}")
 
 VERSION="$(git describe --tags --always --dirty)"
 case "$VERSION" in
@@ -51,7 +51,7 @@ echo "==> 目标仓库：${REGISTRY}"
 echo "==> 构建镜像（BUILD_VERSION=${VERSION}）..."
 docker build \
   --build-arg BUILD_VERSION="${VERSION}" \
-  ${IMAGE_PREFIX_ARG:-} \
+  "${IMAGE_PREFIX_ARG[@]}" \
   --build-arg NPM_REGISTRY="${NPM_REGISTRY:-https://registry.npmmirror.com}" \
   --build-arg GOPROXY="${GOPROXY:-https://goproxy.cn,direct}" \
   -t "${REGISTRY}:${VERSION}" \

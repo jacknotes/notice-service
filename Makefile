@@ -133,7 +133,13 @@ db-status: ## 查看本地 MySQL 状态
 
 db-clean: ## 清空真实库与测试库数据（危险：会删除所有数据）
 	@echo "危险操作：将删除 notice_service 与 notice_service_test 的全部数据，确认请运行: make db-clean FORCE=1"
-	@[ "$(FORCE)" = "1" ] && (mysql --socket=$(CURDIR)/.dev/mysql-run/mysqld.sock -u root -e "DROP DATABASE IF EXISTS notice_service; DROP DATABASE IF EXISTS notice_service_test; CREATE DATABASE notice_service CHARACTER SET utf8mb4; CREATE DATABASE notice_service_test CHARACTER SET utf8mb4; GRANT ALL ON notice_service.* TO 'notice'@'%'; GRANT ALL ON notice_service_test.* TO 'notice'@'%';") || echo "已取消"
+	@if [ "$(FORCE)" = "1" ]; then \
+		mysql --socket=$(CURDIR)/.dev/mysql-run/mysqld.sock -u root -e "DROP DATABASE IF EXISTS notice_service; DROP DATABASE IF EXISTS notice_service_test; CREATE DATABASE notice_service CHARACTER SET utf8mb4; CREATE DATABASE notice_service_test CHARACTER SET utf8mb4; GRANT ALL ON notice_service.* TO 'notice'@'%'; GRANT ALL ON notice_service_test.* TO 'notice'@'%';" \
+		|| { echo "db-clean 执行失败"; exit 1; }; \
+		echo "数据库已重置"; \
+	else \
+		echo "已取消"; \
+	fi
 
 clean: ## 清理构建产物（含生成的 Swagger 文档）
 	rm -rf $(BIN) $(WEB)/dist $(WEB)/node_modules docs/swagger
