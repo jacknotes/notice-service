@@ -170,6 +170,20 @@
                 </el-button>
               </span>
             </el-tooltip>
+            <el-tooltip
+              :content="row.totp_enabled ? t('users.force2faConfirmOffTitle') : t('users.force2faConfirmOnTitle')"
+            >
+              <span>
+                <el-button
+                  link
+                  :type="row.totp_enabled ? 'info' : 'success'"
+                  size="small"
+                  @click="on2FACommand(row.totp_enabled ? 'disable' : 'enable', row)"
+                >
+                  {{ row.totp_enabled ? t('users.force2faOffBtn') : t('users.force2faOnBtn') }}
+                </el-button>
+              </span>
+            </el-tooltip>
           </template>
         </el-table-column>
       </el-table>
@@ -886,6 +900,11 @@ async function doBatchToggle(enabled: boolean) {
 async function doBatchResetPassword() {
   if (!batchNewPassword.value) {
     ElMessage.warning(t('users.batchNewPasswordRequired'))
+    return
+  }
+  // 与单用户创建/编辑同强度校验：弱口令不因批量入口而放行
+  if (!passwordValid(batchNewPassword.value)) {
+    ElMessage.warning(t('users.passwordRule'))
     return
   }
   if (batchNewPassword.value !== batchNewPasswordConfirm.value) {
