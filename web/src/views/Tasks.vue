@@ -611,7 +611,17 @@ const categoryFilter = ref<string>('')
 const dateRange = ref<[string, string] | null>(null)
 const expiredOnly = ref(false)
 
-interface ShortcutItem { text: string; value?: () => [Date, Date]; onClick?: () => void }
+interface ShortcutItem {
+  text: string
+  value?: () => [Date, Date]
+  onClick?: (ctx: { emit: (event: string, ...args: unknown[]) => void }) => void
+}
+
+// value 型快捷项（今天/7天/1月）由 element-plus 自动 emit('pick') 关面板；
+// 全部/已过期需要清空区间（value 无法表达 null），只能用 onClick，但纯 onClick
+// 不会关面板（见 use-shortcut.mjs：value 为 falsy 时只回调 onClick），
+// 需手动 emit('pick', null)：onPick 会把 v-model 置空并关闭面板。
+let expiredShortcutClosing = false
 const pickerShortcuts = computed<ShortcutItem[]>(() => [
   {
     text: t('common.today'),
@@ -627,16 +637,21 @@ const pickerShortcuts = computed<ShortcutItem[]>(() => [
   },
   {
     text: t('common.all'),
-    onClick: () => {
+    onClick: ({ emit }) => {
       expiredOnly.value = false
       dateRange.value = null
+      emit('pick', null)
     },
   },
   {
     text: t('tasks.expired'),
-    onClick: () => {
+    onClick: ({ emit }) => {
       expiredOnly.value = true
       dateRange.value = null
+      // 面板关闭后 change 事件必然触发（值与打开时不同），用标记防止
+      // onDateRangeChange 把刚置位的「已过期」状态重置掉。
+      expiredShortcutClosing = true
+      emit('pick', null)
     },
   },
 ])
@@ -651,6 +666,12 @@ function presetRange(days: number): [Date, Date] {
 }
 
 function onDateRangeChange(val: [string, string] | null) {
+  // 「已过期」快捷项触发的关闭：保留刚置位的状态，不当作普通清空
+  if (expiredShortcutClosing) {
+    expiredShortcutClosing = false
+    void val
+    return
+  }
   // 自定义选择/清空 → 退出「已过期」纯状态筛选
   expiredOnly.value = false
   void val

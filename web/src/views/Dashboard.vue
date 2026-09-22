@@ -192,8 +192,6 @@ function onDateRangeChange() {
   load()
 }
 
-applyPreset(quickPresets[0])
-
 /* ── 状态环形图 ─────────────────────────────────────────────────────── */
 const donutEl = ref<HTMLDivElement | null>(null)
 let donut: echarts.ECharts | null = null
@@ -303,6 +301,11 @@ async function loadOptions() {
 }
 
 watch(() => stats, renderDonut, { deep: true })
+
+// 初始加载默认近 7 天。必须放在 load/loadSeq/loading 等声明之后：
+// applyPreset 会同步调用 load（首行 ++loadSeq），放在声明之前会触发
+// TDZ ReferenceError，且 async 函数内的异常被静默吞掉，表现为首屏永远空数据。
+applyPreset(quickPresets[0])
 
 onMounted(() => {
   // 统计数据已在 setup 阶段由 applyPreset(quickPresets[0]) 触发加载，
