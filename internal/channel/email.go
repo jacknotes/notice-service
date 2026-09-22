@@ -1,7 +1,10 @@
 package channel
 
 import (
+	"crypto/hmac"
+	"crypto/md5"
 	"crypto/tls"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"net"
@@ -83,15 +86,87 @@ func dialAndAuth(cfg map[string]string) (*smtp.Client, error) {
 			return nil, errors.New("SMTP 服务器不支持 STARTTLS，拒绝明文传输邮箱密码（如确为内网明文中继，可在渠道配置加 allow_insecure=true）")
 		}
 	}
-	_ = secure
 
-	auth := smtp.PlainAuth("", cfg["username"], cfg["password"], cfg["host"])
-	if err := client.Auth(auth); err != nil {
+	// 标准库 smtp.PlainAuth 在非 TLS 连接上会直接拒绝（net/smtp/auth.go 强制
+	// localhost + TLS），allow_insecure=true 的内网明文中继永远发不出去。
+	// 此处按服务器支持的认证扩展手工实现 AUTH：优先 CRAM-MD5（口令不明文上线），
+	// 其次 LOGIN / PLAIN（仅 allow_insecure 明文场景，密码 base64 而非哈希）。
+	if cfg["password"] == "" {
+		return client, nil // 无凭据：匿名投递
+	}
+	if err := authByExtensions(client, cfg, secure); err != nil {
 		_ = client.Close()
 		return nil, err
 	}
-	_ = secure
 	return client, nil
+}
+
+// authByExtensions 按 SMTP 服务器宣告的 AUTH 扩展选择认证方式。
+// CRAM-MD5（挑战-响应，口令不上线）> LOGIN > PLAIN；PLAIN 在非 TLS 连接上
+// 仅 allow_insecure 场景放行（配置者已显式接受明文中继风险）。
+func authByExtensions(client *smtp.Client, cfg map[string]string, secure bool) error {
+	host := cfg["host"]
+	username, password := cfg["username"], cfg["password"]
+	advertised := map[string]bool{}
+	if ok, authExts := client.Extension("AUTH"); ok && authExts != "" {
+		for _, m := range strings.Fields(authExts) {
+			advertised[strings.ToUpper(m)] = true
+		}
+	}
+	switch {
+	case advertised["CRAM-MD5"]:
+		return client.Auth(&cramMD5Auth{username, password})
+	case advertised["LOGIN"]:
+		return client.Auth(&loginAuth{username, password})
+	case advertised["PLAIN"]:
+		if secure || cfg["allow_insecure"] == "true" {
+			return client.Auth(smtp.PlainAuth("", username, password, host))
+		}
+		return errors.New("SMTP 服务器仅支持 PLAIN 认证且连接非 TLS，拒绝明文传输邮箱密码（如确为内网明文中继，可加 allow_insecure=true）")
+	}
+	// 未宣告 AUTH 扩展：TLS 连接上 PLAIN 是安全的（标准库对 localhost 也放行）。
+	if secure {
+		return client.Auth(smtp.PlainAuth("", username, password, host))
+	}
+	return errors.New("SMTP 服务器未宣告 AUTH 扩展且连接非 TLS，无法认证（检查端口/加密配置）")
+}
+
+// cramMD5Auth 实现 smtp.Auth 接口的 CRAM-MD5（RFC 2195）：服务器挑战 + HMAC-MD5 口令摘要。
+type cramMD5Auth struct{ username, password string }
+
+func (a *cramMD5Auth) Start(server *smtp.ServerInfo) (string, []byte, error) {
+	return "CRAM-MD5", nil, nil
+}
+
+func (a *cramMD5Auth) Next(fromServer []byte, more bool) ([]byte, error) {
+	if !more {
+		return nil, nil
+	}
+	mac := hmac.New(md5.New, []byte(a.password))
+	mac.Write(fromServer)
+	return []byte(a.username + " " + hex.EncodeToString(mac.Sum(nil))), nil
+}
+
+// loginAuth 实现 AUTH LOGIN（用户名/口令分两步 base64 明文，仅用于内网明文中继）。
+type loginAuth struct{ username, password string }
+
+func (a *loginAuth) Start(server *smtp.ServerInfo) (string, []byte, error) {
+	return "LOGIN", nil, nil
+}
+
+func (a *loginAuth) Next(fromServer []byte, more bool) ([]byte, error) {
+	if !more {
+		return nil, nil
+	}
+	prompt := strings.ToLower(strings.TrimSpace(string(fromServer)))
+	switch {
+	case strings.Contains(prompt, "username"):
+		return []byte(a.username), nil
+	case strings.Contains(prompt, "password"):
+		return []byte(a.password), nil
+	default:
+		return nil, errors.New("unexpected AUTH LOGIN challenge")
+	}
 }
 
 func (e *EmailChannel) TestConnection(c map[string]string) error {
