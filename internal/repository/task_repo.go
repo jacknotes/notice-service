@@ -16,6 +16,9 @@ type TaskRepo struct{ db *sql.DB }
 
 func NewTaskRepo(db *sql.DB) *TaskRepo { return &TaskRepo{db: db} }
 
+// DB 暴露底层连接（scheduler 用它取 DB 时钟做跨实例一致的 dedupe key）。
+func (r *TaskRepo) DB() *sql.DB { return r.db }
+
 func (r *TaskRepo) Create(t *model.Task) error {
 	res, err := r.db.Exec(
 		`INSERT INTO tasks (user_id, name, channel_id, channel_ids, template_id, category, trigger_type, receivers, cron_expr, api_key, hmac_secret, require_signature, allowed_ips, variables, enabled)

@@ -162,9 +162,8 @@ func (s *TaskService) Update(userID, id int64, in *model.Task) error {
 		in.APIKey = ""
 		in.HMACSecret = "" // 与 API Key 同生命周期：切回 cron 立即失效
 	}
-	if (ex.TriggerType == "cron" || in.TriggerType == "cron") && s.sched != nil {
-		s.sched.UnregisterTask(id)
-	}
+	// 先落库再动调度器：Update 失败时 DB 中任务保持启用，调度器里的旧注册
+	// 仍在（宁可多发旧频率，不可静默停发）；成功后再注销+重注册到新表达式。
 	normalizeChannels(in)
 	s.toJSON(in)
 	// next_run_at 归属：仅「启用的 cron 任务」有意义。切到 api（或停用）时清空，
@@ -178,8 +177,11 @@ func (s *TaskService) Update(userID, id int64, in *model.Task) error {
 	if err := s.repo.Update(in); err != nil {
 		return err
 	}
-	if in.TriggerType == "cron" && in.Enabled && s.sched != nil {
-		s.sched.RegisterTask(id, in.CronExpr)
+	if (ex.TriggerType == "cron" || in.TriggerType == "cron") && s.sched != nil {
+		s.sched.UnregisterTask(id)
+		if in.TriggerType == "cron" && in.Enabled {
+			s.sched.RegisterTask(id, in.CronExpr)
+		}
 	}
 	if in.TriggerType == "cron" && in.Enabled && s.refresher != nil {
 		s.refresher.RefreshNextRun(in) // 表达式可能已改：立即重算，不等首次触发
@@ -242,17 +244,17 @@ func (s *TaskService) BatchToggle(ids []int64, enabled bool) error {
 		for _, t := range all {
 			byID[t.ID] = t
 		}
-		for _, id := range ids {
-			ex, ok := byID[id]
-			if !ok || ex.TriggerType != "cron" {
-				continue
-			}
-			if enabled {
-				s.sched.RegisterTask(id, ex.CronExpr)
-			} else {
+			for _, id := range ids {
+				ex, ok := byID[id]
+				if !ok || ex.TriggerType != "cron" {
+					continue
+				}
+				// 先注销再注册，防重复 entry 堆积（同 Toggle）
 				s.sched.UnregisterTask(id)
+				if enabled {
+					s.sched.RegisterTask(id, ex.CronExpr)
+				}
 			}
-		}
 	}
 	return s.repo.SetEnabledBatch(ids, enabled)
 }
@@ -325,10 +327,11 @@ func (s *TaskService) Toggle(userID, id int64, enabled bool) error {
 		return err
 	}
 	if ex.TriggerType == "cron" && s.sched != nil {
+		// 先注销再注册：反复 enable 不在 cron 里堆积重复 entry（旧 entryID
+		// 被 sync.Map 覆盖后将永远无法 Remove，属资源泄漏）。
+		s.sched.UnregisterTask(id)
 		if enabled {
 			s.sched.RegisterTask(id, ex.CronExpr)
-		} else {
-			s.sched.UnregisterTask(id)
 		}
 	}
 	if ex.TriggerType == "cron" && enabled && s.refresher != nil {
@@ -464,6 +467,9 @@ func (s *TaskService) fill(t *model.Task) {
 
 func generateAPIKey() string {
 	b := make([]byte, 8)
-	_, _ = rand.Read(b)
+	// 熵源不可用属系统级故障：回退会产生可预测 API Key，必须 fail-fast。
+	if _, err := rand.Read(b); err != nil {
+		panic("task: crypto/rand unavailable: " + err.Error())
+	}
 	return uuid.NewString() + hex.EncodeToString(b)
 }

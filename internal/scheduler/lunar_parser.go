@@ -109,6 +109,20 @@ func allDigitsLen4(s string) bool {
 	return true
 }
 
+// parseHM 解析并校验 HH:MM 时刻：越界值若交给 time.Date 会被静默归一化
+// （如 25:00 → 次日 01:00），触发时间与用户意图不符且无告警，必须拒绝。
+func parseHM(hStr, minStr string) (int, int, error) {
+	h, err := strconv.Atoi(hStr)
+	if err != nil || h < 0 || h > 23 {
+		return 0, 0, fmt.Errorf("小时必须在 0-23 之间: %q", hStr)
+	}
+	min, err := strconv.Atoi(minStr)
+	if err != nil || min < 0 || min > 59 {
+		return 0, 0, fmt.Errorf("分钟必须在 0-59 之间: %q", minStr)
+	}
+	return h, min, nil
+}
+
 // parseLunarSchedule 解析 @lunar 表达式为 LunarSchedule。
 func parseLunarSchedule(spec string, loc *time.Location) (*LunarSchedule, error) {
 	spec = strings.TrimSpace(spec)
@@ -117,8 +131,10 @@ func parseLunarSchedule(spec string, loc *time.Location) (*LunarSchedule, error)
 		if err != nil {
 			return nil, err
 		}
-		h, _ := strconv.Atoi(m[2])
-		min, _ := strconv.Atoi(m[3])
+		h, min, err := parseHM(m[2], m[3])
+		if err != nil {
+			return nil, err
+		}
 		return &LunarSchedule{Kind: "monthly", Days: days, Hour: h, Minute: min, Loc: loc}, nil
 	}
 	if m := lunarYearlyRe.FindStringSubmatch(spec); m != nil {
@@ -130,13 +146,17 @@ func parseLunarSchedule(spec string, loc *time.Location) (*LunarSchedule, error)
 		if err != nil {
 			return nil, err
 		}
-		h, _ := strconv.Atoi(m[3])
-		min, _ := strconv.Atoi(m[4])
+		h, min, err := parseHM(m[3], m[4])
+		if err != nil {
+			return nil, err
+		}
 		return &LunarSchedule{Kind: "yearly", Months: months, Days: days, Hour: h, Minute: min, Loc: loc}, nil
 	}
 	if m := lunarTermRe.FindStringSubmatch(spec); m != nil {
-		h, _ := strconv.Atoi(m[2])
-		min, _ := strconv.Atoi(m[3])
+		h, min, err := parseHM(m[2], m[3])
+		if err != nil {
+			return nil, err
+		}
 		terms := splitComma(m[1])
 		for _, tm := range terms {
 			if tm == "" {

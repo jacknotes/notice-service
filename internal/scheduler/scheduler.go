@@ -1,6 +1,7 @@
 package scheduler
 
 import (
+	"database/sql"
 	"fmt"
 	"log"
 	"sync"
@@ -19,6 +20,7 @@ type Scheduler struct {
 	cron        *cron.Cron
 	exec        ExecFunc
 	leases      *Lease
+	leaseDB     *sql.DB // dedupe key 用 DB 时钟（多实例一致）；无租约时为 nil
 	taskEntries sync.Map // taskID -> cron.EntryID
 }
 
@@ -38,6 +40,7 @@ func New(exec ExecFunc, repo *repository.TaskRepo, instanceID string) *Scheduler
 	}
 	if repo != nil && instanceID != "" {
 		s.leases = NewLease(repo, instanceID)
+		s.leaseDB = repo.DB()
 	}
 	return s
 }
@@ -70,16 +73,31 @@ func (s *Scheduler) UnregisterTask(taskID int64) {
 
 func (s *Scheduler) makeJob(taskID int64) func() {
 	return func() {
-		// cron 为 5 字段（分钟级）表达式：以触发时刻的分钟作为 dedupe 键，
-		// 同一触发时刻在多个实例间稳定，防止租约极端竞态下的重复入队。
-		dedupeKey := fmt.Sprintf("%d:%d", taskID, time.Now().Truncate(time.Minute).Unix())
+		// cron 为 5 字段（分钟级）表达式：以触发时刻的分钟作为 dedupe 键。
+		// 租约用 MySQL NOW()（多实例同源），dedupe key 也必须跨实例一致——
+		// 用本机时钟则实例间偏移 ≥1 分钟时产生不同 key，防重复入队失效。
+		// 取 DB 当前分钟：QueryRow 开销可忽略（每任务每分钟一次），一致性优先。
+		dbNow := time.Now()
+		if s.leaseDB != nil {
+			if err := s.leaseDB.QueryRow("SELECT NOW()").Scan(&dbNow); err != nil {
+				// DB 不可用时退回本机时钟：任务仍可触发（租约 Acquire 会再拦一道），
+				// 仅 dedupe 保证弱化，同时把错误暴露出来而不是静默吞掉。
+				log.Printf("scheduler: db NOW() for dedupe key: %v", err)
+			}
+		}
+		dedupeKey := fmt.Sprintf("%d:%d", taskID, dbNow.Truncate(time.Minute).Unix())
 		if s.leases == nil {
 			s.exec(taskID, dedupeKey)
 			return
 		}
 		ok, err := s.leases.Acquire(taskID)
-		if err != nil || !ok {
-			return // 其他实例持锁或出错，跳过
+		if err != nil {
+			// DB 故障导致的获取失败要留痕：否则该分钟触发被丢弃且排障完全不可见。
+			log.Printf("scheduler: acquire lease task %d: %v", taskID, err)
+			return
+		}
+		if !ok {
+			return // 其他实例持锁，跳过
 		}
 		defer s.leases.Release(taskID)
 		s.exec(taskID, dedupeKey)
