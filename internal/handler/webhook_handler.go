@@ -15,6 +15,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -149,8 +150,47 @@ func ipMatches(allow, remote string) bool {
 // webhookSigWindow 签名时间戳允许偏差（秒），防重放。
 const webhookSigWindow = 300
 
+// replayCache 已见签名的短期去重缓存：时间窗（±300s）只限制时间偏差，
+// 不阻止窗口内抓包重放同一签名。按「key+ts+sig」哈希去重，TTL 与签名窗口
+// 一致；单实例内存缓存（多实例下重放需落在同一实例，且 60/min 限流兜底）。
+type replayCache struct {
+	mu      sync.Mutex
+	entries map[string]time.Time
+	max     int
+}
+
+func newReplayCache(max int) *replayCache {
+	return &replayCache{entries: make(map[string]time.Time), max: max}
+}
+
+// seen 记录 key 首次出现返回 false；已存在且未过期返回 true（重放）。
+// 超过容量或过期即清理，避免无界增长。
+func (c *replayCache) seen(key string, ttl time.Duration) bool {
+	now := time.Now()
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if len(c.entries) > c.max {
+		for k, exp := range c.entries {
+			if exp.Before(now) {
+				delete(c.entries, k)
+			}
+		}
+		if len(c.entries) > c.max { // 清理后仍满：整体重建（简单防膨胀）
+			c.entries = make(map[string]time.Time)
+		}
+	}
+	if exp, ok := c.entries[key]; ok && exp.After(now) {
+		return true
+	}
+	c.entries[key] = now.Add(ttl)
+	return false
+}
+
+var webhookReplays = newReplayCache(4096)
+
 // verifyWebhookSignature 校验 HMAC 签名：X-Timestamp + X-Signature，
-// 签名消息为 "<X-Timestamp>\n<原始请求体>"，HMAC-SHA256，密钥为任务 api_key。
+// 签名消息为 "<X-Timestamp>\n<原始请求体>"，HMAC-SHA256，密钥为任务 hmac_secret。
+// 时间窗 + 已见签名去重双保险：窗口拦过期签名，去重拦窗口内重放。
 func verifyWebhookSignature(c *gin.Context, key string, body []byte) error {
 	tsStr := c.GetHeader("X-Timestamp")
 	sig := c.GetHeader("X-Signature")
@@ -171,6 +211,10 @@ func verifyWebhookSignature(c *gin.Context, key string, body []byte) error {
 	expect := hex.EncodeToString(mac.Sum(nil))
 	if subtle.ConstantTimeCompare([]byte(expect), []byte(sig)) != 1 {
 		return errors.New("签名无效")
+	}
+	// 签名本身有效 → 记录并拦截重放（key 维度隔离，不同任务互不影响）
+	if webhookReplays.seen(key+":"+tsStr+":"+sig, time.Duration(2*webhookSigWindow)*time.Second) {
+		return errors.New("签名已使用（疑似重放请求）")
 	}
 	return nil
 }

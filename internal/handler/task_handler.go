@@ -41,10 +41,12 @@ func (h *TaskHandler) List(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": sanitizeErr(err)})
 		return
 	}
-	// api_key 是触发凭据：任务为共享读，最低权限用户不应拿到它去调 webhook。
+	// api_key / hmac_secret 都是触发凭据：任务为共享读，最低权限用户不应
+	// 拿到它们去直接调 webhook（hmac_secret 泄漏可伪造合法签名）。
 	if c.GetString("role") != "admin" {
 		for _, t := range list {
 			t.APIKey = ""
+			t.HMACSecret = ""
 		}
 	}
 	c.JSON(http.StatusOK, list)
