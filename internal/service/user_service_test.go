@@ -169,11 +169,11 @@ func TestUserServiceDisableEnable(t *testing.T) {
 		t.Fatalf("non-admin disable should fail, got %v", err)
 	}
 
-	// 禁用普通用户 → 登录失败、UserActive=false
+	// 禁用普通用户 → 登录失败（错误信息统一为凭据错误，防用户名枚举/时序探测）、UserActive=false
 	if err := svc.DisableUser(op, normal.ID); err != nil {
 		t.Fatalf("disable normal user: %v", err)
 	}
-	if _, err := auth.Login(normal.Username, "TestPass123!", svcTestIP); err == nil || !strings.Contains(err.Error(), "账号已被禁用") {
+	if _, err := auth.Login(normal.Username, "TestPass123!", svcTestIP); err == nil || !strings.Contains(err.Error(), "用户名或密码错误") {
 		t.Fatalf("disabled user should not login, got %v", err)
 	}
 	if auth.UserActive(normal.ID) {

@@ -1,7 +1,9 @@
 package service
 
 import (
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"log"
@@ -13,6 +15,7 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/crypto/bcrypt"
 
+	"notice-service/internal/crypto"
 	"notice-service/internal/model"
 	"notice-service/internal/repository"
 	"notice-service/internal/totp"
@@ -38,6 +41,8 @@ type AuthService struct {
 	tokenTTL   time.Duration
 	maxFails   int
 	lockWindow time.Duration
+	// cipher 用于 TOTP 密钥加密落库（可为 nil：测试场景降级明文）。
+	cipher *crypto.Cipher
 }
 
 func NewAuthService(db *sql.DB, jwtSecret, adminUser, adminPass string) *AuthService {
@@ -52,6 +57,9 @@ func NewAuthService(db *sql.DB, jwtSecret, adminUser, adminPass string) *AuthSer
 		lockWindow: 15 * time.Minute,
 	}
 }
+
+// SetCipher 注入渠道配置同源的 AES-GCM cipher，启用 TOTP 密钥加密存储。
+func (s *AuthService) SetCipher(c *crypto.Cipher) { s.cipher = c }
 
 func (s *AuthService) IssueToken(userID int64, role string) (string, error) {
 	return s.IssueTokenWithTTL(userID, role, s.tokenTTL)
@@ -226,9 +234,11 @@ func (s *AuthService) Login(username, password, ip string) (*LoginResult, error)
 	if err != nil {
 		return nil, err
 	}
-	// 禁用账号：明确拒绝（不纳入登录失败限流，也无需提示具体密码）
+	// 禁用账号：消耗等价 bcrypt 工作量后返回与「密码错误」一致的提示，
+	// 抹平时序差并避免确认用户名存在（枚举防护）。
 	if !u.Enabled {
-		return nil, errors.New("账号已被禁用")
+		_ = bcrypt.CompareHashAndPassword(dummyBcryptHash, []byte(password))
+		return nil, errors.New("用户名或密码错误")
 	}
 	if bcrypt.CompareHashAndPassword([]byte(u.PasswordHash), []byte(password)) != nil {
 		_ = s.rateLimit.RecordLoginFailure(bucket, s.maxFails, s.lockWindow)
@@ -252,7 +262,8 @@ func (s *AuthService) Login(username, password, ip string) (*LoginResult, error)
 /* ── 双因子认证（TOTP + 备用码） ────────────────────────────────────── */
 
 // Setup2FA 生成 TOTP 密钥与一次性备用码并落库（启用标记置 0，验证后启用）。
-// 返回明文密钥、otpauth URL 与明文备用码（仅此一次展示）。
+// 返回明文密钥、otpauth URL 与明文备用码（仅此一次展示）。密钥加密落库
+// （cipher 未注入时降级明文），DB 泄漏不再直接等于 2FA 失守。
 func (s *AuthService) Setup2FA(userID int64) (secret, otpauthURL string, recoveryCodes []string, err error) {
 	u, err := s.users.GetByID(userID)
 	if err != nil {
@@ -268,10 +279,36 @@ func (s *AuthService) Setup2FA(userID int64) (secret, otpauthURL string, recover
 	}
 	hashed := totp.HashRecoveryCodes(codes)
 	b, _ := json.Marshal(hashed)
-	if err := s.users.SetTOTP(userID, secret, string(b)); err != nil {
+	if err := s.storeTOTPSecret(userID, secret, string(b)); err != nil {
 		return "", "", nil, err
 	}
 	return secret, totp.OTPAuthURI("Notice Service", u.Username, secret), codes, nil
+}
+
+// storeTOTPSecret 加密 TOTP 密钥后落库；加密失败时保留明文回退（可用性优先，
+// 且比明文落库不会更差），历史明文列仅在降级场景写入。
+func (s *AuthService) storeTOTPSecret(userID int64, secret, recoveryJSON string) error {
+	if s.cipher != nil {
+		if enc, encErr := s.cipher.EncryptString(secret); encErr == nil {
+			return s.users.SetTOTP(userID, enc, "", recoveryJSON)
+		} else {
+			log.Printf("auth: encrypt totp secret failed, fallback to plaintext column: %v", encErr)
+		}
+	}
+	return s.users.SetTOTP(userID, "", secret, recoveryJSON)
+}
+
+// totpSecret 取用户的 TOTP 密钥明文：优先解密密文列；密文列空（历史数据）
+// 回退明文列。同时返回密钥来源，供验证成功后升级加密存储。
+func (s *AuthService) totpSecret(u *model.User) (secret string, encrypted bool, err error) {
+	if u.TOTPSecretEnc != "" && s.cipher != nil {
+		plain, decErr := s.cipher.DecryptString(u.TOTPSecretEnc)
+		if decErr != nil {
+			return "", true, errors.New("TOTP 密钥解密失败，请重新设置双因子认证")
+		}
+		return plain, true, nil
+	}
+	return u.TOTPSecret, false, nil
 }
 
 // Enable2FA 用动态码验证密钥后启用双因子认证。
@@ -280,11 +317,25 @@ func (s *AuthService) Enable2FA(userID int64, code string) error {
 	if err != nil {
 		return errors.New("用户不存在")
 	}
-	if u.TOTPSecret == "" {
+	secret, encrypted, err := s.totpSecret(u)
+	if err != nil {
+		return err
+	}
+	if secret == "" {
 		return errors.New("请先完成双因子认证设置")
 	}
-	if !totp.Validate(code, u.TOTPSecret) {
+	// 启用是会话内的确认操作，不消耗防重放计数器：否则用户启用后 30s 内
+	// 立即登录会用同一时间步验证码被防重放误拒。
+	if !totp.Validate(code, secret) {
 		return errors.New("验证码不正确，请检查认证器中的 6 位动态码")
+	}
+	// 启用时升级为加密存储（历史明文数据首次启用即升级）
+	if !encrypted && s.cipher != nil {
+		if enc, encErr := s.cipher.EncryptString(secret); encErr == nil {
+			if err := s.users.SetTOTPSecretEnc(userID, enc); err != nil {
+				return err
+			}
+		}
 	}
 	return s.users.EnableTOTP(userID)
 }
@@ -295,10 +346,16 @@ func (s *AuthService) Disable2FA(userID int64, code string) error {
 	if err != nil {
 		return errors.New("用户不存在")
 	}
-	if !u.TOTPEnabled || u.TOTPSecret == "" {
+	if !u.TOTPEnabled {
 		return errors.New("当前未启用双因子认证")
 	}
-	if !totp.Validate(code, u.TOTPSecret) {
+	secret, _, err := s.totpSecret(u)
+	if err != nil {
+		return err
+	}
+	// 同 Enable2FA：确认性操作不消耗防重放计数器
+	if !totp.Validate(code, secret) {
+		// 动态码不匹配时尝试备用码（备用码一次性，天然防重放）
 		if idx := s.matchRecovery(u, code); idx < 0 {
 			return errors.New("验证码不正确，无法关闭双因子认证")
 		}
@@ -316,7 +373,9 @@ func (s *AuthService) Verify2FA(pendingToken, code, ip string) (string, *model.U
 		return "", nil, err
 	}
 	u, err := s.users.GetByID(uid)
-	if err != nil || !u.TOTPEnabled {
+	if err != nil || !u.TOTPEnabled || !u.Enabled {
+		// Enabled 一并校验：被禁用用户若在禁用前已拿到 pending token，
+		// 5 分钟窗口内不得再完成登录。
 		return "", nil, errors.New("用户不存在或未启用双因子认证")
 	}
 	bucket := s.loginBucket(u.Username, ip)
@@ -325,8 +384,13 @@ func (s *AuthService) Verify2FA(pendingToken, code, ip string) (string, *model.U
 	} else if locked {
 		return "", nil, errors.New("登录失败次数过多，请稍后再试")
 	}
-	if !totp.Validate(code, u.TOTPSecret) {
-		// 备用码：命中则消费并从列表移除
+	secret, encrypted, err := s.totpSecret(u)
+	if err != nil {
+		return "", nil, err
+	}
+	used, verr := s.validateTOTPWithReplay(u.ID, code, secret, u.TOTPLastCounter)
+	if verr != nil {
+		// 备用码：命中则消费并从列表移除（备用码本身一次性，天然防重放）
 		idx := s.matchRecovery(u, code)
 		if idx < 0 {
 			_ = s.rateLimit.RecordLoginFailure(bucket, s.maxFails, s.lockWindow)
@@ -335,6 +399,16 @@ func (s *AuthService) Verify2FA(pendingToken, code, ip string) (string, *model.U
 		if err := s.consumeRecovery(uid, idx); err != nil {
 			return "", nil, errors.New("备用码校验失败，请重试")
 		}
+	} else {
+		_ = used
+		// 首次用明文历史密钥验证成功：升级为加密存储
+		if !encrypted && s.cipher != nil {
+			if enc, encErr := s.cipher.EncryptString(secret); encErr == nil {
+				if err := s.users.SetTOTPSecretEnc(uid, enc); err != nil {
+					log.Printf("auth: upgrade totp secret enc for user %d: %v", uid, err)
+				}
+			}
+		}
 	}
 	_ = s.rateLimit.Reset(bucket)
 	tok, err := s.IssueToken(u.ID, u.Role)
@@ -342,6 +416,36 @@ func (s *AuthService) Verify2FA(pendingToken, code, ip string) (string, *model.U
 		return "", nil, err
 	}
 	return tok, u, nil
+}
+
+// validateTOTPWithReplay 防重放的 TOTP 校验：同一时间步的验证码只能消费一次。
+// 返回是否校验通过；通过时已把该用户 last_counter 推进到本次 counter。
+// counter 为 0（首次）视为无历史，仅要求大于 0 的 counter 未被用过。
+func (s *AuthService) validateTOTPWithReplay(userID int64, code, secret string, lastCounter uint64) (bool, error) {
+	if secret == "" {
+		return false, errors.New("验证码不正确")
+	}
+	code = strings.TrimSpace(code)
+	if len(code) != 6 {
+		return false, errors.New("验证码不正确，请检查认证器中的 6 位动态码")
+	}
+	key, err := totp.DecodeSecret(secret)
+	if err != nil {
+		return false, errors.New("验证码不正确")
+	}
+	counter, ok := totp.MatchingCounter(key, code)
+	if !ok {
+		return false, errors.New("验证码不正确，请检查认证器中的 6 位动态码")
+	}
+	if lastCounter > 0 && counter <= lastCounter {
+		// 该时间步的验证码已被消费（重放）
+		return false, errors.New("验证码已被使用，请等待下一个动态码")
+	}
+	if err := s.users.SetTOTPLastCounter(userID, counter); err != nil {
+		// 记录失败时宁可拒绝本次登录：不记 counter 则同一验证码窗口内可重放
+		return false, errors.New("验证码校验失败，请重试")
+	}
+	return true, nil
 }
 
 // matchRecovery 校验 code 是否为该用户的备用码，命中返回下标，否则 -1。
@@ -399,7 +503,10 @@ func (s *AuthService) RevokeAllSessions(userID int64) error {
 }
 
 // ResetPassword 忘记密码：用管理员生成的一次性令牌重置密码（公开接口）。
-// 令牌一次性且带过期时间，重置成功后即失效。
+// 令牌一次性且带过期时间，重置成功后即失效。落库为 SHA-256 哈希，校验前
+// 先把明文令牌哈希化再比对。
+// 顺序：先做 bcrypt（与调用方无关的固定工作量，抹平时序差），校验通过后
+// 由 DB 原子完成「令牌匹配 → 换密码 → 吊销会话 → 清令牌」。
 func (s *AuthService) ResetPassword(username, token, newPass string) error {
 	username = strings.TrimSpace(username)
 	if err := validatePassword(newPass); err != nil {
@@ -409,7 +516,7 @@ func (s *AuthService) ResetPassword(username, token, newPass string) error {
 	if err != nil {
 		return err
 	}
-	ok, err := s.users.ResetPasswordByToken(username, token, string(hash))
+	ok, err := s.users.ResetPasswordByToken(username, hashCode(token), string(hash))
 	if err != nil {
 		return err
 	}
@@ -417,4 +524,10 @@ func (s *AuthService) ResetPassword(username, token, newPass string) error {
 		return errors.New("重置令牌无效或已过期，请向管理员重新申请")
 	}
 	return nil
+}
+
+// hashCode 重置令牌哈希（SHA-256 hex），与 user_service.GenerateResetToken 落库口径一致。
+func hashCode(token string) string {
+	sum := sha256.Sum256([]byte(token))
+	return hex.EncodeToString(sum[:])
 }

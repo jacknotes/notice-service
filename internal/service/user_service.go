@@ -50,6 +50,7 @@ func (s *UserService) Username(id int64) string {
 
 // GenerateResetToken 生成一次性重置令牌（15 分钟有效），返回给管理员线下转交用户。
 // 内置 admin 账号的密码不可由管理员重置（防止把默认管理员锁死），请走离线 CLI。
+// 落库仅存 SHA-256 哈希：DB 泄漏时令牌不可直接使用（明文令牌则等于直接改密）。
 func (s *UserService) GenerateResetToken(userID int64) (string, time.Time, error) {
 	target, err := s.users.GetByID(userID)
 	if err != nil {
@@ -58,19 +59,24 @@ func (s *UserService) GenerateResetToken(userID int64) (string, time.Time, error
 	if isDefaultAdmin(target) {
 		return "", time.Time{}, errors.New("不能重置内置 admin 账号的密码")
 	}
-	token := randomToken(24)
+	token, err := randomToken(24)
+	if err != nil {
+		return "", time.Time{}, err
+	}
 	expires := time.Now().Add(resetTokenTTL)
-	if err := s.users.SetResetToken(userID, token, expires); err != nil {
+	if err := s.users.SetResetToken(userID, hashCode(token), expires); err != nil {
 		return "", time.Time{}, err
 	}
 	return token, expires, nil
 }
 
 // randomToken 生成 n 字节的十六进制随机令牌（长度 = n*2 字符）。
-func randomToken(n int) string {
+func randomToken(n int) (string, error) {
 	b := make([]byte, n)
-	_, _ = rand.Read(b)
-	return hex.EncodeToString(b)
+	if _, err := rand.Read(b); err != nil {
+		return "", err // 熵源故障回退全零令牌 = 可预测凭据，必须暴露失败
+	}
+	return hex.EncodeToString(b), nil
 }
 
 func (s *UserService) List() ([]*model.User, error) {
@@ -300,7 +306,7 @@ func (s *UserService) ForceEnable2FA(userID int64) (secret, otpauthURL string, c
 	}
 	hashed := totp.HashRecoveryCodes(codes)
 	b, _ := json.Marshal(hashed)
-	if err := s.users.SetTOTP(userID, secret, string(b)); err != nil {
+	if err := s.users.SetTOTP(userID, "", secret, string(b)); err != nil {
 		return "", "", nil, err
 	}
 	if err := s.users.EnableTOTP(userID); err != nil {

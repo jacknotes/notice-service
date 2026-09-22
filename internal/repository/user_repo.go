@@ -33,21 +33,24 @@ func (r *UserRepo) Create(u *model.User) error {
 }
 
 // userCols 用户常用列（含 2FA 字段与启用状态）。
-const userCols = "id, username, display_name, email, password_hash, role, enabled, created_at, updated_at, session_revoked_at, totp_secret, totp_enabled, totp_recovery_codes"
+const userCols = "id, username, display_name, email, password_hash, role, enabled, created_at, updated_at, session_revoked_at, totp_secret, totp_secret_enc, totp_enabled, totp_last_counter, totp_recovery_codes"
 
 func scanUser(row interface{ Scan(...any) error }) (*model.User, error) {
 	u := &model.User{}
-	var secret, recovery sql.NullString
+	var secret, secretEnc, recovery sql.NullString
 	var revoked sql.NullTime
 	var totpEnabled bool
-	if err := row.Scan(&u.ID, &u.Username, &u.DisplayName, &u.Email, &u.PasswordHash, &u.Role, &u.Enabled, &u.CreatedAt, &u.UpdatedAt, &revoked, &secret, &totpEnabled, &recovery); err != nil {
+	var lastCounter sql.NullInt64
+	if err := row.Scan(&u.ID, &u.Username, &u.DisplayName, &u.Email, &u.PasswordHash, &u.Role, &u.Enabled, &u.CreatedAt, &u.UpdatedAt, &revoked, &secret, &secretEnc, &totpEnabled, &lastCounter, &recovery); err != nil {
 		return nil, err
 	}
 	if revoked.Valid {
 		u.SessionRevokedAt = &revoked.Time
 	}
 	u.TOTPSecret = secret.String
+	u.TOTPSecretEnc = secretEnc.String
 	u.TOTPEnabled = totpEnabled
+	u.TOTPLastCounter = uint64(lastCounter.Int64)
 	u.TOTPRecoveryJSON = recovery.String
 	return u, nil
 }
@@ -91,10 +94,15 @@ func (r *UserRepo) RevokeAllSessions(userID int64) error {
 }
 
 // Update 更新用户的角色、密码、显示名与邮箱（两字段均写当前值，保证幂等）。
+// 密码哈希发生变化时推进 session_revoked_at：管理员重置密码后该用户的全部
+// 旧 JWT 立即失效（与自助改密 UpdatePassword 行为一致，防止被盗号后旧会话
+// 在 token TTL 内继续可用）。实现：先用旧哈希比对是否变化（MySQL 在 UPDATE
+// 赋值时右侧读取的是旧值），未变化则保持原吊销基线。
 func (r *UserRepo) Update(u *model.User) error {
 	_, err := r.db.Exec(
-		"UPDATE users SET role=?, password_hash=?, display_name=?, email=? WHERE id=?",
-		u.Role, u.PasswordHash, u.DisplayName, u.Email, u.ID)
+		"UPDATE users SET role=?, display_name=?, email=?,"+
+			"password_hash=?, session_revoked_at=IF(password_hash = ?, session_revoked_at, NOW()) WHERE id=?",
+		u.Role, u.DisplayName, u.Email, u.PasswordHash, u.PasswordHash, u.ID)
 	return err
 }
 
@@ -198,11 +206,26 @@ func (r *UserRepo) BatchDelete(ids []int64) error {
 /* ── 双因子认证（TOTP） ────────────────────────────────────────────── */
 
 // SetTOTP 写入 TOTP 密钥与备用码哈希（启用前/重新生成用）。启用标记置 0，
-// 用户在设置页用动态码验证通过后才置 1（EnableTOTP）。
-func (r *UserRepo) SetTOTP(userID int64, secret, recoveryCodesJSON string) error {
+// 用户在设置页用动态码验证通过后才置 1（EnableTOTP）。secretEnc 非空时写入
+// 加密列（生产路径），否则写明文列（cipher 未注入的测试降级），并清空防重放计数器。
+func (r *UserRepo) SetTOTP(userID int64, secretEnc, secretPlain, recoveryCodesJSON string) error {
 	_, err := r.db.Exec(
-		"UPDATE users SET totp_secret=?, totp_recovery_codes=?, totp_enabled=0 WHERE id=? AND deleted_at IS NULL",
-		secret, nullableJSON(recoveryCodesJSON), userID)
+		"UPDATE users SET totp_secret_enc=?, totp_secret=?, totp_recovery_codes=?, totp_enabled=0, totp_last_counter=0 WHERE id=? AND deleted_at IS NULL",
+		nullableJSON(secretEnc), nullableJSON(secretPlain), nullableJSON(recoveryCodesJSON), userID)
+	return err
+}
+
+// SetTOTPLastCounter 更新最近成功验证的时间步计数器（TOTP 防重放）。
+func (r *UserRepo) SetTOTPLastCounter(userID int64, counter uint64) error {
+	_, err := r.db.Exec(
+		"UPDATE users SET totp_last_counter=? WHERE id=? AND deleted_at IS NULL", counter, userID)
+	return err
+}
+
+// SetTOTPSecretEnc 升级存储 TOTP 密钥密文（历史明文数据首次验证成功后调用）。
+func (r *UserRepo) SetTOTPSecretEnc(userID int64, enc string) error {
+	_, err := r.db.Exec(
+		"UPDATE users SET totp_secret_enc=? WHERE id=? AND deleted_at IS NULL", enc, userID)
 	return err
 }
 

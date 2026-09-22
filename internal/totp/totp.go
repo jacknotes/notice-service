@@ -72,6 +72,28 @@ func GenerateCode(secret string) string {
 	return hotp(key, uint64(time.Now().Unix())/stepSeconds, digits)
 }
 
+// DecodeSecret 解析 base32 密钥（防重放校验与 Validate 共用解析逻辑）。
+func DecodeSecret(secret string) ([]byte, error) {
+	return b32.DecodeString(strings.ToUpper(strings.TrimSpace(secret)))
+}
+
+// MatchingCounter 在 ±1 步窗口内匹配验证码，命中返回对应时间步计数器
+// （供防重放记录 last_used counter），未命中返回 ok=false。
+func MatchingCounter(key []byte, code string) (uint64, bool) {
+	code = strings.TrimSpace(code)
+	if len(code) != digits {
+		return 0, false
+	}
+	counter := uint64(time.Now().Unix()) / stepSeconds
+	for offset := -window; offset <= window; offset++ {
+		want := hotp(key, counter+uint64(offset), digits)
+		if subtleEqual(code, want) {
+			return counter + uint64(offset), true
+		}
+	}
+	return 0, false
+}
+
 // hotp 计算单次 HMAC 动态截断码。
 func hotp(key []byte, counter uint64, n int) string {
 	var msg [8]byte

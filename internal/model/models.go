@@ -18,8 +18,10 @@ type User struct {
 	SessionRevokedAt *time.Time `json:"-"`
 
 	// 双因子认证（TOTP）
-	TOTPSecret        string   `json:"-"`
+	TOTPSecret        string   `json:"-"` // 明文列（历史数据）；新数据存 TOTPSecretEnc
+	TOTPSecretEnc     string   `json:"-"` // AES-256-GCM 密文 base64（与渠道配置加密同源）；空表示尚未加密升级
 	TOTPEnabled       bool     `json:"totp_enabled"`
+	TOTPLastCounter   uint64   `json:"-"` // 最近成功验证的时间步计数器（防重放）
 	TOTPRecoveryCodes []string `json:"-"`
 	TOTPRecoveryJSON  string   `json:"-"`
 }
