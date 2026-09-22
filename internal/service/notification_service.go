@@ -99,6 +99,13 @@ func (s *NotificationService) SendTask(taskID int64, vars map[string]string, tr 
 	// 邮箱 → HTML；飞书 → 纯文本；企微/钉钉/PushPlus → 原生 Markdown
 	msg := &channel.Message{Subject: subject, Content: content}
 
+	return s.sendToChannels(task, channelIDs, msg, receivers, tr)
+}
+
+// sendToChannels 对任务绑定的渠道逐个发送。多渠道/多接收人时任意失败都会
+// 返回错误驱动 job 级重试——重试会重发成功的渠道，这是 job 粒度重试的已知
+// 取舍（每条发送都有日志，接收方可识别重复）；完全成功返回 nil。
+func (s *NotificationService) sendToChannels(task *model.Task, channelIDs []int64, msg *channel.Message, receivers []string, tr Trigger) error {
 	var lastErr error
 	for _, cid := range channelIDs {
 		ch, err := s.channelRepo.GetByID(cid)
@@ -110,7 +117,7 @@ func (s *NotificationService) SendTask(taskID int64, vars map[string]string, tr 
 			// 渠道已停用：不参与投递（与前端提示「停用后该渠道不再参与投递」一致），
 			// 落一条失败日志便于追踪；不返回错误，避免对永久停用的渠道做无意义重试。
 			_ = s.logRepo.Create(&model.TaskLog{
-				TaskID: task.ID, ChannelID: ch.ID, Subject: subject, Content: content,
+				TaskID: task.ID, ChannelID: ch.ID, Subject: msg.Subject, Content: msg.Content,
 				Status: "failed", Request: "{}", ErrorMsg: fmt.Sprintf("渠道「%s」已停用", ch.Name),
 				TriggerType: tr.Type, TriggerBy: tr.By, TriggerIP: tr.IP, RetryCount: tr.Attempt,
 			})
@@ -169,6 +176,7 @@ func (s *NotificationService) sendOnce(inst channel.Channel, msg *channel.Messag
 
 // ResendLog 定向重发一条失败日志：用日志已渲染的 Subject/Content 向原渠道/接收人重发，
 // 并写入一条新的发送日志（保留原失败历史）。单次尝试，由调用方决定是否异步。
+// RetryCount 沿用原日志序号 +1（语义：对该次发送的第 N 次补救），与队列重试计数区分。
 func (s *NotificationService) ResendLog(logID int64, tr Trigger) error {
 	logRow, err := s.logRepo.GetByID(logID)
 	if err != nil {
@@ -201,14 +209,14 @@ func (s *NotificationService) ResendLog(logID int64, tr Trigger) error {
 		_ = s.logRepo.Create(&model.TaskLog{
 			TaskID: logRow.TaskID, ChannelID: ch.ID, Subject: logRow.Subject, Content: logRow.Content,
 			Status: "failed", Request: logRow.Request, ErrorMsg: err.Error(),
-			TriggerType: tr.Type, TriggerBy: tr.By, TriggerIP: tr.IP,
+			TriggerType: tr.Type, TriggerBy: tr.By, TriggerIP: tr.IP, RetryCount: tr.Attempt,
 		})
 		return err
 	}
 	_ = s.logRepo.Create(&model.TaskLog{
 		TaskID: logRow.TaskID, ChannelID: ch.ID, Subject: logRow.Subject, Content: logRow.Content,
 		Status: "success", Request: logRow.Request, Response: "ok",
-		TriggerType: tr.Type, TriggerBy: tr.By, TriggerIP: tr.IP,
+		TriggerType: tr.Type, TriggerBy: tr.By, TriggerIP: tr.IP, RetryCount: tr.Attempt,
 	})
 	return nil
 }

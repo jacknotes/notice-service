@@ -103,13 +103,27 @@ func TestSendJobClaimAndMark(t *testing.T) {
 		t.Fatalf("claimed job should not be claimable again, got %+v", jobs2)
 	}
 
-	// MarkDone
-	if err := r.MarkDone(j.ID); err != nil {
+	// MarkDone（CAS：须由认领实例执行）
+	if _, err := r.MarkDone(j.ID, "inst-a"); err != nil {
 		t.Fatal(err)
 	}
 	got, _ := r.GetByID(j.ID)
 	if got.Status != "done" || got.SentAt == nil {
 		t.Errorf("done job: status=%q sent_at=%v", got.Status, got.SentAt)
+	}
+	// 非 认领者 的 MarkDone 不生效（CAS 守卫）
+	j2 := &model.SendJob{TaskID: tk.ID, VarsJSON: "null", Status: "pending"}
+	if err := r.Create(j2); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := r.Claim("inst-a", 5); err != nil {
+		t.Fatal(err)
+	}
+	if ok, err := r.MarkDone(j2.ID, "inst-b"); err != nil || ok {
+		t.Errorf("MarkDone by non-owner should not take effect, ok=%v err=%v", ok, err)
+	}
+	if got, _ = r.GetByID(j2.ID); got.Status != "claimed" {
+		t.Errorf("job should stay claimed, got %q", got.Status)
 	}
 }
 
@@ -124,15 +138,19 @@ func TestSendJobMarkFailedBackoff(t *testing.T) {
 	if err := tr.Create(tk); err != nil {
 		t.Fatal(err)
 	}
-	j := &model.SendJob{TaskID: tk.ID, VarsJSON: "null", Status: "claimed", ClaimedBy: "inst-a"}
+	j := &model.SendJob{TaskID: tk.ID, VarsJSON: "null", Status: "pending"}
 	if err := r.Create(j); err != nil {
+		t.Fatal(err)
+	}
+	// 走正规认领路径，保证 claimed_by/claimed_at 落库（Create 不写认领字段）
+	if _, err := r.Claim("inst-a", 5); err != nil {
 		t.Fatal(err)
 	}
 	backoff := []time.Duration{5 * time.Second, 30 * time.Second}
 
-	// 第 1 次失败 → pending + next_retry_at 在未来
-	if err := r.MarkFailed(j.ID, "boom", 3, backoff); err != nil {
-		t.Fatal(err)
+	// 第 1 次失败（须由认领者执行）→ pending + next_retry_at 在未来
+	if ok, err := r.MarkFailed(j.ID, "inst-a", "boom", 3, backoff); err != nil || !ok {
+		t.Fatalf("MarkFailed ok=%v err=%v", ok, err)
 	}
 	j2, _ := r.GetByID(j.ID)
 	if j2.Status != "pending" {
@@ -145,12 +163,33 @@ func TestSendJobMarkFailedBackoff(t *testing.T) {
 		t.Errorf("next_retry_at should be in the future, got %v", j2.NextRetryAt)
 	}
 
-	// 再失败 2 次（共 3 次）→ failed
-	if err := r.MarkFailed(j.ID, "boom", 3, backoff); err != nil {
-		t.Fatal(err)
+	// 非 认领者 的 MarkFailed 不生效（CAS 守卫，attempts 不变）
+	if ok, err := r.MarkFailed(j.ID, "inst-b", "boom", 3, backoff); err != nil || ok {
+		t.Errorf("MarkFailed by non-owner should not take effect, ok=%v err=%v", ok, err)
 	}
-	if err := r.MarkFailed(j.ID, "boom", 3, backoff); err != nil {
-		t.Fatal(err)
+	if j2b, _ := r.GetByID(j.ID); j2b.Attempts != 1 {
+		t.Errorf("attempts=%d want 1 after non-owner MarkFailed", j2b.Attempts)
+	}
+
+	// 再失败 2 次（共 3 次）→ failed。
+	// 每次失败后 job 回到 pending 且 next_retry_at 在退避期内（Claim 只认领
+	// 到期 job），故先把 next_retry_at 拨回过去模拟退避时间流逝，再重新认领。
+	reclaimAfterBackoff := func() {
+		t.Helper()
+		if _, err := db.Exec("UPDATE send_jobs SET next_retry_at = NOW() - INTERVAL 1 SECOND WHERE id=?", j.ID); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := r.Claim("inst-a", 5); err != nil {
+			t.Fatal(err)
+		}
+	}
+	reclaimAfterBackoff()
+	if ok, err := r.MarkFailed(j.ID, "inst-a", "boom", 3, backoff); err != nil || !ok {
+		t.Fatalf("MarkFailed#2 ok=%v err=%v", ok, err)
+	}
+	reclaimAfterBackoff()
+	if ok, err := r.MarkFailed(j.ID, "inst-a", "boom", 3, backoff); err != nil || !ok {
+		t.Fatalf("MarkFailed#3 ok=%v err=%v", ok, err)
 	}
 	j3, _ := r.GetByID(j.ID)
 	if j3.Status != "failed" {
@@ -186,7 +225,7 @@ func TestSendJobRecoverStale(t *testing.T) {
 	if _, err := db.Exec("UPDATE send_jobs SET claimed_at = NOW() - INTERVAL 10 MINUTE WHERE id=?", j.ID); err != nil {
 		t.Fatal(err)
 	}
-	n, err := r.RecoverStale(120*time.Second, 3)
+	n, err := r.RecoverStale(120*time.Second, 3, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -196,6 +235,9 @@ func TestSendJobRecoverStale(t *testing.T) {
 	got, _ := r.GetByID(j.ID)
 	if got.Status != "pending" || got.ClaimedBy != "" {
 		t.Errorf("recovered job should be pending & unclaimed, got %+v", got)
+	}
+	if got.Attempts != 1 {
+		t.Errorf("recovered job attempts=%d want 1 (crash counts as an attempt)", got.Attempts)
 	}
 }
 
@@ -221,7 +263,7 @@ func TestSendJobRecoverStaleTerminatesAtMaxAttempts(t *testing.T) {
 	if _, err := db.Exec("UPDATE send_jobs SET attempts=3, claimed_at = NOW() - INTERVAL 10 MINUTE WHERE id=?", j.ID); err != nil {
 		t.Fatal(err)
 	}
-	n, err := r.RecoverStale(120*time.Second, 3)
+	n, err := r.RecoverStale(120*time.Second, 3, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

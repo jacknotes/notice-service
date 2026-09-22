@@ -181,11 +181,37 @@ func (q *QueueService) workerLoop() {
 }
 
 func (q *QueueService) process(j *model.SendJob) {
+	// 续租心跳：长发送（多接收人 SMTP）可能超过 ClaimTTL，不续租会被
+	// RecoverStale 误判崩溃并交给其他实例重复发送。停止续租后仍有
+	// ClaimTTL/2 的宽限，正常短任务无感知。
+	stopRenew := make(chan struct{})
+	var renewWG sync.WaitGroup
+	renewWG.Add(1)
+	go func() {
+		defer renewWG.Done()
+		t := time.NewTicker(q.cfg.ClaimTTL / 3)
+		defer t.Stop()
+		for {
+			select {
+			case <-stopRenew:
+				return
+			case <-t.C:
+				if err := q.jobRepo.RenewClaim(j.ID, q.instanceID); err != nil {
+					log.Printf("queue: renew claim job %d: %v", j.ID, err)
+				}
+			}
+		}
+	}()
+	// lost 标记认领是否在处理期间被接管（续租失败/超时）：此时 MarkDone/MarkFailed
+	// 的 CAS 都不会命中，后续状态更新自然失效，仅需避免覆盖任务运行时间。
+	completed := false
 	defer func() {
-		if r := recover(); r != nil {
+		close(stopRenew)
+		renewWG.Wait()
+		if r := recover(); r != nil && !completed {
 			// 单次 panic 不应杀死 worker 协程：记录并按一次失败处理（计入重试上限）。
 			log.Printf("queue: panic processing job %d: %v", j.ID, r)
-			_ = q.jobRepo.MarkFailed(j.ID, fmt.Sprintf("panic: %v", r), q.cfg.MaxAttempts, q.cfg.RetryBackoff)
+			_, _ = q.jobRepo.MarkFailed(j.ID, q.instanceID, fmt.Sprintf("panic: %v", r), q.cfg.MaxAttempts, q.cfg.RetryBackoff)
 		}
 	}()
 	// 日志定向重发：单次尝试，完成即终止（不叠加队列退避）。
@@ -194,28 +220,48 @@ func (q *QueueService) process(j *model.SendJob) {
 		if err := q.ns.ResendLog(j.LogID, tr); err != nil {
 			log.Printf("queue: log retry %d failed: %v", j.LogID, err)
 		}
-		_ = q.jobRepo.MarkDone(j.ID)
+		_, _ = q.jobRepo.MarkDone(j.ID, q.instanceID)
 		return
 	}
 	task, err := q.taskRepo.GetByID(j.TaskID)
 	if err != nil {
-		_ = q.jobRepo.MarkDone(j.ID) // 任务已删除，无内容可发
+		// 仅「任务已删除」视为无内容可发；瞬时 DB 故障回 pending 由接管机制
+		// 重试，避免一次连接抖动就静默吞掉一条通知。
+		if errors.Is(err, repository.ErrNotFound) {
+			_, _ = q.jobRepo.MarkDone(j.ID, q.instanceID)
+			return
+		}
+		log.Printf("queue: load task %d for job %d: %v", j.TaskID, j.ID, err)
+		_, _ = q.jobRepo.MarkFailed(j.ID, q.instanceID, "transient error: "+err.Error(), q.cfg.MaxAttempts, q.cfg.RetryBackoff)
 		return
 	}
 	if !task.Enabled {
-		_ = q.jobRepo.MarkDone(j.ID) // 停用即停止发送
+		_, _ = q.jobRepo.MarkDone(j.ID, q.instanceID) // 停用即停止发送
 		return
 	}
 	var vars map[string]string
-	_ = json.Unmarshal([]byte(j.VarsJSON), &vars)
+	if err := json.Unmarshal([]byte(j.VarsJSON), &vars); err != nil {
+		// JSON 损坏属持久性数据问题，重试无意义：直接终止并留痕。
+		log.Printf("queue: job %d vars_json invalid: %v", j.ID, err)
+		_, _ = q.jobRepo.MarkFailed(j.ID, q.instanceID, "vars_json invalid: "+err.Error(), 1, nil)
+		return
+	}
 	// Attempt 为本次尝试序号（j.Attempts 是已失败次数：首次=0，重试1次后=1，…），
 	// 供 SendTask 写入日志 retry_count。
 	tr := Trigger{Type: j.TriggerType, By: j.TriggerBy, IP: j.TriggerIP, Attempt: j.Attempts}
 	if err := q.ns.SendTask(j.TaskID, vars, tr); err != nil {
-		_ = q.jobRepo.MarkFailed(j.ID, err.Error(), q.cfg.MaxAttempts, q.cfg.RetryBackoff)
+		_, _ = q.jobRepo.MarkFailed(j.ID, q.instanceID, err.Error(), q.cfg.MaxAttempts, q.cfg.RetryBackoff)
 		return
 	}
-	_ = q.jobRepo.MarkDone(j.ID)
+	ok, err := q.jobRepo.MarkDone(j.ID, q.instanceID)
+	if err != nil {
+		log.Printf("queue: mark done job %d: %v", j.ID, err)
+	}
+	completed = ok
+	if !ok {
+		// 认领已被接管：发送结果由接管方裁决，本实例不更新任务运行时间。
+		return
+	}
 	now := time.Now()
 	_ = q.taskRepo.SetLastRunAt(j.TaskID, now)
 }
@@ -233,10 +279,10 @@ func (q *QueueService) recoverLoop() {
 		select {
 		case <-q.stopCh:
 			return
-		case <-ticker.C:
-			if _, err := q.jobRepo.RecoverStale(q.cfg.ClaimTTL, q.cfg.MaxAttempts); err != nil {
-				log.Printf("queue: recover stale: %v", err)
-			}
+			case <-ticker.C:
+				if _, err := q.jobRepo.RecoverStale(q.cfg.ClaimTTL, q.cfg.MaxAttempts, q.cfg.RetryBackoff); err != nil {
+					log.Printf("queue: recover stale: %v", err)
+				}
 		}
 	}
 }
