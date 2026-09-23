@@ -22,15 +22,19 @@ func (w *WechatChannel) ValidateConfig(c map[string]string) error {
 	return nil
 }
 
-// sendPushPlus 调用 PushPlus API；template 可选 text/markdown 等。
+// sendPushPlus 调用 PushPlus API；template 可选 html/txt/markdown 等，
+// channel 为发送渠道（如新消息ClawBot 填 cmcc），空则走 PushPlus 默认渠道。
 // 配置 pushplus_topic（群组编码）非空时追加 topic 参数，实现群组发送。
-func sendPushPlus(cfg map[string]string, title, content, template string) error {
+func sendPushPlus(cfg map[string]string, title, content, template, channel string) error {
 	form := url.Values{}
 	form.Set("token", cfg["pushplus_token"])
 	form.Set("title", title)
 	form.Set("content", content)
 	if template != "" {
 		form.Set("template", template)
+	}
+	if channel != "" {
+		form.Set("channel", channel)
 	}
 	if topic := cfg["pushplus_topic"]; topic != "" {
 		form.Set("topic", topic)
@@ -60,7 +64,7 @@ func (w *WechatChannel) TestConnection(c map[string]string) error {
 		return err
 	}
 	// 真实推送一条测试消息，便于用户确认能收到（template 用 txt：text 是非法值会报 code=600）
-	return sendPushPlus(c, "【notice-service】渠道连接测试", "渠道连接测试成功！", "txt")
+	return sendPushPlus(c, "【notice-service】渠道连接测试", "渠道连接测试成功！", "txt", "")
 }
 
 func (w *WechatChannel) Send(message *Message, receiver *Receiver) error {
@@ -70,7 +74,7 @@ func (w *WechatChannel) Send(message *Message, receiver *Receiver) error {
 	// PushPlus 的 markdown 模板走其自有渲染器，对「列表紧贴段落」等宽松写法
 	// 兼容差（标题不渲染、列表丢圆点），与其它渠道排版不统一；改用 html
 	// 模板 + 本地渲染管线（与邮件同一套 ToHTMLEmail），五个渠道排版一致。
-	return sendPushPlus(w.config, message.Subject, render.ToHTMLEmail(message.Content), "html")
+	return sendPushPlus(w.config, message.Subject, render.ToHTMLEmail(message.Content), "html", "")
 }
 
 func NewWechatChannel(config map[string]string) *WechatChannel {

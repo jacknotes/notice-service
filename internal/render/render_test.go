@@ -84,6 +84,26 @@ func TestToText(t *testing.T) {
 	}
 }
 
+// ToPlainText 面向短信（ClawBot）场景：保留换行、剥离标记、链接展开。
+func TestToPlainText(t *testing.T) {
+	md := "# 标题\n\n**加粗** 与 `代码`\n\n- 列表一\n- [链接文本](https://e.com/1)\n\n> 引用行\n\n1. 有序\n2. 条目\n\n---\n\n```\ncode block\n```\n"
+	text := ToPlainText(md)
+	want := "标题\n\n加粗 与 代码\n\n• 列表一\n• 链接文本: https://e.com/1\n\n引用行\n\n1. 有序\n2. 条目\n\ncode block"
+	if text != want {
+		t.Errorf("ToPlainText:\n got %q\nwant %q", text, want)
+	}
+}
+
+// 连续空行压缩为单空行，首尾空白裁剪；同文链接不重复。
+func TestToPlainTextBlankAndSelfLink(t *testing.T) {
+	md := "\n\n\n段落一\n\n\n\n段落二\n\n\n[https://e.com](https://e.com)\n\n"
+	text := ToPlainText(md)
+	want := "段落一\n\n段落二\n\nhttps://e.com"
+	if text != want {
+		t.Errorf("ToPlainText:\n got %q\nwant %q", text, want)
+	}
+}
+
 func contains(s, sub string) bool {
 	for i := 0; i+len(sub) <= len(s); i++ {
 		if s[i:i+len(sub)] == sub {

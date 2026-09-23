@@ -206,7 +206,13 @@
       "wecom": "WeCom",
       "dingtalk": "DingTalk",
       "feishu": "Feishu",
-      "wechat": "PushPlus"
+      "wechat": "PushPlus",
+      "clawbot": "PushPlus·ClawBot"
+    },
+    "groupPushplus": "PushPlus",
+    "subtype": {
+      "wechat": "WeChat Service Account",
+      "clawbot": "ClawBot (5G SMS)"
     },
     "fieldHost": "SMTP server",
     "fieldPort": "Port",
@@ -227,6 +233,7 @@
     "phWebhookFeishu": "https://open.feishu.cn/open-apis/bot/v2/hook/…",
     "phSecret": "SEC… (leave empty if signing is disabled)",
     "phPpToken": "Token from https://www.pushplus.plus",
+    "phPpClawToken": "PushPlus token; bind ClawBot on the website first (China Mobile only)",
     "phPpTopic": "PushPlus topic code, delivers to a group",
     "selectType": "Select type",
     "namePlaceholder": "A memorable name for the channel",

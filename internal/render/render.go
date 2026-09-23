@@ -177,6 +177,96 @@ func ToText(md string) string {
 	return strings.Join(out, " ")
 }
 
+// 纯文本转换用行内标记正则。
+var (
+	imgRe      = regexp.MustCompile(`!\[([^\]]*)\]\([^)]+\)`)
+	linkRe     = regexp.MustCompile(`\[([^\]]+)\]\(([^)]+)\)`)
+	boldStar   = regexp.MustCompile(`\*\*([^*]+)\*\*`)
+	boldUnder  = regexp.MustCompile(`__([^_]+)__`)
+	inlineCode = regexp.MustCompile("`([^`]+)`")
+)
+
+// bulletLineRe 匹配无序列表行（标记后须有空格），替换为「• 」。
+var bulletLineRe = regexp.MustCompile(`^(\s*)[*+-]\s+`)
+
+// atxLineRe 匹配 ATX 标题行的前缀（# ~ ###### 后须有空格或行尾）。
+var atxLineRe = regexp.MustCompile(`^\s*#{1,6}\s?`)
+
+// quoteLineRe 匹配引用行前缀。
+var quoteLineRe = regexp.MustCompile(`^(\s*)>\s?`)
+
+// ToPlainText 把 Markdown 降级为适合短信等纯文本渠道展示的内容：
+// 保留换行与列表结构（- → •），剥离标题/引用/加粗/代码等语法标记，
+// 链接展开为「文本: URL」让链接在短信中仍可识别。与 ToText 的差异：
+// ToText 面向 IM 单行摘要（合并所有行），本函数面向短信分块阅读。
+func ToPlainText(md string) string {
+	lines := strings.Split(md, "\n")
+	out := make([]string, 0, len(lines))
+	inFence := false
+	fenceMark := ""
+	prevBlank := true // 开头的空行直接丢弃
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if inFence {
+			if strings.HasPrefix(trimmed, fenceMark) {
+				inFence = false
+			} else {
+				out = append(out, line)
+			}
+			continue
+		}
+		if mark := fenceMarker(trimmed); mark != "" {
+			inFence = true
+			fenceMark = mark
+			continue // 围栏行本身丢弃，代码内容保留
+		}
+		if trimmed == "" {
+			if !prevBlank && len(out) > 0 {
+				out = append(out, "")
+				prevBlank = true
+			}
+			continue
+		}
+		// 分隔线丢弃（前后空行自然分段，不重置 prevBlank 避免多出空行）
+		if thematicBreakRe.MatchString(line) {
+			continue
+		}
+		prevBlank = false
+		out = append(out, stripInline(plainLine(line)))
+	}
+	return strings.TrimSpace(strings.Join(out, "\n"))
+}
+
+// plainLine 剥离单行的块级 Markdown 标记（引用 > 标题 # 列表 -/*/+）。
+func plainLine(line string) string {
+	for quoteLineRe.MatchString(line) { // 允许嵌套引用 >> 逐层剥离
+		line = quoteLineRe.ReplaceAllString(line, "$1")
+	}
+	if listItemRe.MatchString(line) {
+		// 有序列列表保留原编号；无序列表标记替换为圆点
+		if m := bulletLineRe.FindStringSubmatch(line); m != nil {
+			line = bulletLineRe.ReplaceAllString(line, "$1• ")
+		}
+		return line
+	}
+	return atxLineRe.ReplaceAllString(line, "")
+}
+
+// stripInline 剥离行内 Markdown 标记（图片/链接/加粗/代码）。
+func stripInline(s string) string {
+	s = imgRe.ReplaceAllString(s, "[图:$1]")
+	s = linkRe.ReplaceAllStringFunc(s, func(m string) string {
+		sub := linkRe.FindStringSubmatch(m)
+		if sub[1] == sub[2] {
+			return sub[2] // [url](url) 形式只保留 URL
+		}
+		return sub[1] + ": " + sub[2]
+	})
+	s = boldStar.ReplaceAllString(s, "$1")
+	s = boldUnder.ReplaceAllString(s, "$1")
+	return inlineCode.ReplaceAllString(s, "$1")
+}
+
 func RenderMessage(subject, content string, vars map[string]string) (string, string) {
 	return RenderVariables(subject, vars), RenderVariables(content, vars)
 }

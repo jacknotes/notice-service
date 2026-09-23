@@ -159,6 +159,8 @@ func (s *ChannelService) InstancedChannel(c *model.Channel) (channel.Channel, er
 		return channel.NewFeishuChannel(cfg), nil
 	case "wechat":
 		return channel.NewWechatChannel(cfg), nil
+	case "clawbot":
+		return channel.NewClawBotChannel(cfg), nil
 	}
 	// 内置类型在上面的 switch 中总会用解密后的 cfg 构造全新实例。
 	// 此回退返回注册表中的共享原型实例，丢弃已解密的 cfg —— 仅适用于忽略

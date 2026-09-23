@@ -160,8 +160,22 @@
           </el-form-item>
 
           <el-form-item :label="t('common.type')" prop="type" class="shrink">
-            <el-select v-model="form.type" :placeholder="t('channels.selectType')" style="width: 160px" @change="onTypeChange">
+            <el-select
+              v-model="form.type"
+              :placeholder="t('channels.selectType')"
+              style="width: 160px"
+              popper-class="channel-type-popper"
+              @change="onTypeChange"
+            >
               <el-option v-for="o in typeOptions" :key="o.value" :label="t(o.labelKey)" :value="o.value" />
+              <el-option-group :label="t('channels.groupPushplus')">
+                <el-option
+                  v-for="o in pushplusSubtypes"
+                  :key="o.value"
+                  :label="t(o.labelKey)"
+                  :value="o.value"
+                />
+              </el-option-group>
             </el-select>
           </el-form-item>
         </div>
@@ -275,7 +289,12 @@ const typeOptions = [
   { value: 'wecom', labelKey: 'channels.type.wecom' },
   { value: 'dingtalk', labelKey: 'channels.type.dingtalk' },
   { value: 'feishu', labelKey: 'channels.type.feishu' },
-  { value: 'wechat', labelKey: 'channels.type.wechat' },
+]
+
+// PushPlus 家族子类型（下拉中以分组呈现）：wechat=公众号，clawbot=新消息ClawBot(5G短信)
+const pushplusSubtypes = [
+  { value: 'wechat', labelKey: 'channels.subtype.wechat' },
+  { value: 'clawbot', labelKey: 'channels.subtype.clawbot' },
 ]
 
 const typeMeta: Record<string, { key: string; color: string }> = {
@@ -284,6 +303,7 @@ const typeMeta: Record<string, { key: string; color: string }> = {
   dingtalk: { key: 'channels.type.dingtalk', color: '#8b5cf6' },
   feishu: { key: 'channels.type.feishu', color: '#34d399' },
   wechat: { key: 'channels.type.wechat', color: '#fbbf24' },
+  clawbot: { key: 'channels.type.clawbot', color: '#f87171' },
 }
 
 const configFields: Record<string, ConfigField[]> = {
@@ -306,6 +326,10 @@ const configFields: Record<string, ConfigField[]> = {
   ],
   wechat: [
     { key: 'pushplus_token', labelKey: 'channels.fieldPpToken', placeholderKey: 'channels.phPpToken', type: 'password' },
+    { key: 'pushplus_topic', labelKey: 'channels.fieldPpTopic', placeholderKey: 'channels.phPpTopic', type: 'text' },
+  ],
+  clawbot: [
+    { key: 'pushplus_token', labelKey: 'channels.fieldPpToken', placeholderKey: 'channels.phPpClawToken', type: 'password' },
     { key: 'pushplus_topic', labelKey: 'channels.fieldPpTopic', placeholderKey: 'channels.phPpTopic', type: 'text' },
   ],
 }
@@ -676,6 +700,14 @@ async function doBatchCategory() {
 }
 
 </script>
+
+<style>
+/* 渠道类型下拉的 popper 挂载在 body 下，scoped 样式不生效，需全局：
+   PushPlus 分组内的子类型增加缩进，体现其归属层级 */
+.channel-type-popper .el-select-group__wrap .el-select-dropdown__item {
+  padding-left: 36px;
+}
+</style>
 
 <style scoped>
 .search-input { width: 220px; }

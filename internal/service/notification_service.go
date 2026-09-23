@@ -38,7 +38,7 @@ func NewNotificationService(db *sql.DB, cipher *crypto.Cipher) *NotificationServ
 }
 
 // SendTask 渲染并发送任务（对每个绑定渠道发送，单次尝试；重试由发送队列负责）。
-// 邮件渠道 → 逐个接收地址发送；IM 渠道（企微/钉钉/飞书/PushPlus）→ 发送一次到机器人/token 绑定目标。
+// 邮件渠道 → 逐个接收地址发送；IM/短信渠道（企微/钉钉/飞书/PushPlus/ClawBot）→ 发送一次到机器人/token 绑定目标。
 // tr 为触发来源信息（谁触发 / 从哪个 IP / 触发方式），随每条日志落库。
 func (s *NotificationService) SendTask(taskID int64, vars map[string]string, tr Trigger) error {
 	task, err := s.taskRepo.GetByID(taskID)
@@ -96,7 +96,7 @@ func (s *NotificationService) SendTask(taskID int64, vars map[string]string, tr 
 	}
 	subject, content := render.RenderMessage(tpl.Subject, tpl.ContentMD, fullVars)
 	// content 为渲染后的原始 Markdown，由各渠道决定如何呈现：
-	// 邮箱 → HTML；飞书 → 纯文本；企微/钉钉/PushPlus → 原生 Markdown
+	// 邮箱/PushPlus → HTML；企微/钉钉/飞书 → 原生 Markdown；ClawBot(短信) → 纯文本
 	msg := &channel.Message{Subject: subject, Content: content}
 
 	return s.sendToChannels(task, channelIDs, msg, receivers, tr)

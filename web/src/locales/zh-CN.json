@@ -206,7 +206,13 @@
       "wecom": "企业微信",
       "dingtalk": "钉钉",
       "feishu": "飞书",
-      "wechat": "PushPlus"
+      "wechat": "PushPlus",
+      "clawbot": "PushPlus·新消息ClawBot"
+    },
+    "groupPushplus": "PushPlus",
+    "subtype": {
+      "wechat": "微信服务号",
+      "clawbot": "新消息ClawBot(5G短信)"
     },
     "fieldHost": "SMTP 服务器",
     "fieldPort": "端口",
@@ -227,6 +233,7 @@
     "phWebhookFeishu": "https://open.feishu.cn/open-apis/bot/v2/hook/…",
     "phSecret": "SEC…（未启用加签可留空）",
     "phPpToken": "https://www.pushplus.plus 获取的 token",
+    "phPpClawToken": "PushPlus token，需先在官网绑定新消息ClawBot（仅中国移动号）",
     "phPpTopic": "PushPlus 群组 code，发送到群组",
     "selectType": "选择类型",
     "namePlaceholder": "给渠道起个易记的名字",

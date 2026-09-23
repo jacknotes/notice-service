@@ -36,4 +36,5 @@ func init() {
 	Register(NewDingtalkChannel(nil))
 	Register(NewFeishuChannel(nil))
 	Register(NewWechatChannel(nil))
+	Register(NewClawBotChannel(nil))
 }
