@@ -1,0 +1,79 @@
+# Build artifacts
+web/dist/
+web/node_modules/
+*.exe
+*.log
+
+# TypeScript 增量构建产物（vue-tsc -b 生成）
+*.tsbuildinfo
+web/vite.config.d.ts
+web/vite.config.js
+
+# Local dev data (MariaDB datadir, Go caches, sockets)
+.dev/
+
+# Environment（含 .env.local / .env.production / 备份等变体，均可含密钥；
+# .env.example 为无密钥示例，保留跟踪）
+.env*
+!.env.example
+
+# 真实配置文件（可含 DB 密码 / JWT_SECRET / ENCRYPT_KEY / admin 密码），
+# 区别于无密钥的 config.example.yml
+config.yml
+config.local.yml
+
+# 密钥与证书：本地加密密钥、TLS 私钥/证书等
+*.key
+*.pem
+*.p12
+
+# 数据库导出/迁移临时文件（可能含敏感数据）
+migrate.sql
+dump*.sql
+*.dump.sql
+*.sql.bak
+
+# IDE
+.idea/
+.vscode/
+
+# 本地加密密钥（ENCRYPT_KEY 未设置时持久化用）
+.notice-encrypt.key
+
+# Brainstorm/visual-companion working dir
+.superpowers/
+
+# ZCode 会话工作目录（计划/临时文件，非项目代码）
+.zcode/
+
+# ===== ↑ 以上同步自 .gitignore（「从 .gitignore 同步」只重写以上部分）=====
+.git/
+.hg/
+.svn/
+node_modules/
+bower_components/
+jspm_packages/
+__pycache__/
+site-packages/
+venv/
+coverage/
+htmlcov/
+lcov-report/
+cmakefiles/
+cmake-build-*/
+bazel-*/
+pods/
+deriveddata/
+storybook-static/
+playwright-report/
+test-results/
+allure-results/
+allure-report/
+cdk.out/
+*.egg-info/
+*.dist-info/
+eggs/
+pip-wheel-metadata/
+wheels/
+# ----- ↑ 以上为 ZCode 默认排除规则（自定义规则请写在本行下方，不会被同步/恢复改动）-----
+# 自定义规则写在下方（本行提示可删除）
