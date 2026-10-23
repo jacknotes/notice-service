@@ -86,7 +86,7 @@ func NewRouter(db *sql.DB, authSvc *service.AuthService, cipher *crypto.Cipher, 
 	webhookH := handler.NewWebhookHandler(db, queue)
 	categoryH := handler.NewCategoryHandler(db)
 	dashH := handler.NewDashboardHandler(db)
-	userH := handler.NewUserHandler(db)
+	userH := handler.NewUserHandler(db, cipher)
 	auditH := handler.NewAuditHandler(db)
 	sysH := handler.NewSystemHandler(db, o.BuildVersion, o.InstanceID)
 

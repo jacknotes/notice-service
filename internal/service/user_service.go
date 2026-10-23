@@ -13,6 +13,7 @@ import (
 	"github.com/go-sql-driver/mysql"
 	"golang.org/x/crypto/bcrypt"
 
+	"notice-service/internal/crypto"
 	"notice-service/internal/model"
 	"notice-service/internal/repository"
 	"notice-service/internal/totp"
@@ -32,11 +33,17 @@ func isDefaultAdmin(u *model.User) bool {
 
 type UserService struct {
 	users *repository.UserRepo
+	// cipher 用于强制开启 2FA 时加密种子落库（与渠道配置/自助 2FA 同源密钥）。
+	// 未注入时 ForceEnable2FA fail-closed 拒绝，绝不回退明文列。
+	cipher *crypto.Cipher
 }
 
 func NewUserService(db *sql.DB) *UserService {
 	return &UserService{users: repository.NewUserRepo(db)}
 }
+
+// SetCipher 注入 AES-GCM cipher，启用强制开启 2FA 时的种子加密存储。
+func (s *UserService) SetCipher(c *crypto.Cipher) { s.cipher = c }
 
 // Username 返回用户 ID 对应的用户名（不存在/已删除返回空串）。用于审计详情可读性。
 // 删除类操作需在删除之前调用，否则软删除后查询不到。
@@ -291,7 +298,14 @@ func (s *UserService) Update(operatorID int64, operatorRole string, targetID int
 // ForceEnable2FA 管理员为用户强制开启双因子认证：重新生成 TOTP 密钥与
 // 一次性备用码并直接启用（覆盖该用户此前的 2FA 配置）。返回明文密钥/
 // otpauth URL/备用码，由管理员线下转交用户完成绑定。
+//
+// 种子必须以密文落库（与自助 Setup2FA 同一路径）：管理员批量强制开启是最
+// 常见的合规运维操作，若这里写明文列，DB 只读泄漏即等于这些账号的 2FA 全面失守。
+// 未注入 cipher 或加密失败时 fail-closed 报错，不做明文降级。
 func (s *UserService) ForceEnable2FA(userID int64) (secret, otpauthURL string, codes []string, err error) {
+	if s.cipher == nil {
+		return "", "", nil, errors.New("服务器未配置加密密钥，无法安全写入 2FA 密钥（拒绝明文落库）")
+	}
 	u, err := s.users.GetByID(userID)
 	if err != nil {
 		return "", "", nil, errors.New("用户不存在")
@@ -300,13 +314,17 @@ func (s *UserService) ForceEnable2FA(userID int64) (secret, otpauthURL string, c
 	if err != nil {
 		return "", "", nil, err
 	}
+	secretEnc, err := s.cipher.EncryptString(secret)
+	if err != nil {
+		return "", "", nil, errors.New("2FA 密钥加密失败，请重试")
+	}
 	codes, err = totp.GenerateRecoveryCodes(8)
 	if err != nil {
 		return "", "", nil, err
 	}
 	hashed := totp.HashRecoveryCodes(codes)
 	b, _ := json.Marshal(hashed)
-	if err := s.users.SetTOTP(userID, "", secret, string(b)); err != nil {
+	if err := s.users.SetTOTP(userID, secretEnc, "", string(b)); err != nil {
 		return "", "", nil, err
 	}
 	if err := s.users.EnableTOTP(userID); err != nil {

@@ -5,7 +5,19 @@ import (
 	"fmt"
 	"testing"
 	"time"
+
+	"notice-service/internal/crypto"
 )
+
+// testCipher 返回固定密钥的 AES-GCM cipher（TOTP 加密不变量测试用）。
+func testCipher(t *testing.T) *crypto.Cipher {
+	t.Helper()
+	c, err := crypto.New(key32())
+	if err != nil {
+		t.Fatal(err)
+	}
+	return c
+}
 
 func seedServiceChannel(t *testing.T, db *sql.DB, uid int64) int64 {
 	t.Helper()

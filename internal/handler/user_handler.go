@@ -7,6 +7,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"notice-service/internal/crypto"
 	"notice-service/internal/model"
 	"notice-service/internal/service"
 )
@@ -16,8 +17,13 @@ type UserHandler struct {
 	db  *sql.DB
 }
 
-func NewUserHandler(db *sql.DB) *UserHandler {
-	return &UserHandler{svc: service.NewUserService(db), db: db}
+// NewUserHandler 构造用户管理 handler。cipher 用于强制开启 2FA 时加密落库种子
+// （与渠道配置/自助 2FA 同源密钥）；为 nil 时 ForceEnable2FA fail-closed 拒绝，
+// 不会退化为明文写入。
+func NewUserHandler(db *sql.DB, cipher *crypto.Cipher) *UserHandler {
+	svc := service.NewUserService(db)
+	svc.SetCipher(cipher)
+	return &UserHandler{svc: svc, db: db}
 }
 
 // operatorFromCtx 从请求上下文构造操作者，用于权限判定（内置 admin / 普通管理员）。

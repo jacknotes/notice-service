@@ -205,10 +205,30 @@ func (r *UserRepo) BatchDelete(ids []int64) error {
 
 /* ── 双因子认证（TOTP） ────────────────────────────────────────────── */
 
+// ErrPlaintextTOTPSecret 表示生产路径试图把 TOTP 种子明文落库（fail-closed）。
+var ErrPlaintextTOTPSecret = errors.New("repository: 拒绝明文写入 TOTP 密钥（生产路径必须加密落库）")
+
 // SetTOTP 写入 TOTP 密钥与备用码哈希（启用前/重新生成用）。启用标记置 0，
 // 用户在设置页用动态码验证通过后才置 1（EnableTOTP）。secretEnc 非空时写入
-// 加密列（生产路径），否则写明文列（cipher 未注入的测试降级），并清空防重放计数器。
+// 加密列（生产路径），并清空明文列与防重放计数器。
+//
+// 生产路径 fail-closed：secretEnc 为空但 secretPlain 非空（即「明文降级」）
+// 直接拒绝。历史明文数据只能由 SetTOTPPlaintextLegacy 显式构造（测试/迁移用），
+// 避免调用方「忘了加密」时静默退化成明文落库。
 func (r *UserRepo) SetTOTP(userID int64, secretEnc, secretPlain, recoveryCodesJSON string) error {
+	if secretEnc == "" && secretPlain != "" {
+		return ErrPlaintextTOTPSecret
+	}
+	return r.setTOTP(userID, secretEnc, secretPlain, recoveryCodesJSON)
+}
+
+// SetTOTPPlaintextLegacy 显式写入明文列（仅用于测试构造历史明文数据/离线迁移）。
+// 生产代码不得调用：请用 SetTOTP 写密文，或 SetTOTPSecretEnc 升级历史数据。
+func (r *UserRepo) SetTOTPPlaintextLegacy(userID int64, secretPlain, recoveryCodesJSON string) error {
+	return r.setTOTP(userID, "", secretPlain, recoveryCodesJSON)
+}
+
+func (r *UserRepo) setTOTP(userID int64, secretEnc, secretPlain, recoveryCodesJSON string) error {
 	_, err := r.db.Exec(
 		"UPDATE users SET totp_secret_enc=?, totp_secret=?, totp_recovery_codes=?, totp_enabled=0, totp_last_counter=0 WHERE id=? AND deleted_at IS NULL",
 		nullableJSON(secretEnc), nullableJSON(secretPlain), nullableJSON(recoveryCodesJSON), userID)
@@ -223,9 +243,11 @@ func (r *UserRepo) SetTOTPLastCounter(userID int64, counter uint64) error {
 }
 
 // SetTOTPSecretEnc 升级存储 TOTP 密钥密文（历史明文数据首次验证成功后调用）。
+// 必须同时置空明文列：否则升级后同一份种子明文与密文长期并存，明文列再也
+// 不会被清理，「DB 泄漏不等于 2FA 失守」这一承诺就不成立。
 func (r *UserRepo) SetTOTPSecretEnc(userID int64, enc string) error {
 	_, err := r.db.Exec(
-		"UPDATE users SET totp_secret_enc=? WHERE id=? AND deleted_at IS NULL", enc, userID)
+		"UPDATE users SET totp_secret_enc=?, totp_secret=NULL WHERE id=? AND deleted_at IS NULL", enc, userID)
 	return err
 }
 
@@ -236,10 +258,11 @@ func (r *UserRepo) EnableTOTP(userID int64) error {
 	return err
 }
 
-// DisableTOTP 关闭双因子认证并清除密钥与备用码。
+// DisableTOTP 关闭双因子认证并清除全部种子材料（明文列 + 密文列 + 备用码 +
+// 防重放计数器）。只清明文列会让已停用账号的密文种子永久驻留 DB，违反数据最小化。
 func (r *UserRepo) DisableTOTP(userID int64) error {
 	_, err := r.db.Exec(
-		"UPDATE users SET totp_secret=NULL, totp_enabled=0, totp_recovery_codes=NULL WHERE id=? AND deleted_at IS NULL",
+		"UPDATE users SET totp_secret=NULL, totp_secret_enc=NULL, totp_enabled=0, totp_recovery_codes=NULL, totp_last_counter=0 WHERE id=? AND deleted_at IS NULL",
 		userID)
 	return err
 }

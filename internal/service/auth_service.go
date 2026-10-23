@@ -285,17 +285,20 @@ func (s *AuthService) Setup2FA(userID int64) (secret, otpauthURL string, recover
 	return secret, totp.OTPAuthURI("Notice Service", u.Username, secret), codes, nil
 }
 
-// storeTOTPSecret 加密 TOTP 密钥后落库；加密失败时保留明文回退（可用性优先，
-// 且比明文落库不会更差），历史明文列仅在降级场景写入。
+// storeTOTPSecret 加密 TOTP 密钥后落库。
+// 生产路径（cipher 已注入）加密失败即返回错误，不回退明文：明文落库等于把
+// 「TOTP 密钥加密存储」这条承诺作废，宁可让用户重试也不能降级。
+// 仅当 cipher 未注入（单元测试/离线工具）时才显式走明文列。
 func (s *AuthService) storeTOTPSecret(userID int64, secret, recoveryJSON string) error {
-	if s.cipher != nil {
-		if enc, encErr := s.cipher.EncryptString(secret); encErr == nil {
-			return s.users.SetTOTP(userID, enc, "", recoveryJSON)
-		} else {
-			log.Printf("auth: encrypt totp secret failed, fallback to plaintext column: %v", encErr)
-		}
+	if s.cipher == nil {
+		return s.users.SetTOTPPlaintextLegacy(userID, secret, recoveryJSON)
 	}
-	return s.users.SetTOTP(userID, "", secret, recoveryJSON)
+	enc, err := s.cipher.EncryptString(secret)
+	if err != nil {
+		log.Printf("auth: encrypt totp secret failed: %v", err)
+		return errors.New("双因子密钥加密失败，请重试")
+	}
+	return s.users.SetTOTP(userID, enc, "", recoveryJSON)
 }
 
 // totpSecret 取用户的 TOTP 密钥明文：优先解密密文列；密文列空（历史数据）

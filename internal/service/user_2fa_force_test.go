@@ -33,7 +33,9 @@ func TestUserCreateWithProfile(t *testing.T) {
 func TestForce2FA(t *testing.T) {
 	db := testDB(t)
 	userSvc := NewUserService(db)
+	userSvc.SetCipher(testCipher(t))
 	authSvc := NewAuthService(db, "secret", "admin", "admin123")
+	authSvc.SetCipher(testCipher(t))
 	uid := seedServiceUser(t, db)
 	_ = userSvc.users.UpdatePassword(uid, hashOf("Pass1234!x"))
 	u, _ := authSvc.users.GetByID(uid)
