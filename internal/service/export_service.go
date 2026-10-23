@@ -121,7 +121,11 @@ func (s *ExportService) Import(userID int64, b *ExportBundle) (*ImportResult, er
 			continue
 		}
 		oldID := t.ID
-		nt := &model.Template{Name: t.Name, Subject: t.Subject, ContentMD: t.ContentMD, Variables: t.Variables}
+		// Enabled 必须显式带上：template_repo.Create 的 INSERT 显式写 enabled 列，
+		// 缺省会以 Go 零值 false 落库、绕过列默认值 1 → 导入模板一律停用。
+		// 结合「模板停用时禁止发送」，会让迁移后所有任务静默停发（报告 H-5）。
+		nt := &model.Template{Name: t.Name, Subject: t.Subject, ContentMD: t.ContentMD,
+			Variables: t.Variables, Enabled: t.Enabled}
 		if err := s.templates.Create(userID, nt); err != nil {
 			return nil, fmt.Errorf("导入模板 %q 失败: %w", t.Name, err)
 		}
