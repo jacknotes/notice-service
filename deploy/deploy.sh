@@ -49,7 +49,7 @@ while [ $# -gt 0 ]; do
     --rollback) DO_ROLLBACK=1; shift ;;
     --check) CHECK_ONLY=1; shift ;;
     --no-rollback) AUTO_ROLLBACK=0; shift ;;
-    -h|--help) sed -n '2,30p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,24p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) err "未知参数: $1"; exit 1 ;;
   esac
 done
