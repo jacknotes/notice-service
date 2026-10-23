@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"log"
 	"net"
 	"net/smtp"
 	"strconv"
@@ -102,33 +103,95 @@ func dialAndAuth(cfg map[string]string) (*smtp.Client, error) {
 }
 
 // authByExtensions 按 SMTP 服务器宣告的 AUTH 扩展选择认证方式。
-// CRAM-MD5（挑战-响应，口令不上线）> LOGIN > PLAIN；PLAIN 在非 TLS 连接上
-// 仅 allow_insecure 场景放行（配置者已显式接受明文中继风险）。
+//
+// 安全边界（本函数是唯一决策点，不依赖服务器宣告顺序）：
+//   - TLS 连接（secure=true）：优先 PLAIN/LOGIN（口令在 TLS 内传输，无额外风险），
+//     CRAM-MD5 仅作兜底——它是 HMAC-MD5，无迭代无盐，可被离线字典攻击。
+//   - 非 TLS 连接（secure=false）：只允许 CRAM-MD5（口令不上线）。LOGIN/PLAIN 是
+//     base64 明文，必须由配置显式声明 allow_insecure=true 才放行，且每次发送
+//     打 warning 日志，让「明文传凭据」可见。
+//
+// 不允许因为服务器把 LOGIN 排在 CRAM-MD5 前面就自动选中弱机制。
 func authByExtensions(client *smtp.Client, cfg map[string]string, secure bool) error {
 	host := cfg["host"]
 	username, password := cfg["username"], cfg["password"]
+	allowInsecure := cfg["allow_insecure"] == "true"
 	advertised := map[string]bool{}
-	if ok, authExts := client.Extension("AUTH"); ok && authExts != "" {
+	authAdvertised := false
+	if ok, authExts := client.Extension("AUTH"); ok {
+		authAdvertised = true
 		for _, m := range strings.Fields(authExts) {
 			advertised[strings.ToUpper(m)] = true
 		}
 	}
-	switch {
-	case advertised["CRAM-MD5"]:
-		return client.Auth(&cramMD5Auth{username, password})
-	case advertised["LOGIN"]:
-		return client.Auth(&loginAuth{username, password})
-	case advertised["PLAIN"]:
-		if secure || cfg["allow_insecure"] == "true" {
+	if authAdvertised && len(advertised) == 0 {
+		// 宣告了 AUTH 但机制列表为空：显式失败，不回落 PLAIN（配置漂移必须可见）。
+		return errors.New("SMTP 服务器宣告了 AUTH 但未列出任何认证机制，拒绝回落明文认证（请检查服务器的 AUTH 配置）")
+	}
+	if !authAdvertised {
+		// 未宣告 AUTH 扩展：TLS 连接上 PLAIN 是安全的（标准库对 localhost 也放行）。
+		if secure {
+			log.Printf("channel/email: SMTP 服务器未宣告 AUTH 扩展，回落到 TLS 上的 PLAIN 认证（host=%s）", host)
 			return client.Auth(smtp.PlainAuth("", username, password, host))
 		}
-		return errors.New("SMTP 服务器仅支持 PLAIN 认证且连接非 TLS，拒绝明文传输邮箱密码（如确为内网明文中继，可加 allow_insecure=true）")
+		return errors.New("SMTP 服务器未宣告 AUTH 扩展且连接非 TLS，无法认证（检查端口/加密配置）")
 	}
-	// 未宣告 AUTH 扩展：TLS 连接上 PLAIN 是安全的（标准库对 localhost 也放行）。
-	if secure {
+	mech, err := pickAuthMechanism(secure, allowInsecure, advertised)
+	if err != nil {
+		return err
+	}
+	if !secure {
+		log.Printf("[警告] channel/email: 非 TLS 连接使用 %s 认证（allow_insecure=true），凭据以明文/可离线攻击形式传输，仅限内网明文中继（host=%s）", mech, host)
+	}
+	switch mech {
+	case mechCRAMMD5:
+		return client.Auth(&cramMD5Auth{username, password})
+	case mechLogin:
+		return client.Auth(&loginAuth{username, password})
+	case mechPlain:
 		return client.Auth(smtp.PlainAuth("", username, password, host))
 	}
-	return errors.New("SMTP 服务器未宣告 AUTH 扩展且连接非 TLS，无法认证（检查端口/加密配置）")
+	return errors.New("SMTP 认证方式选择失败")
+}
+
+const (
+	mechCRAMMD5 = "CRAM-MD5"
+	mechLogin   = "LOGIN"
+	mechPlain   = "PLAIN"
+)
+
+// pickAuthMechanism 是纯函数形式的认证方式选择（便于回归测试）：
+//
+//	secure=true  → PLAIN > LOGIN > CRAM-MD5（TLS 内明文口令无风险，MD5 反而是弱点）
+//	secure=false → CRAM-MD5 >（仅 allow_insecure=true 时）LOGIN > PLAIN
+//
+// 非 TLS 且未 allow_insecure 时，LOGIN/PLAIN 一律拒绝（不因宣告顺序被选中）。
+func pickAuthMechanism(secure, allowInsecure bool, advertised map[string]bool) (string, error) {
+	if secure {
+		switch {
+		case advertised[mechPlain]:
+			return mechPlain, nil
+		case advertised[mechLogin]:
+			return mechLogin, nil
+		case advertised[mechCRAMMD5]:
+			return mechCRAMMD5, nil
+		}
+		return "", errors.New("SMTP 服务器宣告的 AUTH 机制均不受支持（支持 PLAIN/LOGIN/CRAM-MD5）")
+	}
+	// 非 TLS：CRAM-MD5 不把口令放到线上，唯一可无条件允许的机制。
+	if advertised[mechCRAMMD5] {
+		return mechCRAMMD5, nil
+	}
+	if advertised[mechLogin] || advertised[mechPlain] {
+		if !allowInsecure {
+			return "", errors.New("SMTP 服务器仅支持 LOGIN/PLAIN 且连接非 TLS，拒绝明文传输邮箱密码（如确为内网明文中继，可加 allow_insecure=true）")
+		}
+		if advertised[mechLogin] {
+			return mechLogin, nil
+		}
+		return mechPlain, nil
+	}
+	return "", errors.New("SMTP 服务器宣告的 AUTH 机制均不受支持（支持 PLAIN/LOGIN/CRAM-MD5）")
 }
 
 // cramMD5Auth 实现 smtp.Auth 接口的 CRAM-MD5（RFC 2195）：服务器挑战 + HMAC-MD5 口令摘要。
