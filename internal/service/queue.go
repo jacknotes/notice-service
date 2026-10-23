@@ -86,6 +86,49 @@ func (q *QueueService) Start() {
 	go q.cleanerLoop()
 }
 
+// pollInterval 返回安全的轮询周期：time.NewTicker 对非正周期 panic。
+// 配置层已钳制，这里兜底直接构造 QueueConfig 的调用方（测试/嵌入场景）。
+func (q *QueueService) pollInterval() time.Duration {
+	if q.cfg.PollInterval <= 0 {
+		return time.Second
+	}
+	return q.cfg.PollInterval
+}
+
+// renewInterval 返回续租心跳周期（ClaimTTL/3，且不小于 1s）：ClaimTTL 为 0
+// 或负数时 time.NewTicker 会 panic，而该 ticker 建在 goroutine 内——goroutine
+// 的 panic 不会被 process 的 recover 捕获，会直接崩掉整个进程。
+func (q *QueueService) renewInterval() time.Duration {
+	if q.cfg.ClaimTTL <= 0 {
+		return time.Second
+	}
+	if d := q.cfg.ClaimTTL / 3; d >= time.Second {
+		return d
+	}
+	return time.Second
+}
+
+// recoverInterval 陈旧认领恢复周期（ClaimTTL/4，且不小于 1s）。
+func (q *QueueService) recoverInterval() time.Duration {
+	if q.cfg.ClaimTTL <= 0 {
+		return time.Second
+	}
+	if d := q.cfg.ClaimTTL / 4; d >= time.Second {
+		return d
+	}
+	return time.Second
+}
+
+// safeClaimTTL 返回用于陈旧认领判定的 TTL：非正值会让
+// `claimed_at < NOW() - INTERVAL 0 SECOND` 变成「刚认领即视为陈旧」，
+// 进而重复发送；此处回退到默认 120s。
+func (q *QueueService) safeClaimTTL() time.Duration {
+	if q.cfg.ClaimTTL <= 0 {
+		return 120 * time.Second
+	}
+	return q.cfg.ClaimTTL
+}
+
 func (q *QueueService) Stop() { q.StopWithTimeout(0) }
 
 // StopWithTimeout 停止队列：关闭 stopCh 并等待 worker 退出；d<=0 无限等待，
@@ -161,7 +204,7 @@ func (q *QueueService) EnqueueLogRetry(logID int64, tr Trigger) (int64, error) {
 
 func (q *QueueService) workerLoop() {
 	defer q.wg.Done()
-	ticker := time.NewTicker(q.cfg.PollInterval)
+	ticker := time.NewTicker(q.pollInterval())
 	defer ticker.Stop()
 	for {
 		select {
@@ -189,7 +232,14 @@ func (q *QueueService) process(j *model.SendJob) {
 	renewWG.Add(1)
 	go func() {
 		defer renewWG.Done()
-		t := time.NewTicker(q.cfg.ClaimTTL / 3)
+		// 续租协程内的 panic 不会传到 process 的 recover：必须自带兜底，
+		// 否则非法 ClaimTTL（time.NewTicker(0)）会直接崩掉整个进程。
+		defer func() {
+			if r := recover(); r != nil {
+				log.Printf("queue: renew goroutine panic for job %d: %v", j.ID, r)
+			}
+		}()
+		t := time.NewTicker(q.renewInterval())
 		defer t.Stop()
 		for {
 			select {
@@ -269,20 +319,17 @@ func (q *QueueService) process(j *model.SendJob) {
 // recoverLoop 周期性把认领超时（认领实例崩溃）的 job 放回 pending 供接管。
 func (q *QueueService) recoverLoop() {
 	defer q.wg.Done()
-	interval := q.cfg.ClaimTTL / 4
-	if interval < time.Second {
-		interval = time.Second
-	}
+	interval := q.recoverInterval()
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 	for {
 		select {
 		case <-q.stopCh:
 			return
-			case <-ticker.C:
-				if _, err := q.jobRepo.RecoverStale(q.cfg.ClaimTTL, q.cfg.MaxAttempts, q.cfg.RetryBackoff); err != nil {
-					log.Printf("queue: recover stale: %v", err)
-				}
+		case <-ticker.C:
+			if _, err := q.jobRepo.RecoverStale(q.safeClaimTTL(), q.cfg.MaxAttempts, q.cfg.RetryBackoff); err != nil {
+				log.Printf("queue: recover stale: %v", err)
+			}
 		}
 	}
 }
