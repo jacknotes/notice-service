@@ -1,6 +1,7 @@
 package scheduler
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -241,5 +242,67 @@ func TestLunarParserRejectsBadLast(t *testing.T) {
 		if _, err := parseLunarSchedule(bad, time.Local); err == nil {
 			t.Fatalf("bad spec %q should error", bad)
 		}
+	}
+}
+
+// TestLunarTermRejectsShortFestivalName: 节日短名必须在解析期报错（报告 B-1 / M-8）。
+// 短名既不在 lunarFestivals 表也不是节气，旧实现会「解析成功 + Next() 零值」静默失效。
+func TestLunarTermRejectsShortFestivalName(t *testing.T) {
+	for _, bad := range []string{
+		"@lunar term 中秋 09:00",
+		"@lunar term 元宵 09:00",
+		"@lunar term 端午 09:00",
+		"@lunar term 不存在 09:00",
+		"@lunar term 春节,中秋 09:00", // 混合列表：短名也必须整体拒绝，避免「部分生效」
+	} {
+		_, err := parseLunarSchedule(bad, time.Local)
+		if err == nil {
+			t.Fatalf("short/unknown festival name %q should error at parse time, got nil", bad)
+		}
+		// 报错需可指导用户：提示里应包含可用名字（如「中秋节」）。
+		if !strings.Contains(err.Error(), "中秋节") {
+			t.Errorf("error for %q should list available names, got %q", bad, err.Error())
+		}
+	}
+}
+
+// TestLunarTermAcceptsFullFestivalName: 节日全称必须有效，且 Next() 命中真实日期。
+func TestLunarTermAcceptsFullFestivalName(t *testing.T) {
+	cases := []struct {
+		name   string
+		lunarM int
+		lunarD int
+		afterY int
+		afterM time.Month
+		afterD int
+	}{
+		{"中秋节", 8, 15, 2026, time.January, 1},
+		{"元宵节", 1, 15, 2026, time.January, 1},
+		{"端午节", 5, 5, 2026, time.January, 1},
+		{"春节", 1, 1, 2026, time.January, 1},
+	}
+	for _, c := range cases {
+		s := mustParseLunar(t, "@lunar term "+c.name+" 09:00")
+		solar := calendar.NewLunarFromYmd(2026, c.lunarM, c.lunarD).GetSolar()
+		next := s.Next(time.Date(c.afterY, c.afterM, c.afterD, 0, 0, 0, 0, time.Local))
+		want := time.Date(solar.GetYear(), time.Month(solar.GetMonth()), solar.GetDay(), 9, 0, 0, 0, time.Local)
+		if next.IsZero() {
+			t.Fatalf("term %s next is zero (silent failure regression)", c.name)
+		}
+		if !next.Equal(want) {
+			t.Errorf("term %s next = %v, want %v", c.name, next, want)
+		}
+	}
+}
+
+// TestLunarTermUnknownNameFailsFast: 未知名字不得进入 8 年 × 370 天的扫描路径。
+// 白名单校验在解析期完成，解析耗时应远低于一次最坏路径 Next()（实测旧路径 336 ms）。
+func TestLunarTermUnknownNameFailsFast(t *testing.T) {
+	start := time.Now()
+	if _, err := parseLunarSchedule("@lunar term 中秋 09:00", time.Local); err == nil {
+		t.Fatal("term 中秋 should error")
+	}
+	if elapsed := time.Since(start); elapsed > 50*time.Millisecond {
+		t.Fatalf("parse of unknown term took %v, expected fast rejection", elapsed)
 	}
 }

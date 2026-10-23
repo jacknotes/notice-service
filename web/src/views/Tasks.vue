@@ -809,7 +809,9 @@ const lunarPresets = [
   { expr: '@lunar monthly 15 09:00', labelKey: 'tasks.lunarFifteen' },
   { expr: '@lunar yearly 1 1 09:00', labelKey: 'tasks.lunarSpringFestival' },
   { expr: '@lunar term 清明 09:00', labelKey: 'tasks.lunarQingming' },
-  { expr: '@lunar term 中秋 09:00', labelKey: 'tasks.lunarMidAutumn' },
+  // 节日名必须用后端 lunarFestivals 的**全称**（「中秋节」而非「中秋」）：
+  // 短名不在白名单内，保存时会被解析器直接拒绝（报告 B-1）。
+  { expr: '@lunar term 中秋节 09:00', labelKey: 'tasks.lunarMidAutumn' },
 ]
 
 /* ── Receiver field: only meaningful for the email channel ────────────

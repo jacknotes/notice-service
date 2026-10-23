@@ -14,13 +14,14 @@ import (
 //
 //	@lunar monthly <day> <HH:MM>        农历每月某日，如 @lunar monthly 15 09:00
 //	@lunar yearly <month> <day> <HH:MM> 农历每年某月某日，如 @lunar yearly 1 1 09:00（正月初一）
-//	@lunar term <节气/节日> <HH:MM>     节气或农历节日，如 @lunar term 清明 09:00 / 春节 09:00
+//	@lunar term <节气/节日> <HH:MM>     节气或农历节日，如 @lunar term 清明 09:00 / 中秋节 09:00
 //
 // 列表/区间/特殊值：
 //   - 日支持逗号列表与连字符区间：15,20 / 17-19 / 1,15
 //   - 日支持 last（该农历月最后一天，精确表达除夕）：@lunar yearly 12 last 09:00
 //   - 月（yearly）同样支持列表/区间：1,5,9 / 1-3
-//   - 节气/节日支持逗号列表：立春,清明 / 春节,中秋
+//   - 节气/节日支持逗号列表：立春,清明 / 春节,中秋节
+//   - 节日名必须用**全称**（中秋节、元宵节、端午节…），短名「中秋」「元宵」「端午」在解析期直接报错
 var (
 	lunarMonthlyRe = regexp.MustCompile(`^@lunar monthly (\S+) (\d{1,2}):(\d{2})$`)
 	lunarYearlyRe  = regexp.MustCompile(`^@lunar yearly (\S+) (\S+) (\d{1,2}):(\d{2})$`)
@@ -159,8 +160,10 @@ func parseLunarSchedule(spec string, loc *time.Location) (*LunarSchedule, error)
 		}
 		terms := splitComma(m[1])
 		for _, tm := range terms {
-			if tm == "" {
-				return nil, fmt.Errorf("节气/节日名不能为空")
+			// 解析期白名单校验（报告 B-1/M-8）：未知名字必须在此报错，
+			// 不能放行到 Next() 里跑满 8 年 × 370 天才返回零值。
+			if err := validateTermName(tm); err != nil {
+				return nil, err
 			}
 		}
 		return &LunarSchedule{Kind: "term", JieQis: terms, Hour: h, Minute: min, Loc: loc}, nil
