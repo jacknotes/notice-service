@@ -118,6 +118,126 @@ func TestWeakSecretWarnings(t *testing.T) {
 	}
 }
 
+// TestWeakSecretWarningsPlaceholders 回归 H-1：.env.example 的占位值长度 ≥32，
+// 精确相等判断完全漏过（STRICT_SECRETS=1 形同虚设）。占位前缀必须告警。
+func TestWeakSecretWarningsPlaceholders(t *testing.T) {
+	const placeholder = "please_change_me_to_32_bytes_random_hex"
+	cases := []struct {
+		name string
+		cfg  Config
+	}{
+		{"env.example 三个原值", Config{JWTSecret: placeholder, EncryptKey: placeholder, AdminPass: "please_change_me_to_a_strong_password"}},
+		{"仅 JWT 占位", Config{JWTSecret: placeholder, EncryptKey: "a1b2c3d4e5f60718293a4b5c6d7e8f90", AdminPass: "Str0ng!Passphrase#2026"}},
+		{"仅 ENCRYPT 占位", Config{JWTSecret: "9f8e7d6c5b4a39281706f5e4d3c2b1a0", EncryptKey: placeholder, AdminPass: "Str0ng!Passphrase#2026"}},
+		{"仅 ADMIN_PASS 占位", Config{JWTSecret: "9f8e7d6c5b4a39281706f5e4d3c2b1a0", EncryptKey: "a1b2c3d4e5f60718293a4b5c6d7e8f90", AdminPass: "please_change_me_to_a_strong_password"}},
+		{"32 个 a 低熵", Config{JWTSecret: strings.Repeat("a", 32), EncryptKey: "a1b2c3d4e5f60718293a4b5c6d7e8f90", AdminPass: "Str0ng!Passphrase#2026"}},
+		{"ENCRYPT 低熵", Config{JWTSecret: "9f8e7d6c5b4a39281706f5e4d3c2b1a0", EncryptKey: strings.Repeat("ab", 16), AdminPass: "Str0ng!Passphrase#2026"}},
+		{"占位前缀 change_me", Config{JWTSecret: "change_me_please_1234567890abcdef", EncryptKey: "a1b2c3d4e5f60718293a4b5c6d7e8f90", AdminPass: "Str0ng!Passphrase#2026"}},
+		{"占位前缀 your_", Config{JWTSecret: "your_jwt_secret_here_0123456789abcdef", EncryptKey: "a1b2c3d4e5f60718293a4b5c6d7e8f90", AdminPass: "Str0ng!Passphrase#2026"}},
+		{"占位前缀 example", Config{JWTSecret: "9f8e7d6c5b4a39281706f5e4d3c2b1a0", EncryptKey: "example_encrypt_key_0123456789ab", AdminPass: "Str0ng!Passphrase#2026"}},
+		{"占位前缀 placeholder", Config{JWTSecret: "placeholder_secret_0123456789abcdef", EncryptKey: "a1b2c3d4e5f60718293a4b5c6d7e8f90", AdminPass: "Str0ng!Passphrase#2026"}},
+	}
+	for _, tc := range cases {
+		cfg := tc.cfg
+		if w := cfg.WeakSecretWarnings(); len(w) == 0 {
+			t.Errorf("%s: 占位/低熵密钥必须产生告警，实际 0 条", tc.name)
+		}
+	}
+}
+
+// TestWeakSecretWarningsAdminPass 回归 H-1c：ADMIN_PASS 走 BootstrapAdmin 建号，
+// 没有强度校验，常见弱口令必须告警。
+func TestWeakSecretWarningsAdminPass(t *testing.T) {
+	strongJWT, strongKey := "9f8e7d6c5b4a39281706f5e4d3c2b1a0", "a1b2c3d4e5f60718293a4b5c6d7e8f90"
+	for _, pass := range []string{"x", "1", "a", "admin", "password", "admin123", "please_change_me"} {
+		cfg := &Config{JWTSecret: strongJWT, EncryptKey: strongKey, AdminPass: pass}
+		if w := cfg.WeakSecretWarnings(); len(w) == 0 {
+			t.Errorf("ADMIN_PASS=%q 必须产生告警", pass)
+		}
+	}
+}
+
+// TestEnvExampleSecretsBlank 回归 H-1：.env.example 的 JWT_SECRET/ENCRYPT_KEY
+// 必须留空，让 docker compose 的 ${VAR:?} 在启动前拦截，而不是留一个「长度
+// 达标但公开」的占位值骗过 STRICT_SECRETS。
+func TestEnvExampleSecretsBlank(t *testing.T) {
+	data, err := os.ReadFile("../../.env.example")
+	if err != nil {
+		t.Fatalf("读取 .env.example 失败: %v", err)
+	}
+	values := map[string]string{}
+	for _, line := range strings.Split(string(data), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		k, v, ok := strings.Cut(line, "=")
+		if !ok {
+			continue
+		}
+		values[strings.TrimSpace(k)] = strings.Trim(strings.TrimSpace(v), `"'`)
+	}
+	for _, k := range []string{"JWT_SECRET", "ENCRYPT_KEY"} {
+		v, ok := values[k]
+		if !ok {
+			t.Fatalf(".env.example 缺少 %s", k)
+		}
+		if v != "" {
+			t.Errorf(".env.example 的 %s 必须留空（compose :? 守卫拦截），实际 %q", k, v)
+		}
+	}
+	// 反向校验：若运维把示例里的占位值原样填进环境，WeakSecretWarnings 仍须告警。
+	if w := (&Config{JWTSecret: "please_change_me_to_32_bytes_random_hex",
+		EncryptKey: "please_change_me_to_32_bytes_random_hex",
+		AdminPass:  "please_change_me_to_a_strong_password"}).WeakSecretWarnings(); len(w) == 0 {
+		t.Error(".env.example 历史占位值必须仍被识别为弱密钥")
+	}
+}
+
+// TestQueueConfigClamp 回归 M-2：QUEUE_CLAIM_TTL=0/负数会让
+// time.NewTicker(ClaimTTL/3) 在 goroutine 内 panic 崩进程，加载期必须钳制。
+func TestQueueConfigClamp(t *testing.T) {
+	clearEnv(t)
+	for _, tc := range []struct {
+		ttl     string
+		want    time.Duration
+		workers string
+		poll    string
+		wantW   int
+		wantP   int
+	}{
+		{"0", 30 * time.Second, "0", "0", 1, 50},
+		{"-5", 30 * time.Second, "-3", "-1", 1, 50},
+		{"1", 30 * time.Second, "4", "1000", 4, 1000},
+		{"999999", 3600 * time.Second, "1000", "99999999", 64, 60000},
+	} {
+		t.Setenv("QUEUE_CLAIM_TTL", tc.ttl)
+		t.Setenv("QUEUE_WORKERS", tc.workers)
+		t.Setenv("QUEUE_POLL_MS", tc.poll)
+		cfg := LoadFile(t.TempDir() + "/nope.yml")
+		if cfg.QueueClaimTTL != tc.want {
+			t.Errorf("QUEUE_CLAIM_TTL=%s → %v, want %v", tc.ttl, cfg.QueueClaimTTL, tc.want)
+		}
+		if cfg.QueueWorkers != tc.wantW {
+			t.Errorf("QUEUE_WORKERS=%s → %d, want %d", tc.workers, cfg.QueueWorkers, tc.wantW)
+		}
+		if cfg.QueuePollMS != tc.wantP {
+			t.Errorf("QUEUE_POLL_MS=%s → %d, want %d", tc.poll, cfg.QueuePollMS, tc.wantP)
+		}
+	}
+	// 配置文件通道同样钳制（先清掉上一段设置的环境变量，确保走文件通道）
+	clearEnv(t)
+	dir := t.TempDir()
+	yml := dir + "/config.yml"
+	if err := os.WriteFile(yml, []byte("queue:\n  claim_ttl: 0\n  workers: 0\n  poll_ms: 0\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg := LoadFile(yml)
+	if cfg.QueueClaimTTL != 30*time.Second || cfg.QueueWorkers != 1 || cfg.QueuePollMS != 50 {
+		t.Errorf("config.yml 非法队列参数未钳制: ttl=%v workers=%d poll=%d", cfg.QueueClaimTTL, cfg.QueueWorkers, cfg.QueuePollMS)
+	}
+}
+
 func TestLoadFile(t *testing.T) {
 	clearEnv(t)
 	dir := t.TempDir()

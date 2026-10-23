@@ -96,22 +96,81 @@ type fileConfig struct {
 	} `yaml:"metrics"`
 }
 
+// weakSecretPrefixes 公开占位/示例值前缀黑名单（小写比较）。.env.example 中的
+// please_change_me_to_32_bytes_random_hex 这类值长度 ≥32 却出现在公开仓库里，
+// 只做「精确相等」判断会全部漏过（STRICT_SECRETS=1 形同虚设）。
+var weakSecretPrefixes = []string{
+	"please_change_me", "please-change-me", "pleasechangeme",
+	"change_me", "change-me", "changeme",
+	"your_", "your-",
+	"example", "placeholder", "sample", "dummy",
+	"test_secret", "test-secret",
+}
+
+// weakAdminPasswords 常见弱口令（小写比较）：ADMIN_PASS 走 BootstrapAdmin 直接
+// 建号，没有任何强度校验，必须在这里拦住。
+var weakAdminPasswords = map[string]struct{}{
+	"admin": {}, "admin123": {}, "administrator": {}, "password": {}, "passw0rd": {},
+	"123456": {}, "12345678": {}, "123456789": {}, "qwerty": {}, "letmein": {},
+	"root": {}, "toor": {}, "test": {}, "guest": {}, "notice": {}, "notice123": {},
+	"x": {}, "a": {}, "1": {}, "12": {}, "123": {}, "abc": {}, "abc123": {},
+}
+
+// isPlaceholderSecret 判断是否为公开的占位/示例值（前缀匹配）。
+func isPlaceholderSecret(s string) bool {
+	low := strings.ToLower(strings.TrimSpace(s))
+	if low == "" {
+		return false
+	}
+	for _, p := range weakSecretPrefixes {
+		if strings.HasPrefix(low, p) {
+			return true
+		}
+	}
+	return false
+}
+
+// lowEntropySecret 判断密钥熵是否明显不足：去重字符数 < 12（挡住「32 个 a」
+// 「1234567890…」这类长度达标但可预测的密钥）。空串由调用方单独处理。
+func lowEntropySecret(s string) bool {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return false
+	}
+	distinct := map[rune]struct{}{}
+	for _, r := range s {
+		distinct[r] = struct{}{}
+	}
+	return len(distinct) < 12
+}
+
 // WeakSecretWarnings 返回需要告警的弱密钥配置说明（空表示全部健康）。
 // 防止以默认/示例密钥裸跑导致 JWT 可伪造、渠道配置可被解密、默认口令
 // admin/admin123 直接可登录。
+//
+// 判定分三层：① 精确默认值；② 公开占位前缀（.env.example 的值）；③ 低熵
+// （去重字符数 < 12）。JWT_SECRET 的「长度不足 32」是独立的第四条告警。
 func (c *Config) WeakSecretWarnings() []string {
 	var w []string
-	if c.JWTSecret == "" || c.JWTSecret == "change-me" || c.JWTSecret == "change_me" {
+	switch {
+	case c.JWTSecret == "" || c.JWTSecret == "change-me" || c.JWTSecret == "change_me":
 		w = append(w, "JWT_SECRET 为默认/弱值，JWT 可被伪造，请设置强随机密钥（多实例必须一致）")
-	}
-	if c.EncryptKey == "" || c.EncryptKey == "0123456789abcdef0123456789abcdef" {
-		w = append(w, "ENCRYPT_KEY 为示例固定值，渠道配置加密可被破解，请设置随机 32 字节密钥（多实例必须一致）")
-	}
-	if c.AdminPass == "" || c.AdminPass == "admin123" || c.AdminPass == "change-me" {
-		w = append(w, "ADMIN_PASS 为默认/弱值，默认管理员可被直接登录，请设置强密码")
+	case isPlaceholderSecret(c.JWTSecret) || lowEntropySecret(c.JWTSecret):
+		w = append(w, "JWT_SECRET 为公开占位值或低熵密钥（可被猜测/伪造 JWT），请用 `openssl rand -hex 32` 生成强随机密钥")
 	}
 	if len(c.JWTSecret) > 0 && len(c.JWTSecret) < 32 {
 		w = append(w, "JWT_SECRET 长度不足 32 字节，建议使用至少 32 字节的随机密钥")
+	}
+	switch {
+	case c.EncryptKey == "" || c.EncryptKey == "0123456789abcdef0123456789abcdef":
+		w = append(w, "ENCRYPT_KEY 为示例固定值，渠道配置加密可被破解，请设置随机 32 字节密钥（多实例必须一致）")
+	case isPlaceholderSecret(c.EncryptKey) || lowEntropySecret(c.EncryptKey):
+		w = append(w, "ENCRYPT_KEY 为公开占位值或低熵密钥（渠道配置/2FA 种子可被解密），请用 `openssl rand -hex 32` 生成强随机密钥")
+	}
+	if c.AdminPass == "" || isPlaceholderSecret(c.AdminPass) || lowEntropySecret(c.AdminPass) {
+		w = append(w, "ADMIN_PASS 为默认/弱值，默认管理员可被直接登录，请设置强密码")
+	} else if _, weak := weakAdminPasswords[strings.ToLower(strings.TrimSpace(c.AdminPass))]; weak {
+		w = append(w, "ADMIN_PASS 为常见弱口令，默认管理员可被直接登录，请设置强密码")
 	}
 	return w
 }
@@ -165,11 +224,11 @@ func loadFromPath(path string) *Config {
 		AdminUser:               firstNonEmpty(os.Getenv("ADMIN_USER"), f.Admin.User, "admin"),
 		AdminPass:               firstNonEmpty(os.Getenv("ADMIN_PASS"), f.Admin.Pass, "admin123"),
 
-		QueueWorkers:          firstInt("QUEUE_WORKERS", f.Queue.Workers, 4),
-		QueuePollMS:           firstInt("QUEUE_POLL_MS", f.Queue.PollMS, 1000),
-		QueueMaxAttempts:      firstInt("QUEUE_MAX_ATTEMPTS", f.Queue.MaxAttempts, 3),
+		QueueWorkers:          clampInt("QUEUE_WORKERS", firstInt("QUEUE_WORKERS", f.Queue.Workers, 4), 1, 64),
+		QueuePollMS:           clampInt("QUEUE_POLL_MS", firstInt("QUEUE_POLL_MS", f.Queue.PollMS, 1000), 50, 60000),
+		QueueMaxAttempts:      clampInt("QUEUE_MAX_ATTEMPTS", firstInt("QUEUE_MAX_ATTEMPTS", f.Queue.MaxAttempts, 3), 1, 20),
 		QueueRetryBackoff:     parseDurations(firstNonEmpty(os.Getenv("QUEUE_RETRY_BACKOFF"), f.Queue.RetryBackoff, "5s,30s,60s"), []time.Duration{5 * time.Second, 30 * time.Second, 60 * time.Second}),
-		QueueClaimTTL:         time.Duration(firstInt("QUEUE_CLAIM_TTL", f.Queue.ClaimTTL, 120)) * time.Second,
+		QueueClaimTTL:         time.Duration(clampInt("QUEUE_CLAIM_TTL", firstInt("QUEUE_CLAIM_TTL", f.Queue.ClaimTTL, 120), 30, 3600)) * time.Second,
 		LogRetentionDays:      firstInt("LOG_RETENTION_DAYS", f.LogRetentionDays, 90),
 		QueueJobRetentionDays: firstInt("QUEUE_JOB_RETENTION_DAYS", f.Queue.JobRetentionDays, 30),
 		AuditRetentionDays:    firstInt("AUDIT_RETENTION_DAYS", f.AuditRetentionDays, 180),
@@ -205,6 +264,21 @@ func firstInt(envKey string, fileVal *int, def int) int {
 		return *fileVal
 	}
 	return def
+}
+
+// clampInt 把整型配置钳制到 [lo, hi]。越界值（如 QUEUE_CLAIM_TTL=0/负数）在
+// 运行期会变成 time.NewTicker(非正周期) 的 panic，必须在加载期就消除。
+// 钳制时打一条告警，让配置失误可见而不是被静默改写。
+func clampInt(name string, v, lo, hi int) int {
+	if v < lo {
+		log.Printf("[警告] %s=%d 低于下限，已钳制为 %d", name, v, lo)
+		return lo
+	}
+	if v > hi {
+		log.Printf("[警告] %s=%d 超过上限，已钳制为 %d", name, v, hi)
+		return hi
+	}
+	return v
 }
 
 // firstBool env（true/1）> 配置文件 > 默认。
