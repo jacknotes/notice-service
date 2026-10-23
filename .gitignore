@@ -45,3 +45,6 @@ dump*.sql
 
 # ZCode 会话工作目录（计划/临时文件，非项目代码）
 .zcode/
+
+# AgentTeams 协作会话状态（team.json / inbox 消息，非项目代码）
+.agent-teams/
