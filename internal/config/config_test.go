@@ -102,19 +102,23 @@ func TestLoadQueueFromEnv(t *testing.T) {
 }
 
 func TestWeakSecretWarnings(t *testing.T) {
-	// 弱场景：默认 JWT/加密密钥 + 默认 admin 口令 + JWT 长度不足 → 4 条告警
+	// 弱场景：默认 JWT/加密密钥 + JWT 长度不足 → 3 条告警
+	// （ADMIN_PASS 已移出 WeakSecretWarnings，由 AdminPassWarnings 单独判定）
 	weak := &Config{JWTSecret: "change-me", EncryptKey: "0123456789abcdef0123456789abcdef", AdminPass: "admin123"}
-	if n := len(weak.WeakSecretWarnings()); n != 4 {
-		t.Errorf("weak secrets should produce 4 warnings, got %d: %v", n, weak.WeakSecretWarnings())
+	if n := len(weak.WeakSecretWarnings()); n != 3 {
+		t.Errorf("weak secrets should produce 3 warnings, got %d: %v", n, weak.WeakSecretWarnings())
 	}
 	strong := &Config{JWTSecret: "random-secret-1234567890-random-secret-long", EncryptKey: "abcdef0123456789abcdef0123456789", AdminPass: "Str0ng!Passphrase#2026"}
 	if n := len(strong.WeakSecretWarnings()); n != 0 {
 		t.Errorf("strong secrets should produce 0 warnings, got %d: %v", n, strong.WeakSecretWarnings())
 	}
-	// AdminPass 缺省（空）也应告警
+	// AdminPass 缺省（空）由 AdminPassWarnings 告警，WeakSecretWarnings 不涉及
 	emptyPass := &Config{JWTSecret: "random-secret-1234567890-random-secret-long", EncryptKey: "abcdef0123456789abcdef0123456789"}
-	if n := len(emptyPass.WeakSecretWarnings()); n != 1 {
-		t.Errorf("empty admin pass should produce 1 warning, got %d", n)
+	if n := len(emptyPass.WeakSecretWarnings()); n != 0 {
+		t.Errorf("WeakSecretWarnings 不应因空 ADMIN_PASS 告警，got %d", n)
+	}
+	if n := len(emptyPass.AdminPassWarnings()); n != 1 {
+		t.Errorf("empty admin pass should produce 1 AdminPassWarning, got %d", n)
 	}
 }
 
@@ -129,7 +133,6 @@ func TestWeakSecretWarningsPlaceholders(t *testing.T) {
 		{"env.example 三个原值", Config{JWTSecret: placeholder, EncryptKey: placeholder, AdminPass: "please_change_me_to_a_strong_password"}},
 		{"仅 JWT 占位", Config{JWTSecret: placeholder, EncryptKey: "a1b2c3d4e5f60718293a4b5c6d7e8f90", AdminPass: "Str0ng!Passphrase#2026"}},
 		{"仅 ENCRYPT 占位", Config{JWTSecret: "9f8e7d6c5b4a39281706f5e4d3c2b1a0", EncryptKey: placeholder, AdminPass: "Str0ng!Passphrase#2026"}},
-		{"仅 ADMIN_PASS 占位", Config{JWTSecret: "9f8e7d6c5b4a39281706f5e4d3c2b1a0", EncryptKey: "a1b2c3d4e5f60718293a4b5c6d7e8f90", AdminPass: "please_change_me_to_a_strong_password"}},
 		{"32 个 a 低熵", Config{JWTSecret: strings.Repeat("a", 32), EncryptKey: "a1b2c3d4e5f60718293a4b5c6d7e8f90", AdminPass: "Str0ng!Passphrase#2026"}},
 		{"ENCRYPT 低熵", Config{JWTSecret: "9f8e7d6c5b4a39281706f5e4d3c2b1a0", EncryptKey: strings.Repeat("ab", 16), AdminPass: "Str0ng!Passphrase#2026"}},
 		{"占位前缀 change_me", Config{JWTSecret: "change_me_please_1234567890abcdef", EncryptKey: "a1b2c3d4e5f60718293a4b5c6d7e8f90", AdminPass: "Str0ng!Passphrase#2026"}},
@@ -145,14 +148,65 @@ func TestWeakSecretWarningsPlaceholders(t *testing.T) {
 	}
 }
 
-// TestWeakSecretWarningsAdminPass 回归 H-1c：ADMIN_PASS 走 BootstrapAdmin 建号，
+// TestAdminPassWarnings 回归 H-1c：ADMIN_PASS 走 BootstrapAdmin 建号，
 // 没有强度校验，常见弱口令必须告警。
-func TestWeakSecretWarningsAdminPass(t *testing.T) {
-	strongJWT, strongKey := "9f8e7d6c5b4a39281706f5e4d3c2b1a0", "a1b2c3d4e5f60718293a4b5c6d7e8f90"
+//
+// 注意：判定入口是 AdminPassWarnings（而非 WeakSecretWarnings）——ADMIN_PASS
+// 只在首次建号时生效，admin 已存在后与当前登录口令无关（可能是历史遗留值），
+// 不应参与每次启动的弱密钥阻断。
+func TestAdminPassWarnings(t *testing.T) {
 	for _, pass := range []string{"x", "1", "a", "admin", "password", "admin123", "please_change_me"} {
-		cfg := &Config{JWTSecret: strongJWT, EncryptKey: strongKey, AdminPass: pass}
-		if w := cfg.WeakSecretWarnings(); len(w) == 0 {
+		cfg := &Config{AdminPass: pass}
+		if w := cfg.AdminPassWarnings(); len(w) == 0 {
 			t.Errorf("ADMIN_PASS=%q 必须产生告警", pass)
+		}
+	}
+}
+
+// TestWeakSecretWarningsExcludesAdminPass 回归生产事故：WeakSecretWarnings
+// 不再包含 ADMIN_PASS。它只校验每次启动都真正生效的 JWT_SECRET / ENCRYPT_KEY。
+func TestWeakSecretWarningsExcludesAdminPass(t *testing.T) {
+	strongJWT, strongKey := "9f8e7d6c5b4a39281706f5e4d3c2b1a0", "a1b2c3d4e5f60718293a4b5c6d7e8f90"
+	// 即使 ADMIN_PASS 是最弱的 admin123，WeakSecretWarnings 也应返回空
+	cfg := &Config{JWTSecret: strongJWT, EncryptKey: strongKey, AdminPass: "admin123"}
+	if w := cfg.WeakSecretWarnings(); len(w) != 0 {
+		t.Errorf("WeakSecretWarnings 不应包含 ADMIN_PASS 告警，got %v", w)
+	}
+}
+
+// TestAdminPassWarningsStrongNotFlagged 回归生产事故：ADMIN_PASS 曾被低熵判定
+// （去重字符数 < 12）误判为弱口令，导致 16 位四类字符的强口令在
+// STRICT_SECRETS=1 下拒绝启动、容器崩溃循环。
+//
+// 口令的字符集天然窄（字母+数字+符号），16 位强口令去重字符数常只有 8-11，
+// 因此口令必须用「长度 + 字符类别」判定，不能用密钥用的去重字符数指标。
+func TestAdminPassWarningsStrongNotFlagged(t *testing.T) {
+	strongPasses := []string{
+		"Abc12345def6789X", // 16 位：大小写+数字，去重字符数 < 12（旧逻辑会误判）
+		"Passw0rdPassw0rd", // 16 位：大小写+数字，去重字符数 10
+		"Notice2026abcDEF", // 16 位：大小写+数字，去重字符数 11
+		"MySecret12345678", // 16 位：大小写+数字
+		"Abcd1234!@#$efgh", // 16 位：四类字符
+		"Str0ng!Passphrase#2026",
+	}
+	for _, pass := range strongPasses {
+		cfg := &Config{AdminPass: pass}
+		if w := cfg.AdminPassWarnings(); len(w) != 0 {
+			t.Errorf("强口令 ADMIN_PASS=%q 不应告警（低熵指标不适用于人类口令），got %v", pass, w)
+		}
+	}
+
+	// 反证：同样长度但字符类别不足的口令必须仍告警
+	weakByClass := []string{
+		"abcdefgh12345678", // 16 位仅两类（小写+数字）
+		"aaaaaaaaaaaa1234", // 16 位仅两类且重复
+		"ABCDEFGH12345678", // 16 位仅两类（大写+数字）
+		"Short1!",          // 长度不足
+	}
+	for _, pass := range weakByClass {
+		cfg := &Config{AdminPass: pass}
+		if w := cfg.AdminPassWarnings(); len(w) == 0 {
+			t.Errorf("弱口令 ADMIN_PASS=%q 必须告警", pass)
 		}
 	}
 }

@@ -132,6 +132,11 @@ func isPlaceholderSecret(s string) bool {
 
 // lowEntropySecret 判断密钥熵是否明显不足：去重字符数 < 12（挡住「32 个 a」
 // 「1234567890…」这类长度达标但可预测的密钥）。空串由调用方单独处理。
+//
+// 只用于 JWT_SECRET / ENCRYPT_KEY 这类**机器生成**的随机串（hex/base64 的
+// 字符集大，64 字符 hex 去重数几乎必然 ≥12）。**不要用于人类口令**：人类密码
+// 只由大小写字母+数字+符号构成，16 位口令去重字符数常只有 8-11，用该指标会
+// 把「16 位四类字符」的强口令误判为弱口令（生产事故复盘见 docs/fixes/）。
 func lowEntropySecret(s string) bool {
 	s = strings.TrimSpace(s)
 	if s == "" {
@@ -144,12 +149,53 @@ func lowEntropySecret(s string) bool {
 	return len(distinct) < 12
 }
 
+// weakAdminPass 判断人类口令强度（结构判定，不用去重字符数）。
+//
+// 规则：长度 < 12 或字符类别 < 3 类即判弱。字符类别指大写/小写/数字/符号。
+// 之所以按类别而非去重字符数：口令的字符集天然窄（字母+数字+符号最多 90 余个
+// 可打印字符），16 位强口令去重数常为 8-11，用「去重 < 12」会把强口令误判。
+//
+// 注意：ADMIN_PASS 只在**首次初始化**（admin 不存在）时被 BootstrapAdmin 使用；
+// admin 已存在后该配置项不再影响登录。因此本函数只用于「是否会创建一个弱口令
+// 管理员」的判断，而不是「当前管理员口令是否弱」——后者无从由配置得知。
+func weakAdminPass(s string) bool {
+	s = strings.TrimSpace(s)
+	if len(s) < 12 {
+		return true
+	}
+	var hasUpper, hasLower, hasDigit, hasSymbol bool
+	for _, r := range s {
+		switch {
+		case r >= 'A' && r <= 'Z':
+			hasUpper = true
+		case r >= 'a' && r <= 'z':
+			hasLower = true
+		case r >= '0' && r <= '9':
+			hasDigit = true
+		default:
+			hasSymbol = true
+		}
+	}
+	classes := 0
+	for _, ok := range []bool{hasUpper, hasLower, hasDigit, hasSymbol} {
+		if ok {
+			classes++
+		}
+	}
+	return classes < 3
+}
+
 // WeakSecretWarnings 返回需要告警的弱密钥配置说明（空表示全部健康）。
-// 防止以默认/示例密钥裸跑导致 JWT 可伪造、渠道配置可被解密、默认口令
-// admin/admin123 直接可登录。
+// 防止以默认/示例密钥裸跑导致 JWT 可伪造、渠道配置可被解密。
 //
 // 判定分三层：① 精确默认值；② 公开占位前缀（.env.example 的值）；③ 低熵
 // （去重字符数 < 12）。JWT_SECRET 的「长度不足 32」是独立的第四条告警。
+//
+// **不含 ADMIN_PASS**：该配置项只在 BootstrapAdmin 首次建号时使用一次，
+// admin 已存在后与当前登录口令无关（可能是历史遗留值）。用它拒绝启动会
+// 造成「密码早已改强、却因 .env 旧值起不来」的生产故障。口令强度由
+// AdminPassWarnings 单独判定，且仅在「本次启动真的会建号」时生效
+// （见 cmd/server 的 checkAdminPassOnBootstrap）。
 func (c *Config) WeakSecretWarnings() []string {
 	var w []string
 	switch {
@@ -167,12 +213,20 @@ func (c *Config) WeakSecretWarnings() []string {
 	case isPlaceholderSecret(c.EncryptKey) || lowEntropySecret(c.EncryptKey):
 		w = append(w, "ENCRYPT_KEY 为公开占位值或低熵密钥（渠道配置/2FA 种子可被解密），请用 `openssl rand -hex 32` 生成强随机密钥")
 	}
-	if c.AdminPass == "" || isPlaceholderSecret(c.AdminPass) || lowEntropySecret(c.AdminPass) {
-		w = append(w, "ADMIN_PASS 为默认/弱值，默认管理员可被直接登录，请设置强密码")
-	} else if _, weak := weakAdminPasswords[strings.ToLower(strings.TrimSpace(c.AdminPass))]; weak {
-		w = append(w, "ADMIN_PASS 为常见弱口令，默认管理员可被直接登录，请设置强密码")
-	}
 	return w
+}
+
+// AdminPassWarnings 返回 ADMIN_PASS 作为「首次建号口令」的强度告警。
+// 调用方必须只在「admin 尚不存在、本次启动会真正用它建号」时调用；
+// admin 已存在时该值可能是历史遗留，不应告警更不应阻断启动。
+func (c *Config) AdminPassWarnings() []string {
+	if c.AdminPass == "" || isPlaceholderSecret(c.AdminPass) || weakAdminPass(c.AdminPass) {
+		return []string{"ADMIN_PASS 为默认/弱值（长度 <12 或字符类别 <3），用它创建的管理员可被直接登录，请设置强密码"}
+	}
+	if _, weak := weakAdminPasswords[strings.ToLower(strings.TrimSpace(c.AdminPass))]; weak {
+		return []string{"ADMIN_PASS 为常见弱口令，用它创建的管理员可被直接登录，请设置强密码"}
+	}
+	return nil
 }
 
 // ConfigPathFromArgs 解析配置路径：--config <path> 或 --config=<path> > CONFIG_FILE 环境变量 > 默认 config.yml。
