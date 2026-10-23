@@ -13,7 +13,8 @@
 #   --dir <path>           服务器项目目录（默认 /opt/notice-service）
 #   --compose <file>       compose 文件（默认 docker-compose.quickstart.yml）
 #   --skip-build           跳过构建，只用已有镜像重启
-#   --rollback             回滚到上一个镜像 tag
+#   --rollback             回滚到上一个镜像 tag（用现成镜像，不重新构建）
+#   --to <tag>             回滚到指定 tag（隐含 --rollback）
 #   --check                只做健康检查，不做任何变更
 #   -h, --help             显示帮助
 #
@@ -31,6 +32,7 @@ COMPOSE_FILE="docker-compose.quickstart.yml"
 LOCAL_MODE=0
 SKIP_BUILD=0
 DO_ROLLBACK=0
+ROLLBACK_TO=""
 CHECK_ONLY=0
 AUTO_ROLLBACK=1
 
@@ -47,6 +49,7 @@ while [ $# -gt 0 ]; do
     --compose) COMPOSE_FILE="$2"; shift 2 ;;
     --skip-build) SKIP_BUILD=1; shift ;;
     --rollback) DO_ROLLBACK=1; shift ;;
+    --to) ROLLBACK_TO="$2"; DO_ROLLBACK=1; shift 2 ;;
     --check) CHECK_ONLY=1; shift ;;
     --no-rollback) AUTO_ROLLBACK=0; shift ;;
     -h|--help) sed -n '2,24p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
@@ -89,11 +92,18 @@ ok "目录与 compose 文件存在"
 # ── 1. 记录回滚点 ──────────────────────────────────────────────────
 log "1/7 记录回滚点"
 CUR_COMMIT=$(run "cd $REMOTE_DIR && git rev-parse --short HEAD")
-CUR_IMAGE=$(run "cd $REMOTE_DIR && docker compose -f $COMPOSE_FILE ps --format '{{.Image}}' 2>/dev/null | grep notice-service | head -1")
+CUR_IMAGE=$(run "cd $REMOTE_DIR && docker compose -f $COMPOSE_FILE ps --format '{{.Image}}' 2>/dev/null | grep 'notice-service/notice-service\|notice-service:' | head -1")
+# compose 文件里当前写的 tag（即"运行中"的 tag）
 CUR_TAG=$(run "cd $REMOTE_DIR && grep -E '^\s+image: jacknotes/notice-service:' $COMPOSE_FILE | head -1 | sed 's/.*notice-service://'")
+# 真正的"上一版"：本地镜像库里比 CUR_TAG 早的、版本号次高的 tag（排除 latest/vNN 这类非 git-describe 格式）
+PREV_TAG=$(run "cd $REMOTE_DIR && docker images jacknotes/notice-service --format '{{.Tag}}' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+-' | sort -V | grep -B1 -x '$CUR_TAG' | head -1")
+if [ -z "$PREV_TAG" ] || [ "$PREV_TAG" = "$CUR_TAG" ]; then
+  PREV_TAG=$(run "cd $REMOTE_DIR && docker images jacknotes/notice-service --format '{{.Tag}}' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+-' | sort -V | grep -vx '$CUR_TAG' | tail -1")
+fi
 echo "    commit      : $CUR_COMMIT"
 echo "    运行中镜像  : ${CUR_IMAGE:-<none>}"
-echo "    compose tag : $CUR_TAG"
+echo "    compose tag : $CUR_TAG  （当前）"
+echo "    上一版 tag  : ${PREV_TAG:-<none>}  （回滚目标）"
 printf '%s\n' "$CUR_TAG" > /tmp/_notice_prev_tag
 ok "回滚点已记录"
 
@@ -105,12 +115,25 @@ if [ "$CHECK_ONLY" = "1" ]; then
 fi
 
 # ── 2. 回滚模式 ────────────────────────────────────────────────────
+# 用现成镜像，不重新构建：只改 compose 的 image tag + up -d。
 if [ "$DO_ROLLBACK" = "1" ]; then
-  log "回滚到 $CUR_TAG"
+  TARGET="${ROLLBACK_TO:-$PREV_TAG}"
+  if [ -z "$TARGET" ]; then
+    err "找不到可回滚的上一版镜像；可用 tag："
+    run "docker images jacknotes/notice-service --format '  {{.Tag}}  {{.CreatedSince}}'"
+    exit 1
+  fi
+  if ! run "docker image inspect jacknotes/notice-service:$TARGET >/dev/null 2>&1"; then
+    err "镜像 jacknotes/notice-service:$TARGET 不在本地，无法离线回滚"
+    run "docker images jacknotes/notice-service --format '  {{.Tag}}  {{.CreatedSince}}'"
+    exit 1
+  fi
+  log "回滚到 $TARGET（使用现成镜像，不重新构建）"
   run_script <<EOF
 set -e
 cd $REMOTE_DIR
-sed -i "s#image: jacknotes/notice-service:.*#image: jacknotes/notice-service:$CUR_TAG#" $COMPOSE_FILE
+sed -i "s#image: jacknotes/notice-service:.*#image: jacknotes/notice-service:$TARGET#" $COMPOSE_FILE
+grep -n 'image: jacknotes' $COMPOSE_FILE
 docker compose -f $COMPOSE_FILE up -d
 sleep 12
 docker compose -f $COMPOSE_FILE ps --format '{{.Name}} {{.Image}} {{.Status}}'
