@@ -58,8 +58,20 @@ wsl -e bash /mnt/f/project/notice-service/deploy/deploy.sh --skip-build
 镜像 tag 格式（来自 `deploy/publish.sh` 与 `Makefile`）：
 
 ```
-v2.0.0-63-g45264f2     ← v2.0.0 + 63 个提交 + g<short-sha>
+v2.0.0-66-gbc0f6dc     ← v2.0.0 + 66 个提交 + g<short-sha>
 ```
+
+即 `git describe --tags --always` 的输出：
+- `v2.0.0` = 最近的带 tag 提交（`v2.0.0`，固定前缀，除非打新 tag 才会变）
+- `66` = 自 `v2.0.0` 之后的提交数（**每次提交 +1，递增**）
+- `gbc0f6dc` = `g` + 当前 commit 的 7 位短 SHA（`git rev-parse --short HEAD`）
+- 工作区有未提交改动时追加 `-dirty`，构建前用 `sed 's/-dirty//'` 去掉
+
+**核实确认**（2026-11-12）：`git describe --tags --always` → `v2.0.0-66-gbc0f6dc`，与
+`HEAD=bc0f6dc` 一致；`--dirty` 版本为 `v2.0.0-66-gbc0f6dc-dirty`（本地有未提交的
+compose tag 改动属正常）。「递增」指中间数字（提交数）随每次提交自然 +1，前缀
+`v2.0.0` 只有在打新 tag 时才变——这正是用户要求的「v2.0.0 固定、66 与 gbc0f6dc 取自
+git 提交数与提交 ID」。
 
 ---
 
@@ -68,10 +80,21 @@ v2.0.0-63-g45264f2     ← v2.0.0 + 63 个提交 + g<short-sha>
 > ⚠️ **不要**在 PowerShell 里手敲带嵌套引号的 `wsl -e bash -lc '...'`。PowerShell 会吞掉内层双引号，导致
 > `unexpected EOF while looking for matching ')'`。**必须**把脚本写到文件再执行（见 §5）。
 
-### 4.1 拉代码
+### 4.1 拉代码（**先备份并恢复 compose**）
+
+> ⚠️ 服务器上的 `docker-compose.quickstart.yml` 每次部署都会改 `image:` 一行且**未提交**；
+> 直接 `git reset --hard origin/main` 会把它打回仓库里冻结的旧 tag（如 `v2.0.0-48-g135ab47`）。
+> 必须：**备份 → 强制同步远端 → 恢复备份**，让 compose 保持「上一版」image 行，下一步再换新 tag。
 
 ```bash
-ssh root@tencent.markli.cn 'cd /opt/notice-service && git fetch origin && git merge --ff-only origin/main && git describe --tags --always'
+ssh root@tencent.markli.cn 'cd /opt/notice-service && \
+  BAK=/tmp/docker-compose.quickstart.yml.bak-$(date +%Y%m%d-%H%M%S) && \
+  cp docker-compose.quickstart.yml "$BAK" && \
+  git fetch origin && \
+  git reset --hard origin/main && \
+  cp "$BAK" docker-compose.quickstart.yml && \
+  echo "compose 已恢复：$(grep "image: jacknotes" docker-compose.quickstart.yml)" && \
+  git describe --tags --always'
 ```
 
 `-dirty` 后缀是正常的（compose 的 image tag 改动未提交）。构建时用 `sed 's/-dirty//'` 去掉。
@@ -328,7 +351,7 @@ ssh root@tencent.markli.cn 'cd /opt/notice-service && grep "image: jacknotes" do
 |---|---|
 | `docker compose down -v` | `-v` 删 `mysql_data` 卷 = **数据全丢** |
 | 改 `.env` 的 `ENCRYPT_KEY` / `JWT_SECRET` | 前者解不开历史渠道配置；后者使全部登录态失效 |
-| 在服务器上 `git reset --hard` 丢掉 compose 改动 | 会把 image tag 改回旧值 |
+| 在服务器上 `git reset --hard` **但不先备份并恢复 compose** | 会把 image tag 打回仓库冻结的旧值；必须「备份 → reset → 恢复」 |
 | 用 `docker-compose.yml`（多实例版）部署 | 当前生产是单实例 `quickstart`，端口/实例数都不同 |
 | 直接 `docker run` 手工起容器 | 绕过 compose 的 env/依赖/健康检查 |
 | 部署完不验证就离开 | 崩溃循环可能持续到磁盘/监控报警才发现 |

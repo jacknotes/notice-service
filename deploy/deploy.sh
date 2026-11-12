@@ -142,17 +142,24 @@ EOF
   exit $?
 fi
 
-# ── 3. 拉取最新代码 ────────────────────────────────────────────────
-log "2/7 拉取最新代码"
+# ── 3. 拉取最新代码（备份 compose → 以远端为准 → 恢复 compose）─────
+# 服务器上的 docker-compose.quickstart.yml 每次部署都会改 image 行（未提交），
+# 直接 reset --hard 会把它打回仓库里冻结的旧 tag。因此：先备份 → 强制同步远端
+# → 再恢复备份，保证 compose 的 image 行保持「上一版」，下一步才换成新 tag。
+log "2/7 拉取最新代码（备份并恢复 compose）"
 run_script <<EOF
 set -e
 cd $REMOTE_DIR
+BAK="/tmp/$COMPOSE_FILE.bak-\$(date +%Y%m%d-%H%M%S)"
+cp "$COMPOSE_FILE" "\$BAK"
 git fetch origin
-git merge --ff-only origin/main
+git reset --hard origin/main
+cp "\$BAK" "$COMPOSE_FILE"
+echo "compose 已从 \$BAK 恢复（image 行保持上一版）"
 echo "HEAD=\$(git rev-parse --short HEAD)"
 echo "DESCRIBE=\$(git describe --tags --always | sed 's/-dirty//')"
 EOF
-if [ $? -ne 0 ]; then err "拉取代码失败（可能有本地改动，先检查 git status）"; exit 1; fi
+if [ $? -ne 0 ]; then err "拉取代码失败（检查 SSH / 网络 / git 状态）"; exit 1; fi
 
 VERSION=$(run "cd $REMOTE_DIR && git describe --tags --always | sed 's/-dirty//'")
 ok "版本号 $VERSION"
