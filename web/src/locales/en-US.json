@@ -84,6 +84,7 @@
     "collapseSidebar": "Collapse sidebar",
     "switchLang": "Switch language",
     "apiDocs": "API Docs",
+    "apiDocsDisabled": "API docs are disabled (SWAGGER_ENABLED=false). Enable it and restart the service to view them.",
     "settings": "Settings",
     "logout": "Sign out",
     "logoutConfirmTitle": "Sign out",

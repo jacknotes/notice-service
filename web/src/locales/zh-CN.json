@@ -84,6 +84,7 @@
     "collapseSidebar": "收起侧边栏",
     "switchLang": "切换语言",
     "apiDocs": "API 文档",
+    "apiDocsDisabled": "API 文档未启用（SWAGGER_ENABLED=false），如需查看请开启后重启服务。",
     "settings": "个人设置",
     "logout": "退出登录",
     "logoutConfirmTitle": "退出登录",

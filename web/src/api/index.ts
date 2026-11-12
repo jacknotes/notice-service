@@ -167,7 +167,7 @@ export const systemApi = {
     healthy: number
     total: number
   }> => client.get('/instances').then((r) => r.data),
-  version: (): Promise<{ version: string; instance_id: string }> =>
+  version: (): Promise<{ version: string; instance_id: string; swagger_enabled?: boolean }> =>
     client.get('/system/version').then((r) => r.data),
 }
 

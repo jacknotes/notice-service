@@ -181,7 +181,7 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import type { Component } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ElMessageBox } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   Odometer, Connection, Document, AlarmClock, MessageBox,
   Setting, SwitchButton, User, ArrowDown, Sunny, Moon, List, Fold, Expand, Switch,
@@ -303,9 +303,14 @@ function fmtTime(iso?: string) {
 let signalTimer: ReturnType<typeof setInterval> | null = null
 // 侧边栏底部版本：登录态下取当前实例构建版本（与节点弹窗/设置页同源）
 const buildVersion = ref('')
+// API 文档是否可用：由 /system/version 的 swagger_enabled 决定（与后端 /swagger 路由同源）。
+// 关闭时点击「API 文档」不再无提示跳回首页，而是明确告知已停用。
+const swaggerEnabled = ref(false)
 onMounted(async () => {
   try {
-    buildVersion.value = (await systemApi.version()).version
+    const info = await systemApi.version()
+    buildVersion.value = info.version
+    swaggerEnabled.value = !!info.swagger_enabled
   } catch {
     /* 获取失败保持纯品牌文案 */
   }
@@ -320,7 +325,15 @@ onBeforeUnmount(() => {
 })
 
 function onCommand(cmd: string) {
-  if (cmd === 'swagger') window.open('/swagger/index.html', '_blank')
+  if (cmd === 'swagger') {
+    // /swagger 由后端 SWAGGER_ENABLED 控制（生产默认关闭）。关闭时该路径被 SPA
+    // 兜底路由重定向回 /dashboard，表现为「点击跳回首页」；这里提前拦截给出明确反馈。
+    if (swaggerEnabled.value) {
+      window.open('/swagger/index.html', '_blank')
+    } else {
+      ElMessage.info(t('appShell.apiDocsDisabled'))
+    }
+  }
   if (cmd === 'settings') router.push('/settings')
   if (cmd === 'logout') onLogout()
 }

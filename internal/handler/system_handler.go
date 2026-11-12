@@ -20,10 +20,13 @@ type SystemHandler struct {
 	// 供「当前服务版本」接口与节点心跳口径保持一致。
 	buildVersion string
 	instanceID   string
+	// swaggerEnabled 是否暴露 /swagger API 文档；前端据此决定「API 文档」入口
+	// 是打开文档页还是提示已关闭（避免点击后新标签页被 SPA 兜底跳回首页）。
+	swaggerEnabled bool
 }
 
-func NewSystemHandler(db *sql.DB, buildVersion, instanceID string) *SystemHandler {
-	return &SystemHandler{heartbeats: repository.NewHeartbeatRepo(db), buildVersion: buildVersion, instanceID: instanceID}
+func NewSystemHandler(db *sql.DB, buildVersion, instanceID string, swaggerEnabled bool) *SystemHandler {
+	return &SystemHandler{heartbeats: repository.NewHeartbeatRepo(db), buildVersion: buildVersion, instanceID: instanceID, swaggerEnabled: swaggerEnabled}
 }
 
 // Version 当前实例构建版本（与节点心跳上报的 version 同源）。
@@ -33,7 +36,7 @@ func NewSystemHandler(db *sql.DB, buildVersion, instanceID string) *SystemHandle
 // @Success 200 {object} map[string]interface{}
 // @Router /api/system/version [get]
 func (h *SystemHandler) Version(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"version": h.buildVersion, "instance_id": h.instanceID})
+	c.JSON(http.StatusOK, gin.H{"version": h.buildVersion, "instance_id": h.instanceID, "swagger_enabled": h.swaggerEnabled})
 }
 
 // Instances 返回全部后端实例节点及健康状态（多实例「信号在线」）。

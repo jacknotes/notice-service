@@ -130,6 +130,7 @@ import { ElMessage } from 'element-plus'
 import * as echarts from 'echarts'
 import { useI18n } from 'vue-i18n'
 import { channelApi, dashboardApi, taskApi } from '@/api'
+import { theme } from '@/composables/useTheme'
 import StatCard from '@/components/StatCard.vue'
 import TrendChart from '@/components/TrendChart.vue'
 import type { TrendPoint } from '@/components/TrendChart.vue'
@@ -158,6 +159,9 @@ const rateDisplay = computed(() =>
   Number.isFinite(stats.success_rate) ? Math.round(stats.success_rate * 10) / 10 : 0
 )
 
+// 浅色（白天）模式标记：环形图文字/描边据此切换深浅色，避免白色文字在白色卡片上不可见。
+const isLight = computed(() => theme.value === 'light')
+
 const taskName = (id: number) => tasks.value.find((x) => x.id === id)?.name || t('dashboard.taskFallback', { id })
 const channelName = (id: number) => channels.value.find((x) => x.id === id)?.name || t('dashboard.channelFallback', { id })
 
@@ -177,8 +181,10 @@ function fmtDate(d: Date) {
 
 function applyPreset(p: { key: string; days: number }) {
   quickPreset.value = p.key
-  const end = new Date(Date.now() + 86400000) // to 排他
-  const start = new Date(end.getTime() - p.days * 86400000)
+  // 结束日期取「今天」（含）。后端 parseDateRange 会把 to 再加 1 天转成排他区间，
+  // 这里若再 +86400000 就会把「明天」也纳入，趋势图末尾多出一个空日期点（如 10-30）。
+  const end = new Date()
+  const start = new Date(end.getTime() - (p.days - 1) * 86400000)
   dateRange.value = [fmtDate(start), fmtDate(end)]
   load()
 }
@@ -203,19 +209,24 @@ function renderDonut() {
   const success = stats.today_success
   const failed = stats.today_failed
   const empty = success + failed === 0
+  // 白天模式下白色文字在白色卡片上不可见（尤其中心「100%」），按主题切换文字/描边颜色。
+  const light = isLight.value
+  const centerText = light ? '#0f172a' : '#e2e8f0'
+  const legendText = light ? '#64748b' : '#94a3b8'
+  const sliceBorder = light ? 'rgba(255, 255, 255, 0.85)' : 'rgba(15, 23, 42, 0.6)'
   donut.setOption({
     backgroundColor: 'transparent',
     tooltip: { trigger: 'item' },
-    legend: { bottom: 0, icon: 'circle', itemWidth: 8, itemHeight: 8, textStyle: { color: '#94a3b8', fontSize: 12 } },
+    legend: { bottom: 0, icon: 'circle', itemWidth: 8, itemHeight: 8, textStyle: { color: legendText, fontSize: 12 } },
     series: [
       {
         type: 'pie',
         radius: ['52%', '76%'],
         center: ['50%', '44%'],
         avoidLabelOverlap: false,
-        itemStyle: { borderRadius: 6, borderColor: 'rgba(15,23,42,0.6)', borderWidth: 2 },
+        itemStyle: { borderRadius: 6, borderColor: sliceBorder, borderWidth: 2 },
         label: { show: false },
-        emphasis: { label: { show: true, fontSize: 16, fontWeight: 700, color: '#e2e8f0' } },
+        emphasis: { label: { show: true, fontSize: 16, fontWeight: 700, color: centerText } },
         labelLine: { show: false },
         data: empty
           ? [{ name: t('common.none'), value: 1, itemStyle: { color: 'rgba(148,163,184,0.15)' } }]
@@ -234,7 +245,7 @@ function renderDonut() {
             top: '38%',
             style: {
               text: `${rateDisplay.value}%`,
-              fill: '#e2e8f0',
+              fill: centerText,
               fontSize: 22,
               fontWeight: 700,
             },
@@ -301,6 +312,7 @@ async function loadOptions() {
 }
 
 watch(() => stats, renderDonut, { deep: true })
+watch(theme, renderDonut) // 主题切换后重绘环形图（文字/描边颜色随主题变化）
 
 // 初始加载默认近 7 天。必须放在 load/loadSeq/loading 等声明之后：
 // applyPreset 会同步调用 load（首行 ++loadSeq），放在声明之前会触发
